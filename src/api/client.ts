@@ -5,8 +5,14 @@
  *   بالتراخيص — تم التحقق من عمله من تطبيق نقطة البيع).
  * • رمز الجلسة في ترويسة x-market-token (نفس ترويسة الخادم).
  * • مهلة 20 ثانية عبر AbortController + رسالة عربية واضحة عند الفشل.
- * • إعادة محاولة تلقائية واحدة للأخطاء الشبكية على القراءات
- *   (تلتقط عتبة الاتصال البارد الأولى بعد فتح التطبيق).
+ * • Accept-Encoding: identity على كل النداءات — بوابة Coolify تضغط
+ *   الردود الأكبر من كيلوبايت واحد (gzip) وبعض شبكات الجوال العربية
+ *   تُفسد الردود المضغوطة على HTTP غير المعمّى فيصل المتاجر الصغيرة
+ *   (بلا ضغط) وتفشل قوائم المنتجات (مضغوطة) — طلب بلا ضغط يلغي
+ *   المشكلة من جذورها، والحمولات أصلاً صغيرة.
+ * • إعادة محاولة تلقائية (حتى 3 محاولات بتباعد متصاعد) للأخطاء
+ *   الشبكية على القراءات (تلتقط عتبة الاتصال البارد الأولى بعد
+ *   فتح التطبيق وضعف الشبكة اللحظي).
  * • أخطاء الخادم {ok:false, error:CODE} تُحوّل إلى ApiError برسالة
  *   عربية جاهزة للعرض مع الاحتفاظ بالرمز والحقول الإضافية (regions…).
  */
@@ -61,6 +67,14 @@ export function apiErrorText(code: string): string {
       return 'الطلب غير موجود';
     case 'BAD_STATUS':
       return 'حالة الطلب تغيّرت على الخادم — حدّث الصفحة وحاول مجدداً';
+    case 'ALREADY_RATED':
+      return 'قيّمت هذا الطلب من قبل — شكراً لك';
+    case 'BAD_RATING':
+      return 'اختر عدد النجوم (1–5)';
+    case 'ADDRESS_NOT_FOUND':
+      return 'العنوان غير موجود — حدّث الصفحة';
+    case 'TOO_MANY_ADDRESSES':
+      return 'وصلت الحد الأقصى (10 عناوين) — احذف واحداً لإضافة آخر';
     case 'ACCOUNT_DELETED':
       return 'تم حذف هذا الحساب';
     case 'RATE_LIMITED':
@@ -108,6 +122,10 @@ async function requestOnce<T>(
       method,
       headers: {
         'Content-Type': 'application/json',
+        // بلا ضغط: يمنع بوابة Coolify من gzip الردود الكبيرة التي
+        // تفسدها بعض شبكات الجوال على HTTP الصريح (سبب اختفاء
+        // المنتجات مع ظهور المتاجر في v1.2).
+        'Accept-Encoding': 'identity',
         ...(token ? {'x-market-token': token} : {}),
       },
       body: body !== undefined ? JSON.stringify(body) : undefined,
@@ -143,17 +161,24 @@ async function requestOnce<T>(
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const retryOnNetwork = options.retryOnNetwork ?? options.method !== 'POST';
-  try {
-    return await requestOnce<T>(path, options);
-  } catch (e) {
-    if (retryOnNetwork && e instanceof ApiError &&
-        (e.code === 'NETWORK' || e.code === 'TIMEOUT')) {
-      // مهلة قصيرة ثم محاولة واحدة
-      await new Promise(resolve => setTimeout(resolve, 900));
-      return requestOnce<T>(path, options);
+  const attempts = retryOnNetwork ? 3 : 1;
+  let lastError: unknown;
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    try {
+      return await requestOnce<T>(path, options);
+    } catch (e) {
+      lastError = e;
+      const retriable =
+        e instanceof ApiError && (e.code === 'NETWORK' || e.code === 'TIMEOUT');
+      if (!retriable || attempt === attempts - 1) {
+        throw e;
+      }
+      // تباعد متصاعد: 800ms ثم 2000ms — يمتص ضعف الشبكة اللحظي
+      // وعتبة الاتصال البارد الأولى بعد فتح التطبيق.
+      await new Promise(resolve => setTimeout(resolve, attempt === 0 ? 800 : 2000));
     }
-    throw e;
   }
+  throw lastError;
 }
 
 export const apiRequest = request;

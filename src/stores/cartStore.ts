@@ -123,6 +123,7 @@ export const useCartStore = create<CartState>((set, get) => ({
           stock: product.stock,
           quantity: addQty,
           variant,
+          category: product.category ?? null,
         },
       ];
     }

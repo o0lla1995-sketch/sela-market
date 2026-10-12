@@ -167,7 +167,7 @@ export function CategoryScreen({navigation, route}: Props) {
           keyExtractor={item => `${item.store_id}:${item.id}`}
           numColumns={2}
           columnWrapperStyle={{gap: spacing.md, width: '100%', marginBottom: spacing.md, paddingHorizontal: spacing.lg}}
-          contentContainerStyle={{paddingBottom: spacing.lg}}
+          contentContainerStyle={{paddingBottom: spacing.xxxl}}
           showsVerticalScrollIndicator={false}
           onEndReached={loadMore}
           onEndReachedThreshold={0.6}

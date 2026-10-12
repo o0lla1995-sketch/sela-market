@@ -30,7 +30,6 @@ import {useSettingsStore} from '../../stores/settingsStore';
 import type {RootStackParamList} from '../../navigation/RootNavigator';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Welcome'>;
-
 /* ─── شعار العلامة: حقيبة «س» ─── */
 function BrandMark({size = 64, color = '#F97316', ink = '#17171C'}: {size?: number; color?: string; ink?: string}) {
   return (
@@ -176,6 +175,8 @@ export function WelcomeScreen({navigation}: Props) {
   const setOnboarded = useSettingsStore(s => s.setOnboarded);
   const [slide, setSlide] = useState(0);
   const width = Dimensions.get('window').width;
+  const slideRef = useRef(slide);
+  slideRef.current = slide;
 
   // حركات الدخول المتدرجة
   const artScale = useRef(new Animated.Value(0.82)).current;
@@ -198,6 +199,20 @@ export function WelcomeScreen({navigation}: Props) {
       Animated.timing(chromeOpacity, {toValue: 1, duration: 380, useNativeDriver: true}),
     ]).start();
   }, [artScale, textOpacity, textShift, chromeOpacity, slide]);
+
+  /** يحدّث اللوحة النشطة — تُستدعى من onScroll المستمر فيتجاوب
+   *  السحب البطيء بلا قذف (onMomentumScrollEnd وحده كان يترك اللوحة
+   *  الجديدة فارغة لأن غير النشطة كانت تُرسم كعناصر غير مرئية). */
+  const goToSlide = (i: number) => {
+    const clamped = Math.max(0, Math.min(SLIDES.length - 1, i));
+    if (clamped !== slideRef.current) {
+      artScale.setValue(0.82);
+      textOpacity.setValue(0);
+      textShift.setValue(26);
+      slideRef.current = clamped;
+      setSlide(clamped);
+    }
+  };
 
   const start = (mode: 'guest' | 'login' | 'register') => {
     setOnboarded();
@@ -226,87 +241,82 @@ export function WelcomeScreen({navigation}: Props) {
           </View>
         </View>
         {slide < SLIDES.length - 1 ? (
-          <Pressable onPress={() => setSlide(SLIDES.length - 1)} hitSlop={10}>
+          <Pressable onPress={() => goToSlide(SLIDES.length - 1)} hitSlop={10}>
             <Text style={[type.smallMedium, {color: palette.muted}]}>تخطّي</Text>
           </Pressable>
         ) : null}
       </View>
 
-      {/* اللوحات */}
+      {/* اللوحات — كل المحتوى مرسوم دائماً (لا عناصر مخفية تحفظ
+          الارتفاع): السحب البطيء أو السريع يعرض لوحة مكتملة فوراً
+          وحركات الدخول تُعاد للنشطة فقط. */}
       <ScrollView
         horizontal
         pagingEnabled
         showsHorizontalScrollIndicator={false}
-        onMomentumScrollEnd={e => {
+        scrollEventThrottle={32}
+        onScroll={e => {
           // RTL على أندرويد يعطي إزاحات سالبة (0، -width، …) — القيمة
-          // المطلقة تصحح الفهرس في الاتجاهين (كان الفهرس السالب يفرّغ
-          // اللوحة بعد أول سحبة).
+          // المطلقة تصحح الفهرس في الاتجاهين.
           const i = Math.round(Math.abs(e.nativeEvent.contentOffset.x) / width);
-          if (i !== slide) {
-            artScale.setValue(0.82);
-            textOpacity.setValue(0);
-            textShift.setValue(26);
-            setSlide(i);
+          if (i !== slideRef.current) {
+            goToSlide(i);
           }
         }}
         style={{flex: 1}}>
-        {SLIDES.map((s, i) => (
-          <View key={s.key} style={[styles.slide, {width}]}>
-            {i === slide ? (
-              <>
-                <Animated.View style={{transform: [{scale: artScale}]}}>
-                  <ArtFrame tint={palette.brandSoft} border={palette.brandBorder}>
-                    {s.key === 'mall' ? (
-                      <MallScene brand={palette.brand} deep={palette.brandDeep} ink={palette.ink} muted={palette.muted} />
-                    ) : s.key === 'cart' ? (
-                      <CartScene brand={palette.brand} deep={palette.brandDeep} ink={palette.ink} muted={palette.muted} />
-                    ) : (
-                      <DeliveryScene brand={palette.brand} deep={palette.brandDeep} ink={palette.ink} muted={palette.muted} />
-                    )}
-                  </ArtFrame>
-                </Animated.View>
-                <Animated.View
-                  style={[
-                    styles.texts,
-                    {opacity: textOpacity, transform: [{translateY: textShift}]},
-                  ]}>
-                  <Text style={[type.display, styles.title, {color: palette.ink}]}>
-                    {s.title}
-                  </Text>
-                  <Text style={[type.body, {color: palette.muted, textAlign: 'center', lineHeight: 27}]}>
-                    {s.body}
-                  </Text>
-                </Animated.View>
-              </>
-            ) : (
-              // اللوحات غير النشطة: عناصر غير مرئية تحفظ الارتفاع
-              <View style={{opacity: 0}} pointerEvents="none">
+        {SLIDES.map((s, i) => {
+          const active = i === slide;
+          return (
+            <View key={s.key} style={[styles.slide, {width}]}>
+              <Animated.View
+                style={active ? {transform: [{scale: artScale}]} : undefined}>
                 <ArtFrame tint={palette.brandSoft} border={palette.brandBorder}>
-                  <View style={{width: 196, height: 150}} />
+                  {s.key === 'mall' ? (
+                    <MallScene brand={palette.brand} deep={palette.brandDeep} ink={palette.ink} muted={palette.muted} />
+                  ) : s.key === 'cart' ? (
+                    <CartScene brand={palette.brand} deep={palette.brandDeep} ink={palette.ink} muted={palette.muted} />
+                  ) : (
+                    <DeliveryScene brand={palette.brand} deep={palette.brandDeep} ink={palette.ink} muted={palette.muted} />
+                  )}
                 </ArtFrame>
-                <View style={styles.texts}>
-                  <Text style={[type.display, styles.title]}>{s.title}</Text>
-                  <Text style={[type.body, {lineHeight: 27}]}>{s.body}</Text>
-                </View>
-              </View>
-            )}
-          </View>
-        ))}
+              </Animated.View>
+              <Animated.View
+                style={[
+                  styles.texts,
+                  active
+                    ? {opacity: textOpacity, transform: [{translateY: textShift}]}
+                    : {opacity: 1},
+                ]}>
+                <Text style={[type.display, styles.title, {color: palette.ink}]}>
+                  {s.title}
+                </Text>
+                <Text style={[type.body, {color: palette.muted, textAlign: 'center', lineHeight: 27}]}>
+                  {s.body}
+                </Text>
+              </Animated.View>
+            </View>
+          );
+        })}
       </ScrollView>
 
-      {/* المؤشرات */}
+      {/* المؤشرات — قابلة للنقر للانتقال المباشر */}
       <View style={styles.dots}>
         {SLIDES.map((s, i) => (
-          <View
+          <Pressable
             key={s.key}
-            style={[
-              styles.dot,
-              {
-                backgroundColor: i === slide ? palette.brand : palette.line,
-                width: i === slide ? 26 : 8,
-              },
-            ]}
-          />
+            onPress={() => goToSlide(i)}
+            hitSlop={8}
+            style={{padding: 3}}>
+            <View
+              style={[
+                styles.dot,
+                {
+                  backgroundColor: i === slide ? palette.brand : palette.line,
+                  width: i === slide ? 26 : 8,
+                },
+              ]}
+            />
+          </Pressable>
         ))}
       </View>
 

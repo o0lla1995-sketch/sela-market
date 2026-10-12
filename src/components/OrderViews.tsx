@@ -183,18 +183,29 @@ const timelineStyles = StyleSheet.create({
 
 /* ─── بطاقة الطلب في القائمة ─── */
 
+/** بطاقة الطلب في القائمة — v2.0: زر تقييم للطلبات المسلّمة غير
+ *  المقيّمة ونجوم للتقييم المرسل + دائرة المتجر. */
 export function OrderListCard({
   order,
   onPress,
+  onRate,
 }: {
   order: Order;
   onPress: () => void;
+  /** يُستدعى عند طلب تقييم طلب مسلّم غير مقيّم. */
+  onRate?: (order: Order) => void;
 }) {
   const {palette} = useTheme();
   const items = order.items ?? [];
+  const canRate = order.status === 'delivered' && order.rating == null && onRate != null;
   return (
     <Card onPress={onPress} style={{gap: spacing.sm}}>
       <View style={listStyles.topRow}>
+        <View style={[listStyles.avatar, {backgroundColor: palette.brandSoft, borderColor: palette.brandBorder}]}>
+          <Text style={{fontSize: 16, color: palette.brandDark, fontFamily: fonts.black}}>
+            {(order.store?.name ?? 'م').trim().charAt(0)}
+          </Text>
+        </View>
         <View style={{flex: 1, gap: 2, alignItems: 'flex-start'}}>
           <Text style={[type.smallMedium, {color: palette.muted, fontFamily: fonts.medium}]}>
             {order.order_number}
@@ -224,6 +235,29 @@ export function OrderListCard({
         ) : null}
       </View>
 
+      {order.rating != null ? (
+        <View style={[listStyles.ratedRow, {backgroundColor: palette.successSoft}]}>
+          <Icon name="star" size={13} color={palette.warning} />
+          <Text style={{fontSize: 11.5, color: palette.inkSoft, flex: 1}}>
+            قيّمت هذا الطلب بـ {order.rating.stars} من 5
+          </Text>
+          <Icon name="checkCircle" size={13} color={palette.success} />
+        </View>
+      ) : canRate ? (
+        <Pressable
+          onPress={() => onRate?.(order)}
+          style={({pressed}) => [
+            listStyles.rateRow,
+            {backgroundColor: palette.warningSoft, opacity: pressed ? 0.75 : 1},
+          ]}>
+          <Icon name="star" size={14} color={palette.warning} />
+          <Text style={{fontSize: 12, color: palette.warning, fontFamily: fonts.bold, flex: 1}}>
+            وصل طلبك؟ قيّم المتجر وساعد غيرك
+          </Text>
+          <Icon name="forward" size={13} color={palette.warning} />
+        </Pressable>
+      ) : null}
+
       <View style={listStyles.bottomRow}>
         <Text style={[{fontSize: 12, color: palette.muted}]}>
           {relativeTime(statusTimestamp(order))}
@@ -237,13 +271,37 @@ export function OrderListCard({
 }
 
 const listStyles = StyleSheet.create({
-  topRow: {flexDirection: 'row-reverse', alignItems: 'flex-start', gap: spacing.sm},
+  topRow: {flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.sm},
+  avatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   itemsRow: {flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 6},
   itemChip: {borderRadius: radius.sm, paddingHorizontal: 8, paddingVertical: 3, maxWidth: 170},
   bottomRow: {
     flexDirection: 'row-reverse',
     alignItems: 'center',
     justifyContent: 'space-between',
+  },
+  rateRow: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 7,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 9,
+  },
+  ratedRow: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 6,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 7,
   },
 });
 

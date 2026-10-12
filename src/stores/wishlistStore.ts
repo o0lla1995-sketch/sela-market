@@ -4,6 +4,7 @@
  */
 import {create} from 'zustand';
 import {storage} from '../core/config';
+import {useInterestStore} from './interestStore';
 import type {CrossProduct, Product} from '../core/types';
 
 const KEY = 'wishlist:v1';
@@ -46,6 +47,8 @@ export const useWishlistStore = create<WishlistState>((set, get) => ({
     items[key] = {product, storeName, savedAt: Date.now()};
     set({items});
     storage.set(KEY, JSON.stringify(items));
+    // v2.0: الإضافة للمفضلة إشارة اهتمام قوية (وزن 3) — محلية فقط.
+    useInterestStore.getState().trackWishlist(product.category);
     return true;
   },
 

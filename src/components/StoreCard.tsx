@@ -1,17 +1,21 @@
 /**
- * StoreCard.tsx — بطاقة متجر: علامة «س» على برتقالي ناعم، الاسم،
- * التصنيف بأيقونة نوع المتجر (بقالة/مطعم/ملابس/صيدلية/كافيه…)،
- * المنطقة، ووصف مختصر. تنسيقان: صف كامل وبطاقة أفقية للقائمة
- * الأفقية في الرئيسية.
+ * StoreCard.tsx — بطاقات المتاجر (v2.0):
+ *  • CircleStoreCard — بطاقة دائرية مختصرة للشريط الأفقي في الرئيسية
+ *    (طلب المستخدم صراحة: مختصرة وبشكل دائري واحترافية): حلقة هوية
+ *    حول دائرة بحرف المتجر + النمط + التقييم.
+ *  • StoreCard — صف كامل لدليل المتاجر: تقييم، منطقة، رسوم التوصيل
+ *    لمنطقتك عند توفرها، وشارة «يخدم منطقتك».
  */
 import React from 'react';
 import {Pressable, StyleSheet, Text, View} from 'react-native';
 import {useTheme} from '../theme/ThemeProvider';
-import {radius, spacing, type, fonts} from '../theme/tokens';
+import {radius, shadowFor, spacing, type, fonts} from '../theme/tokens';
 import {Icon, type IconName} from './Icon';
+import {Stars} from './RatingSheet';
+import {formatMoney} from '../core/money';
 import type {Store} from '../core/types';
 
-/** v1.2: نوع المتجر — أيقونة دلالية لكل نشاط (مطاعم، ملابس، بقالة،
+/** نوع المتجر — أيقونة دلالية لكل نشاط (مطاعم، ملابس، بقالة،
  * صيدلية، كافيه…) تُشتق من حقل التصنيف الحر الذي يحدده التاجر. */
 export function storeTypeInfo(
   category: string | null | undefined,
@@ -23,7 +27,7 @@ export function storeTypeInfo(
   if (/كافيه|كافيها|قهوة|مقهى|عصير|بوظة/.test(c)) {
     return {icon: 'box', label: 'كافيه'};
   }
-  if (/ملابس|ألبسة|البسة|أزياء| أحذية|أحذية|أحذية/.test(c)) {
+  if (/ملابس|ألبسة|البسة|أزياء|أحذية/.test(c)) {
     return {icon: 'tag', label: 'ملابس'};
   }
   if (/صيدلي|أدوية|دواء/.test(c)) {
@@ -41,7 +45,16 @@ export function storeTypeInfo(
   return {icon: 'grid', label: c.length > 0 ? c : 'متجر'};
 }
 
-export function StoreAvatar({name, size = 46}: {name: string; size?: number}) {
+/** دائرة هوية المتجر — تُستخدم في البطاقات الدائرية وصفحة المتجر. */
+export function StoreAvatar({
+  name,
+  size = 46,
+  circular = true,
+}: {
+  name: string;
+  size?: number;
+  circular?: boolean;
+}) {
   const {palette} = useTheme();
   const first = name.trim().charAt(0) || 'س';
   return (
@@ -51,14 +64,14 @@ export function StoreAvatar({name, size = 46}: {name: string; size?: number}) {
         {
           width: size,
           height: size,
-          borderRadius: size * 0.34,
+          borderRadius: circular ? size / 2 : size * 0.34,
           backgroundColor: palette.brandSoft,
           borderColor: palette.brandBorder,
         },
       ]}>
       <Text
         style={[
-          {fontSize: size * 0.48, color: palette.brandDark, fontFamily: fonts.black},
+          {fontSize: size * 0.46, color: palette.brandDark, fontFamily: fonts.black},
         ]}>
         {first}
       </Text>
@@ -74,14 +87,14 @@ const avatarStyles = StyleSheet.create({
   },
 });
 
-export function StoreCard({
+/* ═══════════════ البطاقة الدائرية المختصرة (الرئيسية) ═══════════════ */
+
+export function CircleStoreCard({
   store,
   onPress,
-  horizontal = false,
 }: {
   store: Store;
   onPress: () => void;
-  horizontal?: boolean;
 }) {
   const {palette} = useTheme();
   const typeInfo = storeTypeInfo(store.category);
@@ -89,26 +102,126 @@ export function StoreCard({
     <Pressable
       onPress={onPress}
       style={({pressed}) => [
-        horizontal ? hStyles.card : vStyles.card,
+        circleStyles.card,
+        {backgroundColor: palette.surface, borderColor: palette.line},
+        shadowFor(palette.isDark),
+        pressed ? {transform: [{scale: 0.95}]} : null,
+      ]}>
+      {/* حلقة الهوية حول الدائرة — لمسة علامة تجارية عالمية */}
+      <View style={[circleStyles.ringWrap, {borderColor: palette.brandBorder}]}>
+        <View style={[circleStyles.ringPad, {backgroundColor: palette.surface}]}>
+          <StoreAvatar name={store.name} size={64} />
+        </View>
+        {/* شارة نوع النشاط أسفل الدائرة */}
+        <View
+          style={[
+            circleStyles.typeBadge,
+            {backgroundColor: palette.brand, borderColor: palette.surface},
+          ]}>
+          <Icon name={typeInfo.icon} size={11} color="#FFFFFF" />
+        </View>
+      </View>
+      <Text
+        style={[type.smallMedium, {color: palette.ink, fontFamily: fonts.bold}]}
+        numberOfLines={1}>
+        {store.name}
+      </Text>
+      {/* التقييم أو النشاط — أقصى ضغط معلومي في مساحة صغيرة */}
+      {store.rating != null && store.rating > 0 ? (
+        <Stars rating={store.rating} count={store.ratingCount} size={12} compact />
+      ) : (
+        <Text style={{fontSize: 10.5, color: palette.muted}} numberOfLines={1}>
+          {typeInfo.label}
+        </Text>
+      )}
+    </Pressable>
+  );
+}
+
+const circleStyles = StyleSheet.create({
+  card: {
+    width: 96,
+    alignItems: 'center',
+    gap: spacing.sm,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    padding: spacing.md,
+  },
+  ringWrap: {
+    width: 74,
+    height: 74,
+    borderRadius: 999,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  ringPad: {
+    width: 66,
+    height: 66,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  typeBadge: {
+    position: 'absolute',
+    bottom: -2,
+    left: -2,
+    width: 22,
+    height: 22,
+    borderRadius: 999,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+});
+
+/* ═══════════════ صف المتجر الكامل (دليل المتاجر) ═══════════════ */
+
+export function StoreCard({
+  store,
+  onPress,
+  myRegion,
+}: {
+  store: Store;
+  onPress: () => void;
+  /** منطقة المستخدم — تفعّل شارة «يخدم منطقتك» ورسوم التوصيل. */
+  myRegion?: string | null;
+}) {
+  const {palette} = useTheme();
+  const typeInfo = storeTypeInfo(store.category);
+  // deliveryFeeMinor لا يرد إلا عند الاستعلام بمنطقة المستخدم (?region=)
+  // — وجوده يعني حرفياً «هذا المتجر يوصّل إلى منطقتي».
+  const servesMe = myRegion != null && store.deliveryFeeMinor != null;
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({pressed}) => [
+        vStyles.card,
         {
           backgroundColor: palette.surface,
-          borderColor: palette.line,
-          opacity: pressed ? 0.88 : 1,
+          borderColor: servesMe ? palette.brandBorder : palette.line,
+          opacity: pressed ? 0.9 : 1,
         },
+        shadowFor(palette.isDark),
       ]}>
-      <StoreAvatar name={store.name} size={horizontal ? 56 : 50} />
+      <StoreAvatar name={store.name} size={54} />
       <View style={{flex: 1, gap: 3}}>
-        <Text
-          style={[type.bodyMedium, {color: palette.ink, fontFamily: fonts.bold}]}
-          numberOfLines={1}>
-          {store.name}
-        </Text>
+        <View style={{flexDirection: 'row-reverse', alignItems: 'center', gap: 6}}>
+          <Text
+            style={[type.bodyMedium, {color: palette.ink, fontFamily: fonts.bold, flex: 1}]}
+            numberOfLines={1}>
+            {store.name}
+          </Text>
+          {store.rating != null && store.rating > 0 ? (
+            <Stars rating={store.rating} size={13} compact />
+          ) : null}
+        </View>
         <View style={vStyles.metaRow}>
           {store.category ? (
             <View style={[vStyles.chip, {backgroundColor: palette.brandSoft}]}>
               <Icon name={typeInfo.icon} size={10} color={palette.brandDark} />
               <Text style={[{fontSize: 10.5, color: palette.brandDark, fontFamily: fonts.medium}]}>
-                {store.category}
+                {typeInfo.label}
               </Text>
             </View>
           ) : null}
@@ -121,7 +234,14 @@ export function StoreCard({
             </View>
           ) : null}
         </View>
-        {store.description && !horizontal ? (
+        {(servesMe || store.deliveryFeeMinor != null) && myRegion != null ? (
+          <View style={vStyles.feeRow}>
+            <Icon name="truck" size={12} color={palette.success} />
+            <Text style={[{fontSize: 11, color: palette.success, fontFamily: fonts.medium}]}>
+              يوصّل إلى {myRegion} · {formatMoney(store.deliveryFeeMinor ?? 0)}
+            </Text>
+          </View>
+        ) : store.description ? (
           <Text style={[{fontSize: 12, color: palette.muted}]} numberOfLines={1}>
             {store.description}
           </Text>
@@ -141,8 +261,9 @@ const vStyles = StyleSheet.create({
     borderWidth: 1,
     padding: spacing.md,
   },
-  metaRow: {flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.sm},
+  metaRow: {flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.sm, flexWrap: 'wrap'},
   metaItem: {flexDirection: 'row-reverse', alignItems: 'center', gap: 3},
+  feeRow: {flexDirection: 'row-reverse', alignItems: 'center', gap: 4},
   chip: {
     borderRadius: radius.pill,
     paddingHorizontal: 8,
@@ -150,17 +271,5 @@ const vStyles = StyleSheet.create({
     flexDirection: 'row-reverse',
     alignItems: 'center',
     gap: 3,
-  },
-});
-
-const hStyles = StyleSheet.create({
-  card: {
-    width: 240,
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    gap: spacing.md,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    padding: spacing.md,
   },
 });

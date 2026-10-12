@@ -46,7 +46,7 @@ export function WishlistScreen({navigation}: Props) {
         <FlatList
           data={list}
           keyExtractor={entry => String(entry.product.id)}
-          contentContainerStyle={{padding: spacing.lg, gap: spacing.md}}
+          contentContainerStyle={{padding: spacing.lg, gap: spacing.md, paddingBottom: spacing.xxxl}}
           showsVerticalScrollIndicator={false}
           renderItem={({item}) => {
             const p = item.product;

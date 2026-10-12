@@ -3,16 +3,17 @@
  * مداخل سريعة (طلباتي/المفضلة/الإشعارات/الإعدادات/حول)، تسجيل خروج،
  * وحذف الحساب (متطلب سياسة جوجل بلاي).
  */
-import React, {useState} from 'react';
+import React, {useEffect, useState} from 'react';
 import {Pressable, ScrollView, StyleSheet, Text, View} from 'react-native';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 import {useTheme} from '../../theme/ThemeProvider';
 import {radius, spacing, type, fonts} from '../../theme/tokens';
 import {Icon, type IconName} from '../../components/Icon';
 import {AppHeader, Button, Card, Screen} from '../../components/ui';
+import {getMyOrders} from '../../api/endpoints';
 import {useAuthStore} from '../../stores/authStore';
+import {useLocationStore} from '../../stores/locationStore';
 import {useNotificationsStore} from '../../stores/notificationsStore';
-import {useCartStore} from '../../stores/cartStore';
 import {useWishlistStore} from '../../stores/wishlistStore';
 import {maskIdNumber} from '../../core/validation';
 import {APP_VERSION_LABEL} from '../../core/config';
@@ -33,7 +34,33 @@ export function ProfileScreen({navigation}: Props) {
 
   const unread = useNotificationsStore(s => s.unread);
   const wishCount = Object.keys(useWishlistStore(s => s.items)).length;
-  const cartStores = Object.keys(useCartStore(s => s.carts)).length;
+  const addresses = useLocationStore(s => s.addresses);
+  const myRegion = useLocationStore(s => s.myRegion);
+  const [ordersCount, setOrdersCount] = useState<number | null>(null);
+
+  /* عدد الطلبات الحقيقي (للعضو) — أفضل إحصائية من «—». */
+  useEffect(() => {
+    const t = useAuthStore.getState().token;
+    if (t == null) {
+      setOrdersCount(null);
+      return;
+    }
+    let alive = true;
+    getMyOrders(t)
+      .then(orders => {
+        if (alive) {
+          setOrdersCount(orders.length);
+        }
+      })
+      .catch(() => {
+        if (alive) {
+          setOrdersCount(null);
+        }
+      });
+    return () => {
+      alive = false;
+    };
+  }, [token]);
 
   const rootNav = useRootNav();
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -57,7 +84,7 @@ export function ProfileScreen({navigation}: Props) {
     <Screen>
       <AppHeader title="حسابي" big />
 
-      <ScrollView contentContainerStyle={{padding: spacing.lg, gap: spacing.lg}} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{padding: spacing.lg, gap: spacing.lg, paddingBottom: spacing.xxxl}} showsVerticalScrollIndicator={false}>
         {/* بطاقة المستخدم */}
         {token != null && user != null ? (
           <Card style={{gap: spacing.md}}>
@@ -72,12 +99,20 @@ export function ProfileScreen({navigation}: Props) {
                 <Text style={[{fontSize: 12, color: palette.muted}]}>
                   هوية: {maskIdNumber(user.idNumber)}
                 </Text>
+                {myRegion != null ? (
+                  <View style={{flexDirection: 'row-reverse', alignItems: 'center', gap: 4, marginTop: 2}}>
+                    <Icon name="pin" size={11} color={palette.brandDark} />
+                    <Text style={{fontSize: 11, color: palette.brandDark, fontFamily: fonts.medium}}>
+                      منطقتك: {myRegion}
+                    </Text>
+                  </View>
+                ) : null}
               </View>
             </View>
             <View style={{flexDirection: 'row-reverse', gap: spacing.md}}>
-              <MiniStat label="طلبات" value="—" palette={palette} />
+              <MiniStat label="طلب" value={ordersCount != null ? String(ordersCount) : '—'} palette={palette} />
               <MiniStat label="مفضلة" value={String(wishCount)} palette={palette} />
-              <MiniStat label="سلال" value={String(cartStores)} palette={palette} />
+              <MiniStat label="عنوان" value={String(addresses.length)} palette={palette} />
             </View>
           </Card>
         ) : (
@@ -112,8 +147,21 @@ export function ProfileScreen({navigation}: Props) {
           <Row
             icon="receipt"
             label="طلباتي"
-            description="تتبع كل طلباتك من كل المتاجر"
+            description={ordersCount != null ? `${ordersCount} طلباً من كل المتاجر` : 'تتبع كل طلباتك من كل المتاجر'}
             onPress={() => navigation.getParent()?.navigate('Orders')}
+            palette={palette}
+          />
+          <Row
+            icon="pin"
+            label="عناويني"
+            description={
+              token == null
+                ? 'سجّل عنوانك لمتابعة أذكى'
+                : addresses.length > 0
+                  ? `${addresses.length} ${addresses.length === 1 ? 'عنوان' : 'عناوين'} — الافتراضي: ${addresses.find(a => a.is_default === 1)?.label ?? '—'}`
+                  : 'أضف عنوانك الأول'
+            }
+            onPress={() => navigation.navigate('AddressBook')}
             palette={palette}
           />
           <Row
@@ -134,7 +182,7 @@ export function ProfileScreen({navigation}: Props) {
           <Row
             icon="gear"
             label="الإعدادات"
-            description="المظهر والإشعارات والخادم"
+            description="المظهر والإشعارات"
             onPress={() => navigation.navigate('Settings')}
             palette={palette}
           />
@@ -248,7 +296,7 @@ const profileStyles = StyleSheet.create({
   avatar: {
     width: 58,
     height: 58,
-    borderRadius: 20,
+    borderRadius: 29,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',

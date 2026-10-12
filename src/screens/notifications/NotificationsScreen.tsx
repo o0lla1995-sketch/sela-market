@@ -55,7 +55,7 @@ export function NotificationsScreen({navigation}: Props) {
         <FlatList
           data={items}
           keyExtractor={n => n.id}
-          contentContainerStyle={{padding: spacing.lg, gap: spacing.md}}
+          contentContainerStyle={{padding: spacing.lg, gap: spacing.md, paddingBottom: spacing.xxxl}}
           showsVerticalScrollIndicator={false}
           renderItem={({item}) => {
             const c = toneColors(palette, item.kind === 'order' ? 'brand' : 'info');

@@ -13,6 +13,13 @@ export interface Store {
   region: string | null;
   phone: string | null;
   whatsapp: string | null;
+  /** v2.0 (خادم 4.4): متوسط تقييم المتجر (1–5) أو null قبل أول تقييم. */
+  rating?: number | null;
+  /** v2.0: عدد التقييمات. */
+  ratingCount?: number;
+  /** v2.0: رسم التوصيل لمنطقة الاستعلام (?region=) — موجود فقط عند
+   *  الفلترة بمنطقة (مقارنة أرخص توصيل لمنطقتك). */
+  deliveryFeeMinor?: number;
 }
 
 /** منطقة توصيل مع رسمها (بالقروش — minor units). */
@@ -134,6 +141,9 @@ export interface Order {
   delivered_at: number | null;
   cancelled_at: number | null;
   items: OrderItem[];
+  /** v2.0 (خادم 4.4): تقييم الطلب إن قُيّم — يعرض التطبيق زر
+   *  «قيّم المتجر» للطلبات المسلّمة غير المقيّمة. */
+  rating?: {stars: number; comment: string | null} | null;
   store: {id: number; name: string; storeNumber?: string; store_number?: string} | null;
 }
 
@@ -146,7 +156,8 @@ export interface StoreRef {
 
 /** سطر سلة — لقطة منتج لحظة الإضافة (السعر المرجعي هو الخادم عند الطلب).
  *  v1.2: السطر يتحدد بالمنتج + الخيار المختار — المنتج نفسه
- *  بمقاسين مختلفين سطران مستقلان (key فريدة لكل مزيج). */
+ *  بمقاسين مختلفين سطران مستقلان (key فريدة لكل مزيج).
+ *  v2.0: لقطة تصنيف المنتص — تغذي «مقترحات لك» عند إتمام الطلب. */
 export interface CartLine {
   /** `${productId}:${variant ?? ''}` — هوية السطر للعمليات. */
   key: string;
@@ -159,6 +170,8 @@ export interface CartLine {
   quantity: number;
   /** لقطة الخيار المختار («المقاس: L · اللون: كحلي») أو null. */
   variant: string | null;
+  /** لقطة تصنيف المنتج لحظة الإضافة (تغذي التوصيات). */
+  category?: string | null;
 }
 
 /** مفتاح سطر السلة — مزيج المنتج والخيار المختار. */
@@ -223,3 +236,55 @@ export interface AppNotification {
 
 /** وضع المظهر (المود): فاتح / داكن / حسب النظام. */
 export type ThemeMode = 'light' | 'dark' | 'system';
+
+/* ═══ v2.0 (خادم 4.4): العناوين والتقييمات ═══ */
+
+/** عنوان محفوظ للمستخدم (GET/POST /api/market/addresses). */
+export interface Address {
+  id: number;
+  user_id: number;
+  label: string;
+  region: string;
+  city: string | null;
+  street: string | null;
+  building: string | null;
+  floor: string | null;
+  apartment: string | null;
+  phone: string | null;
+  notes: string | null;
+  is_default: number;
+  created_at: number;
+  updated_at: number;
+}
+
+/** يبني سطر عنوان واحد قابل للقراءة («غزة — النصر، بناية 12، ط 3، ش 5»). */
+export function addressLine(a: Address): string {
+  const parts = [a.city, a.street].filter(p => p != null && p.length > 0);
+  const tail = [a.building, a.floor, a.apartment]
+    .filter(p => p != null && p.length > 0)
+    .join(' · ');
+  const head = parts.length > 0 ? parts.join('، ') : a.region;
+  return tail.length > 0 ? `${head}، ${tail}` : head;
+}
+
+/** مراجعة متجر (GET /api/market/stores/:id/ratings). */
+export interface StoreReview {
+  stars: number;
+  comment: string | null;
+  createdAt: number;
+  userName: string;
+}
+
+/** ملخص تقييم متجر — متوسط + مراجعات. */
+export interface StoreRatings {
+  rating: number | null;
+  ratingCount: number;
+  reviews: StoreReview[];
+}
+
+/** رد تقييم طلب (POST /api/market/orders/:id/rate). */
+export interface RateOrderResponse {
+  ok: true;
+  rating: {stars: number; comment: string | null};
+  storeRating: {rating: number | null; ratingCount: number};
+}

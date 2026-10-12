@@ -3,11 +3,12 @@
  * + تحديث عند التركيز (يعمل مع مستطلع الطلبات). الزائر يرى بوابة دخول.
  */
 import React, {useCallback, useState} from 'react';
-import {FlatList, StyleSheet, Text, View} from 'react-native';
+import {FlatList, Pressable, StyleSheet, Text, View} from 'react-native';
 import {useFocusEffect} from '@react-navigation/native';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 import {useTheme} from '../../theme/ThemeProvider';
-import {spacing, type} from '../../theme/tokens';
+import {spacing, type, fonts} from '../../theme/tokens';
+import {Icon} from '../../components/Icon';
 import {
   AppHeader,
   Button,
@@ -18,6 +19,7 @@ import {
   Screen,
 } from '../../components/ui';
 import {OrderListCard} from '../../components/OrderViews';
+import {RatingSheet} from '../../components/RatingSheet';
 import {getMyOrders} from '../../api/endpoints';
 import {ApiError} from '../../api/client';
 import {syncOrdersOnce} from '../../services/ordersSync';
@@ -46,6 +48,7 @@ export function OrdersScreen({navigation}: Props) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [ratingOrder, setRatingOrder] = useState<Order | null>(null);
 
   const load = useCallback(async () => {
     if (token == null) {
@@ -96,6 +99,10 @@ export function OrdersScreen({navigation}: Props) {
     return true;
   });
 
+  const unratedCount = orders.filter(
+    o => o.status === 'delivered' && o.rating == null,
+  ).length;
+
   return (
     <Screen>
       <AppHeader
@@ -114,6 +121,29 @@ export function OrdersScreen({navigation}: Props) {
           />
         ))}
       </View>
+
+      {/* شريط تذكير التقييم — طلبات مسلّمة بانتظار رأيك */}
+      {unratedCount > 0 ? (
+        <Pressable
+          onPress={() => {
+            const target = orders.find(
+              o => o.status === 'delivered' && o.rating == null,
+            );
+            if (target != null) {
+              setRatingOrder(target);
+            }
+          }}
+          style={({pressed}) => [
+            filterStyles.rateBanner,
+            {backgroundColor: palette.warningSoft, borderColor: palette.warning, opacity: pressed ? 0.8 : 1},
+          ]}>
+          <Icon name="star" size={16} color={palette.warning} />
+          <Text style={[{fontSize: 12, color: palette.inkSoft, flex: 1, fontFamily: fonts.medium}]}>
+            لديك {unratedCount} {unratedCount === 1 ? 'طلب وصلك' : 'طلبات وصلتك'} بانتظار تقييمك
+          </Text>
+          <Icon name="forward" size={14} color={palette.warning} />
+        </Pressable>
+      ) : null}
 
       {loading && orders.length === 0 ? (
         <Loader label="نجلب طلباتك…" />
@@ -155,6 +185,7 @@ export function OrdersScreen({navigation}: Props) {
           renderItem={({item}) => (
             <OrderListCard
               order={item}
+              onRate={setRatingOrder}
               onPress={() =>
                 navigation.navigate('OrderDetail', {orderId: item.id, order: item})
               }
@@ -162,6 +193,27 @@ export function OrdersScreen({navigation}: Props) {
           )}
         />
       )}
+
+      {/* نافذة التقييم — تفتح من البطاقة أو شريط التذكير */}
+      <RatingSheet
+        visible={ratingOrder != null}
+        onClose={() => setRatingOrder(null)}
+        orderId={ratingOrder?.id ?? 0}
+        storeName={ratingOrder?.store?.name ?? 'المتجر'}
+        onRated={async () => {
+          // حدّث الطلب محلياً كأنه مقيّم (الكامل يُجلب عند التحديث).
+          const id = ratingOrder?.id;
+          if (id != null) {
+            setOrders(prev =>
+              prev.map(o =>
+                o.id === id
+                  ? {...o, rating: {stars: 5, comment: null}}
+                  : o,
+              ),
+            );
+          }
+        }}
+      />
     </Screen>
   );
 }
@@ -172,5 +224,16 @@ const filterStyles = StyleSheet.create({
     gap: spacing.sm,
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.md,
+  },
+  rateBanner: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: spacing.sm,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 10,
   },
 });

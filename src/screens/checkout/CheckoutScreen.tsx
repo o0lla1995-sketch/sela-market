@@ -25,8 +25,11 @@ import {getStoreDetail, placeOrder} from '../../api/endpoints';
 import {ApiError} from '../../api/client';
 import {formatMoney, formatQty, lineTotal} from '../../core/money';
 import {validateAddress} from '../../core/validation';
+import {addressLine, type Address} from '../../core/types';
 import {useAuthStore} from '../../stores/authStore';
 import {useCartStore} from '../../stores/cartStore';
+import {useInterestStore} from '../../stores/interestStore';
+import {useLocationStore} from '../../stores/locationStore';
 import {useSettingsStore} from '../../stores/settingsStore';
 import {useToastStore} from '../../stores/toastStore';
 import type {DeliveryRegion} from '../../core/types';
@@ -46,12 +49,15 @@ export function CheckoutScreen({navigation, route}: Props) {
   const savedAddresses = useSettingsStore(s => s.savedAddresses);
   const rememberRegion = useSettingsStore(s => s.rememberRegion);
   const lastRegion = useSettingsStore(s => s.lastRegionByStore[String(storeId)]);
+  const serverAddresses = useLocationStore(s => s.addresses);
+  const trackOrder = useInterestStore(s => s.trackOrder);
   const toast = useToastStore(s => s.show);
 
   const [regions, setRegions] = useState<DeliveryRegion[]>([]);
   const [storeName, setStoreName] = useState<string>('');
   const [regionName, setRegionName] = useState<string | null>(null);
   const [address, setAddress] = useState('');
+  const [selectedAddressId, setSelectedAddressId] = useState<number | null>(null);
   const [note, setNote] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -65,8 +71,11 @@ export function CheckoutScreen({navigation, route}: Props) {
       setStoreName(detail.store.name);
       const enabled = detail.deliveryRegions.filter(r => r.enabled === 1);
       setRegions(enabled);
-      // منطقة مسبقة من طلب سابق، وإلا الأرخص.
-      const remembered = enabled.find(r => r.name === lastRegion);
+      // منطقة مسبقة من طلب سابق، وإلا منطقة عنوان المستخدم الافتراضي،
+      // وإلا الأرخص.
+      const remembered = enabled.find(
+        r => r.name === lastRegion || r.name === useLocationStore.getState().myRegion,
+      );
       setRegionName(
         remembered?.name ?? (enabled.length > 0 ? enabled[0].name : null),
       );
@@ -80,6 +89,16 @@ export function CheckoutScreen({navigation, route}: Props) {
   useEffect(() => {
     void load();
   }, [load]);
+
+  /** اختيار عنوان محفوظ يعبّئ الحقل ويحدّد منطقته إن كان المتجر يخدمها. */
+  const pickServerAddress = (a: Address) => {
+    setSelectedAddressId(a.id === selectedAddressId ? null : a.id);
+    setAddress(addressLine(a));
+    const matches = regions.find(r => r.name === a.region);
+    if (matches != null) {
+      setRegionName(matches.name);
+    }
+  };
 
   const selectedRegion = useMemo(
     () => regions.find(r => r.name === regionName) ?? null,
@@ -153,6 +172,8 @@ export function CheckoutScreen({navigation, route}: Props) {
       clearStore(storeId);
       addAddress(address.trim());
       rememberRegion(storeId, regionName);
+      // الطلب المكتمل يرفع وزن تصنيفاته في «مقترحات لك».
+      trackOrder(entry.lines.map(l => l.category ?? null));
       navigation.replace('OrderSuccess', {order});
     } catch (e) {
       if (e instanceof ApiError) {
@@ -238,15 +259,81 @@ export function CheckoutScreen({navigation, route}: Props) {
         {/* العنوان */}
         <View style={{gap: spacing.md}}>
           <SectionTitle title="عنوان التسليم" />
+          {/* عناوين الحساب المحفوظة على الخادم — لمسة واحدة تعبّئ كل شيء */}
+          {token != null && serverAddresses.length > 0 ? (
+            <View style={{gap: spacing.sm}}>
+              {serverAddresses.map(a => {
+                const active = selectedAddressId === a.id;
+                return (
+                  <Pressable
+                    key={a.id}
+                    onPress={() => pickServerAddress(a)}
+                    style={({pressed}) => [
+                      addrStyles.row,
+                      {
+                        backgroundColor: active ? palette.brandSoft : palette.surface,
+                        borderColor: active ? palette.brand : palette.line,
+                        opacity: pressed ? 0.8 : 1,
+                      },
+                    ]}>
+                    <View
+                      style={[
+                        addrStyles.radio,
+                        {
+                          borderColor: active ? palette.brand : palette.lineStrong,
+                          backgroundColor: active ? palette.brand : 'transparent',
+                        },
+                      ]}>
+                      {active ? (
+                        <Icon name="check" size={13} color="#FFFFFF" strokeWidth={3} />
+                      ) : null}
+                    </View>
+                    <View style={{flex: 1, gap: 2}}>
+                      <View style={{flexDirection: 'row-reverse', alignItems: 'center', gap: 6}}>
+                        <Text style={{fontSize: 13, color: palette.ink, fontFamily: fonts.bold}}>
+                          {a.label}
+                        </Text>
+                        {a.is_default === 1 ? (
+                          <View style={[addrStyles.defChip, {backgroundColor: palette.successSoft}]}>
+                            <Text style={{fontSize: 9.5, color: palette.success, fontFamily: fonts.bold}}>
+                              الافتراضي
+                            </Text>
+                          </View>
+                        ) : null}
+                        <View style={[addrStyles.regionChip, {backgroundColor: palette.surfaceAlt}]}>
+                          <Icon name="truck" size={10} color={palette.muted} />
+                          <Text style={{fontSize: 10, color: palette.muted}}>{a.region}</Text>
+                        </View>
+                      </View>
+                      <Text style={{fontSize: 11.5, color: palette.inkSoft}} numberOfLines={1}>
+                        {addressLine(a)}
+                      </Text>
+                    </View>
+                  </Pressable>
+                );
+              })}
+              <Pressable
+                onPress={() => navigation.navigate('AddressBook')}
+                hitSlop={6}
+                style={{alignSelf: 'flex-start'}}>
+                <Text style={{fontSize: 12, color: palette.brandDark, fontFamily: fonts.bold}}>
+                  إدارة عناويني
+                </Text>
+              </Pressable>
+            </View>
+          ) : null}
           <Field
             label="العنوان"
             value={address}
-            onChangeText={setAddress}
-            placeholder="الحي، الشارع، رقم البناية…"
+            onChangeText={t => {
+              setAddress(t);
+              setSelectedAddressId(null);
+            }}
+            placeholder={selectedAddressId != null ? 'اخترت عنواناً محفوظاً — أو اكتب عنواناً آخر' : 'الحي، الشارع، رقم البناية…'}
             icon="pin"
             maxLength={200}
           />
-          {savedAddresses.length > 0 ? (
+          {selectedAddressId == null && savedAddresses.length > 0 ? (
             <View style={{flexDirection: 'row-reverse', flexWrap: 'wrap', gap: spacing.sm}}>
               {savedAddresses.slice(0, 3).map(a => (
                 <Pressable
@@ -348,6 +435,35 @@ export function CheckoutScreen({navigation, route}: Props) {
     </Screen>
   );
 }
+
+const addrStyles = StyleSheet.create({
+  row: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: spacing.sm,
+    borderRadius: radius.md,
+    borderWidth: 1.5,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 11,
+  },
+  radio: {
+    width: 21,
+    height: 21,
+    borderRadius: 11,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  defChip: {borderRadius: radius.pill, paddingHorizontal: 6, paddingVertical: 1},
+  regionChip: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 3,
+    borderRadius: radius.pill,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+  },
+});
 
 const regionStyles = StyleSheet.create({
   row: {

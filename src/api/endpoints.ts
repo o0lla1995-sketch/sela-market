@@ -3,24 +3,59 @@
  */
 import {apiRequest} from './client';
 import type {
+  Address,
   CategoryCount,
   CrossProduct,
   MarketUser,
   Order,
   Product,
+  RateOrderResponse,
   Store,
   StoreDetail,
+  StoreRatings,
 } from '../core/types';
 
 /* ── عام: المتاجر والمنتجات ─────────────────────────────── */
 
-export async function getStores(): Promise<Store[]> {
-  const res = await apiRequest<{ok: true; stores: Store[]}>('/api/market/stores');
+export interface StoresQuery {
+  /** v2.0 (خادم 4.4): متاجر تخدم هذه المنطقة فقط (مرتبة برسم
+   *  التوصيل لها تصاعدياً) مع deliveryFeeMinor لكل متجر. */
+  region?: string;
+}
+
+export async function getStores(query: StoresQuery = {}): Promise<Store[]> {
+  const params = new URLSearchParams();
+  if (query.region) {
+    params.set('region', query.region);
+  }
+  const qs = params.toString();
+  const res = await apiRequest<{ok: true; stores: Store[]}>(
+    `/api/market/stores${qs ? `?${qs}` : ''}`,
+  );
   return res.stores;
+}
+
+/** v2.0: كل مناطق التوصيل المتاحة عبر المول (تغذي مسجل العنوان). */
+export async function getDeliveryRegions(): Promise<string[]> {
+  const res = await apiRequest<{ok: true; regions: string[]}>(
+    '/api/market/regions',
+  );
+  return res.regions;
 }
 
 export async function getStoreDetail(storeId: number): Promise<StoreDetail> {
   return apiRequest<StoreDetail>(`/api/market/stores/${storeId}`);
+}
+
+/** v2.0 (خادم 4.4): مراجعات متجر — متوسط + عدد + أحدث 50 تعليقاً. */
+export async function getStoreRatings(storeId: number): Promise<StoreRatings> {
+  const res = await apiRequest<{
+    ok: true;
+    rating: number | null;
+    ratingCount: number;
+    reviews: StoreRatings['reviews'];
+  }>(`/api/market/stores/${storeId}/ratings`);
+  return {rating: res.rating, ratingCount: res.ratingCount, reviews: res.reviews};
 }
 
 export interface StoreProductsQuery {
@@ -225,4 +260,66 @@ export async function cancelOrder(token: string, orderId: number): Promise<Order
     {method: 'POST', token},
   );
   return res.order;
+}
+
+/* ── v2.0: تقييم الطلب بعد الاستلام (خادم 4.4) ───────────── */
+
+export async function rateOrder(
+  token: string,
+  orderId: number,
+  input: {stars: number; comment?: string},
+): Promise<RateOrderResponse> {
+  return apiRequest<RateOrderResponse>(`/api/market/orders/${orderId}/rate`, {
+    method: 'POST',
+    token,
+    body: input,
+  });
+}
+
+/* ── v2.0: دفتر عناوين المستخدم (خادم 4.4) ───────────────── */
+
+export async function getMyAddresses(token: string): Promise<Address[]> {
+  const res = await apiRequest<{ok: true; addresses: Address[]}>(
+    '/api/market/addresses',
+    {token},
+  );
+  return res.addresses;
+}
+
+export interface SaveAddressInput {
+  /** تعديل عنوان قائم — 0 أو غياب القيمة يعني إضافة جديد. */
+  id?: number;
+  label: string;
+  region: string;
+  city?: string;
+  street?: string;
+  building?: string;
+  floor?: string;
+  apartment?: string;
+  phone?: string;
+  notes?: string;
+  isDefault?: boolean;
+}
+
+export async function saveAddress(token: string, input: SaveAddressInput): Promise<Address> {
+  const res = await apiRequest<{ok: true; address: Address}>(
+    '/api/market/addresses',
+    {method: 'POST', token, body: input},
+  );
+  return res.address;
+}
+
+export async function setDefaultAddress(token: string, addressId: number): Promise<Address> {
+  const res = await apiRequest<{ok: true; address: Address}>(
+    `/api/market/addresses/${addressId}/default`,
+    {method: 'POST', token},
+  );
+  return res.address;
+}
+
+export async function deleteAddress(token: string, addressId: number): Promise<void> {
+  await apiRequest<{ok: true}>(`/api/market/addresses/${addressId}/delete`, {
+    method: 'POST',
+    token,
+  });
 }

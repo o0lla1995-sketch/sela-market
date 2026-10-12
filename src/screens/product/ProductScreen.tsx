@@ -47,6 +47,7 @@ import {
   type ProductOptionGroup,
 } from '../../core/types';
 import {useCartStore} from '../../stores/cartStore';
+import {useInterestStore} from '../../stores/interestStore';
 import {useWishlistStore} from '../../stores/wishlistStore';
 import {useToastStore} from '../../stores/toastStore';
 import type {ShopStackParamList} from '../../navigation/RootNavigator';
@@ -98,6 +99,12 @@ export function ProductScreen({navigation, route}: Props) {
 
   // منتجات من نفس التصنيف داخل المتجر نفسه (اقتراح ذكي خفيف)
   const [similar, setSimilar] = useState<Product[]>([]);
+
+  // v2.0: مشاهدة المنتج ترفع وزن تصنيفه في «مقترحات لك» — إشارة
+  // خفيفة (وزن 1) لا تُرسل لأي خادم (كل شيء محلي على الجهاز).
+  useEffect(() => {
+    useInterestStore.getState().trackView(product.category);
+  }, [product.id, product.category]);
   useEffect(() => {
     let alive = true;
     if (product.category == null) {
@@ -149,7 +156,7 @@ export function ProductScreen({navigation, route}: Props) {
         subtitle={`من ${storeRef.name}`}
         onBack={() => navigation.goBack()}
       />
-      <ScrollView contentContainerStyle={{padding: spacing.lg, gap: spacing.lg}} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{padding: spacing.lg, gap: spacing.lg, paddingBottom: spacing.xxxl}} showsVerticalScrollIndicator={false}>
         {/* ─── معرض الصور ─── */}
         {images.length > 0 ? (
           <View>

@@ -19,7 +19,7 @@ import {useTheme} from '../theme/ThemeProvider';
 import {Icon, type IconName} from '../components/Icon';
 import {Badge} from '../components/ui';
 import {fonts} from '../theme/tokens';
-import type {Order, Product, StoreRef} from '../core/types';
+import type {Address, Order, Product, StoreRef} from '../core/types';
 
 /* ─── الشاشات ─── */
 import {WelcomeScreen} from '../screens/onboarding/WelcomeScreen';
@@ -39,6 +39,8 @@ import {OrderDetailScreen} from '../screens/orders/OrderDetailScreen';
 import {WishlistScreen} from '../screens/wishlist/WishlistScreen';
 import {NotificationsScreen} from '../screens/notifications/NotificationsScreen';
 import {ProfileScreen} from '../screens/profile/ProfileScreen';
+import {AddressBookScreen} from '../screens/profile/AddressBookScreen';
+import {AddressFormScreen} from '../screens/profile/AddressFormScreen';
 import {SettingsScreen} from '../screens/settings/SettingsScreen';
 import {AboutScreen} from '../screens/settings/AboutScreen';
 import {PrivacyScreen} from '../screens/settings/PrivacyScreen';
@@ -59,12 +61,16 @@ export type ShopStackParamList = {
   About: undefined;
   Privacy: undefined;
   Terms: undefined;
+  AddressBook: undefined;
+  AddressForm: {address?: Address} | undefined;
 };
 
 export type CartStackParamList = {
   Cart: undefined;
   Checkout: {storeId: number};
   OrderSuccess: {order: Order};
+  AddressBook: undefined;
+  AddressForm: {address?: Address} | undefined;
 };
 
 export type OrdersStackParamList = {
@@ -82,6 +88,8 @@ export type AccountStackParamList = {
   Terms: undefined;
   Store: {storeId: number; storeName?: string};
   Product: {product: Product; storeRef: StoreRef; storeName?: string};
+  AddressBook: undefined;
+  AddressForm: {address?: Address} | undefined;
 };
 
 export type MainTabParamList = {
@@ -133,6 +141,8 @@ function ShopStackScreens({initial = 'Home'}: {initial?: 'Home' | 'Stores'}) {
       <ShopStack.Screen name="About" component={AboutScreen} />
       <ShopStack.Screen name="Privacy" component={PrivacyScreen} />
       <ShopStack.Screen name="Terms" component={TermsScreen} />
+      <ShopStack.Screen name="AddressBook" component={AddressBookScreen} />
+      <ShopStack.Screen name="AddressForm" component={AddressFormScreen} />
     </ShopStack.Navigator>
   );
 }
@@ -147,6 +157,8 @@ function CartStackScreens() {
         component={OrderSuccessScreen}
         options={{animation: 'fade', gestureEnabled: false}}
       />
+      <CartStack.Screen name="AddressBook" component={AddressBookScreen} />
+      <CartStack.Screen name="AddressForm" component={AddressFormScreen} />
     </CartStack.Navigator>
   );
 }
@@ -172,6 +184,8 @@ function AccountStackScreens() {
       <AccountStack.Screen name="Terms" component={TermsScreen} />
       <AccountStack.Screen name="Store" component={StoreScreen} />
       <AccountStack.Screen name="Product" component={ProductScreen} />
+      <AccountStack.Screen name="AddressBook" component={AddressBookScreen} />
+      <AccountStack.Screen name="AddressForm" component={AddressFormScreen} />
     </AccountStack.Navigator>
   );
 }
@@ -233,12 +247,17 @@ function MainTabs() {
         headerShown: false,
         tabBarActiveTintColor: palette.brandDark,
         tabBarInactiveTintColor: palette.muted,
+        // ارتفاع الشريط تلقائي: 49 للمحتوى + insets.bottom للنظام
+        // (edge-to-edge على Android 15). الارتفاع الثابت 62 كان يبتلع
+        // مساحة الأيقونات والنصوص على أجهزة أزرار التنقل الثلاثة
+        // فتختفي التسميات أسفل الشريط — بلا ارتفاع مخصص لا يحدث أبداً.
         tabBarStyle: {
           backgroundColor: palette.surface,
           borderTopColor: palette.line,
-          height: 62,
           paddingTop: 6,
         },
+        // لوحة المفاتيح تغطي الشريط في نماذج الإدخال — تجربة أوسع.
+        tabBarHideOnKeyboard: true,
         tabBarLabelStyle: {
           fontFamily: fonts.medium,
           fontSize: 11,

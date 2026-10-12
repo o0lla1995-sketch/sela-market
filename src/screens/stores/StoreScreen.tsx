@@ -1,19 +1,19 @@
 /**
- * StoreScreen.tsx — صفحة المتجر: ترويسة (الاسم/التصنيف/المنطقة/اتصال)،
- * مناطق التوصيل مع أرقامها، وبحث داخل المتجر + شبكة منتجاته بترقيم
- * صفحات لا نهائي.
+ * StoreScreen.tsx — صفحة المتجر (v2.0 — إعادة تصميم احترافية):
+ * ترويسة بطولية بتدرج الهوية + دائرة المتجر المتداخلة + التقييم
+ * بنجومه + شارات النشاط والمنطقة، شريط إجراءات (اتصال/واتساب)،
+ * شريط إحصاءات (منتج/مناطق/تقييم)، مناطق التوصيل بأسعارها، بحث
+ * داخل المتجر، شبكة المنتجات، وقسم مراجعات المتجر الحقيقية من
+ * المشترين (خادم 4.4) — بأسلوب متاجر التجزئة العالمية.
  */
-import React, {useCallback, useEffect, useState} from 'react';
-import {FlatList, Linking, StyleSheet, Text, View} from 'react-native';
+import React, {useCallback, useEffect, useMemo, useState} from 'react';
+import {FlatList, I18nManager, Linking, Pressable, StyleSheet, Text, View} from 'react-native';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 import {useTheme} from '../../theme/ThemeProvider';
-import {radius, spacing, type, fonts} from '../../theme/tokens';
+import {radius, shadowFor, spacing, type, fonts} from '../../theme/tokens';
 import {Icon} from '../../components/Icon';
 import {
-  AppHeader,
   Button,
-  Card,
-  Chip,
   EmptyState,
   ErrorState,
   Loader,
@@ -22,12 +22,14 @@ import {
   SectionTitle,
 } from '../../components/ui';
 import {ProductCard} from '../../components/ProductCard';
-import {StoreAvatar} from '../../components/StoreCard';
-import {getStoreDetail, getStoreProducts} from '../../api/endpoints';
+import {StoreAvatar, storeTypeInfo} from '../../components/StoreCard';
+import {Stars} from '../../components/RatingSheet';
+import {getStoreDetail, getStoreProducts, getStoreRatings} from '../../api/endpoints';
 import {ApiError} from '../../api/client';
 import {PRODUCTS_PAGE_SIZE} from '../../core/config';
 import {formatMoney} from '../../core/money';
-import type {DeliveryRegion, Product, StoreDetail} from '../../core/types';
+import {relativeTime} from '../../core/time';
+import type {DeliveryRegion, Product, StoreDetail, StoreRatings} from '../../core/types';
 import type {ShopStackParamList} from '../../navigation/RootNavigator';
 
 type Props = NativeStackScreenProps<ShopStackParamList, 'Store'>;
@@ -37,6 +39,7 @@ export function StoreScreen({navigation, route}: Props) {
   const {storeId, storeName} = route.params;
 
   const [detail, setDetail] = useState<StoreDetail | null>(null);
+  const [ratings, setRatings] = useState<StoreRatings | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
   const [query, setQuery] = useState('');
   const [page, setPage] = useState(1);
@@ -48,8 +51,12 @@ export function StoreScreen({navigation, route}: Props) {
     setError(null);
     setLoading(true);
     try {
-      const d = await getStoreDetail(storeId);
+      const [d, r] = await Promise.all([
+        getStoreDetail(storeId),
+        getStoreRatings(storeId).catch(() => null),
+      ]);
       setDetail(d);
+      setRatings(r);
       const p = await getStoreProducts(storeId, {per: PRODUCTS_PAGE_SIZE});
       setProducts(p);
       setPage(1);
@@ -101,123 +108,253 @@ export function StoreScreen({navigation, route}: Props) {
 
   const store = detail?.store;
   const regions: DeliveryRegion[] = detail?.deliveryRegions ?? [];
+  const typeInfo = storeTypeInfo(store?.category);
+  const storeRef = useMemo(
+    () => ({
+      id: storeId,
+      name: store?.name ?? storeName ?? 'المتجر',
+      storeNumber: store?.store_number,
+    }),
+    [storeId, store, storeName],
+  );
+
+  const reviewsWithText = (ratings?.reviews ?? []).filter(
+    r => r.comment != null && r.comment.length > 0,
+  );
 
   return (
     <Screen>
-      <AppHeader
-        title={store?.name ?? storeName ?? 'المتجر'}
-        subtitle={store ? `${store.store_number} · ${store.category ?? 'متجر'}` : undefined}
-        onBack={() => navigation.goBack()}
-      />
+      <FlatList
+        data={products}
+        keyExtractor={item => String(item.id)}
+        numColumns={2}
+        columnWrapperStyle={{gap: spacing.md, width: '100%'}}
+        contentContainerStyle={{paddingBottom: spacing.xxxl}}
+        showsVerticalScrollIndicator={false}
+        onEndReached={loadMore}
+        onEndReachedThreshold={0.6}
+        ListHeaderComponent={
+          <View>
+            {/* ─── الترويسة البطولية ─── */}
+            <View style={[heroStyles.wrap, {backgroundColor: palette.brandSoft}]}>
+              <View style={[heroStyles.ring, {borderColor: palette.brandBorder}]} />
+              <Pressable
+                onPress={() => navigation.goBack()}
+                hitSlop={10}
+                style={[heroStyles.backBtn, {backgroundColor: palette.surface}]}>
+                <Icon
+                  name={I18nManager.isRTL ? 'back' : 'forward'}
+                  size={20}
+                  color={palette.ink}
+                />
+              </Pressable>
+              <StoreAvatar name={store?.name ?? storeName ?? 'س'} size={86} />
+              <Text style={[type.h1, {color: palette.ink, fontFamily: fonts.black}]}>
+                {store?.name ?? storeName ?? 'المتجر'}
+              </Text>
+              <View style={heroStyles.badgesRow}>
+                <View style={[heroStyles.badge, {backgroundColor: palette.surface}]}>
+                  <Icon name={typeInfo.icon} size={12} color={palette.brandDark} />
+                  <Text style={{fontSize: 11.5, color: palette.brandDark, fontFamily: fonts.bold}}>
+                    {typeInfo.label}
+                  </Text>
+                </View>
+                {store?.region ? (
+                  <View style={[heroStyles.badge, {backgroundColor: palette.surface}]}>
+                    <Icon name="pin" size={12} color={palette.muted} />
+                    <Text style={{fontSize: 11.5, color: palette.inkSoft}} numberOfLines={1}>
+                      {store.region}
+                    </Text>
+                  </View>
+                ) : null}
+                {store?.store_number ? (
+                  <View style={[heroStyles.badge, {backgroundColor: palette.surface}]}>
+                    <Icon name="checkCircle" size={12} color={palette.success} />
+                    <Text style={{fontSize: 11.5, color: palette.inkSoft}}>
+                      موثّق · {store.store_number}
+                    </Text>
+                  </View>
+                ) : null}
+              </View>
+              {/* التقييم */}
+              {store?.rating != null && store.rating > 0 ? (
+                <View style={[heroStyles.ratingBox, {backgroundColor: palette.surface}]}>
+                  <Stars rating={store.rating} size={16} />
+                  <Text style={{fontSize: 12, color: palette.muted}}>
+                    {store.rating} من 5 · {store.ratingCount} تقييماً من مشترين حقيقيين
+                  </Text>
+                </View>
+              ) : (
+                <Text style={{fontSize: 11.5, color: palette.muted}}>
+                  متجر جديد على المول — كن أول من يقيّمه بعد أول طلب
+                </Text>
+              )}
+              {store?.description ? (
+                <Text
+                  style={[type.small, {color: palette.inkSoft, textAlign: 'center', lineHeight: 21}]}>
+                  {store.description}
+                </Text>
+              ) : null}
+            </View>
 
-      {loading && detail == null ? (
-        <Loader label="ندخل المتجر…" />
-      ) : error != null && detail == null ? (
-        <ErrorState message={error} onRetry={load} />
-      ) : (
-        <FlatList
-          data={products}
-          keyExtractor={item => String(item.id)}
-          numColumns={2}
-          columnWrapperStyle={{gap: spacing.md, width: '100%'}}
-          contentContainerStyle={{padding: spacing.lg, gap: spacing.lg}}
-          showsVerticalScrollIndicator={false}
-          onEndReached={loadMore}
-          onEndReachedThreshold={0.6}
-          ListHeaderComponent={
-            <View style={{gap: spacing.lg}}>
-              {/* بطاقة المتجر */}
-              <Card style={{gap: spacing.md}}>
-                <View style={storeStyles.topRow}>
-                  <StoreAvatar name={store?.name ?? 'س'} size={62} />
-                  <View style={{flex: 1, gap: 3, alignItems: 'flex-start'}}>
-                    <Text style={[type.h2, {color: palette.ink}]}>{store?.name}</Text>
-                    <View style={{flexDirection: 'row-reverse', alignItems: 'center', gap: 6}}>
-                      {store?.region ? (
-                        <>
-                          <Icon name="pin" size={13} color={palette.muted} />
-                          <Text style={[{fontSize: 12, color: palette.muted}]}>
-                            {store.region}
-                          </Text>
-                        </>
-                      ) : null}
-                    </View>
+            {loading && detail == null ? (
+              <Loader label="ندخل المتجر…" />
+            ) : error != null && detail == null ? (
+              <View style={{padding: spacing.lg}}>
+                <ErrorState message={error} onRetry={load} />
+              </View>
+            ) : (
+              <View style={{padding: spacing.lg, gap: spacing.xl}}>
+                {/* ─── شريط الإجراءات ─── */}
+                {store?.phone || store?.whatsapp ? (
+                  <View style={{flexDirection: 'row-reverse', gap: spacing.md}}>
+                    {store?.phone ? (
+                      <Button
+                        label="اتصال"
+                        variant="soft"
+                        small
+                        icon="phone"
+                        style={{flex: 1}}
+                        onPress={() => Linking.openURL(`tel:${store.phone}`)}
+                      />
+                    ) : null}
+                    {store?.whatsapp ? (
+                      <Button
+                        label="واتساب"
+                        variant="outline"
+                        small
+                        icon="whatsapp"
+                        style={{flex: 1}}
+                        onPress={() =>
+                          Linking.openURL(
+                            `https://wa.me/${store.whatsapp!.replace(/[^\d]/g, '')}`,
+                          )
+                        }
+                      />
+                    ) : null}
+                  </View>
+                ) : null}
+
+                {/* ─── شريط الإحصاءات ─── */}
+                <View style={[statsStyles.row, {backgroundColor: palette.surface, borderColor: palette.line}, shadowFor(palette.isDark)]}>
+                  <View style={statsStyles.cell}>
+                    <Text style={[type.h2, {color: palette.brandDark}]}>
+                      {loading ? '…' : products.length + (loadingMore ? '+' : '')}
+                    </Text>
+                    <Text style={{fontSize: 10.5, color: palette.muted}}>منتجاً</Text>
+                  </View>
+                  <View style={[statsStyles.divider, {backgroundColor: palette.line}]} />
+                  <View style={statsStyles.cell}>
+                    <Text style={[type.h2, {color: palette.brandDark}]}>{regions.length}</Text>
+                    <Text style={{fontSize: 10.5, color: palette.muted}}>مناطق توصيل</Text>
+                  </View>
+                  <View style={[statsStyles.divider, {backgroundColor: palette.line}]} />
+                  <View style={statsStyles.cell}>
+                    <Text style={[type.h2, {color: palette.brandDark}]}>
+                      {store?.rating != null && store.rating > 0 ? store.rating : 'جديد'}
+                    </Text>
+                    <Text style={{fontSize: 10.5, color: palette.muted}}>
+                      {store?.rating != null && store.rating > 0 ? `من 5 (${store.ratingCount})` : 'تقييم'}
+                    </Text>
                   </View>
                 </View>
-                {store?.description ? (
-                  <Text style={[type.small, {color: palette.inkSoft, lineHeight: 21}]}>
-                    {store.description}
-                  </Text>
-                ) : null}
-                {/* اتصال */}
-                <View style={{flexDirection: 'row-reverse', gap: spacing.md}}>
-                  {store?.phone ? (
-                    <Button
-                      label="اتصال"
-                      variant="soft"
-                      small
-                      icon="phone"
-                      style={{flex: 1}}
-                      onPress={() => Linking.openURL(`tel:${store.phone}`)}
-                    />
-                  ) : null}
-                  {store?.whatsapp ? (
-                    <Button
-                      label="واتساب"
-                      variant="outline"
-                      small
-                      icon="whatsapp"
-                      style={{flex: 1}}
-                      onPress={() =>
-                        Linking.openURL(
-                          `https://wa.me/${store.whatsapp!.replace(/[^\d]/g, '')}`,
-                        )
-                      }
-                    />
-                  ) : null}
-                </View>
-              </Card>
 
-              {/* مناطق التوصيل */}
-              {regions.length > 0 ? (
-                <View style={{gap: spacing.sm}}>
-                  <SectionTitle title="مناطق التوصيل وأسعارها" />
-                  <View style={{flexDirection: 'row-reverse', flexWrap: 'wrap', gap: spacing.sm}}>
-                    {regions.map(r => (
+                {/* ─── مناطق التوصيل ─── */}
+                {regions.length > 0 ? (
+                  <View style={{gap: spacing.sm}}>
+                    <SectionTitle title="مناطق التوصيل وأسعارها" />
+                    <View style={{flexDirection: 'row-reverse', flexWrap: 'wrap', gap: spacing.sm}}>
+                      {regions.map(r => (
+                        <View
+                          key={r.name}
+                          style={[
+                            regionStyles.chip,
+                            {backgroundColor: palette.surfaceAlt, borderColor: palette.line},
+                          ]}>
+                          <Icon name="truck" size={14} color={palette.brandDark} />
+                          <Text style={[{fontSize: 12.5, color: palette.ink, fontFamily: fonts.medium}]}>
+                            {r.name}
+                          </Text>
+                          <Text style={[{fontSize: 12.5, color: palette.brandDark, fontFamily: fonts.bold}]}>
+                            {formatMoney(r.fee_minor)}
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
+                  </View>
+                ) : null}
+
+                {/* ─── بحث داخل المتجر ─── */}
+                <SearchBar
+                  value={query}
+                  onChangeText={setQuery}
+                  placeholder={`ابحث داخل ${store?.name ?? 'المتجر'}…`}
+                />
+                <SectionTitle title={`المنتجات (${products.length}${loadingMore ? '+' : ''})`} />
+
+                {query.trim().length > 0 ? (
+                  <Pressable onPress={() => setQuery('')} hitSlop={6}>
+                    <Text style={{fontSize: 12, color: palette.brandDark}}>
+                      مسح البحث «{query}»
+                    </Text>
+                  </Pressable>
+                ) : null}
+
+                {/* ─── مراجعات المتجر ─── */}
+                {ratings != null && ratings.ratingCount > 0 ? (
+                  <View style={{gap: spacing.md, marginTop: spacing.sm}}>
+                    <SectionTitle title={`آراء المشترين (${ratings.ratingCount})`} />
+                    <View
+                      style={[
+                        reviewStyles.summary,
+                        {backgroundColor: palette.surface, borderColor: palette.line},
+                        shadowFor(palette.isDark),
+                      ]}>
+                      <Stars rating={ratings.rating} count={ratings.ratingCount} size={17} />
+                      <Text style={[type.small, {color: palette.muted, textAlign: 'center'}]}>
+                        متوسط تقييم المتجر من طلبات مكتملة — التقييم بعد استلام
+                        الطلب فقط لضمان آراء حقيقية
+                      </Text>
+                    </View>
+                    {reviewsWithText.slice(0, 5).map((r, i) => (
                       <View
-                        key={r.name}
+                        key={i}
                         style={[
-                          regionStyles.chip,
-                          {backgroundColor: palette.surfaceAlt, borderColor: palette.line},
+                          reviewStyles.card,
+                          {backgroundColor: palette.surface, borderColor: palette.line},
                         ]}>
-                        <Icon name="truck" size={14} color={palette.brandDark} />
-                        <Text style={[{fontSize: 12.5, color: palette.ink, fontFamily: fonts.medium}]}>
-                          {r.name}
-                        </Text>
-                        <Text style={[{fontSize: 12.5, color: palette.brandDark, fontFamily: fonts.bold}]}>
-                          {formatMoney(r.fee_minor)}
+                        <View style={{flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between'}}>
+                          <View style={{gap: 3}}>
+                            <Text style={{fontSize: 12.5, color: palette.ink, fontFamily: fonts.bold}}>
+                              {r.userName}
+                            </Text>
+                            <View style={{flexDirection: 'row-reverse', alignItems: 'center', gap: 4}}>
+                              <Stars rating={r.stars} size={12} compact />
+                              <Text style={{fontSize: 10.5, color: palette.muted}}>
+                                · {relativeTime(r.createdAt)}
+                              </Text>
+                            </View>
+                          </View>
+                          <View style={[reviewStyles.verifiedChip, {backgroundColor: palette.successSoft}]}>
+                            <Icon name="checkCircle" size={10} color={palette.success} />
+                            <Text style={{fontSize: 9.5, color: palette.success, fontFamily: fonts.bold}}>
+                              شراء موثّق
+                            </Text>
+                          </View>
+                        </View>
+                        <Text style={[type.small, {color: palette.inkSoft, lineHeight: 20}]}>
+                          {r.comment}
                         </Text>
                       </View>
                     ))}
                   </View>
-                </View>
-              ) : null}
-
-              {/* بحث داخل المتجر */}
-              <SearchBar
-                value={query}
-                onChangeText={setQuery}
-                placeholder={`ابحث داخل ${store?.name ?? 'المتجر'}…`}
-              />
-              <View style={{flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between'}}>
-                <SectionTitle title={`المنتجات (${products.length}${loadingMore ? '+' : ''})`} />
-                {query.trim().length > 0 ? (
-                  <Chip label="مسح البحث" icon="close" onPress={() => setQuery('')} />
                 ) : null}
               </View>
-            </View>
-          }
-          ListEmptyComponent={
+            )}
+          </View>
+        }
+        ListEmptyComponent={
+          !loading && error == null ? (
             query.trim().length > 0 ? (
               <EmptyState
                 icon="search"
@@ -233,42 +370,91 @@ export function StoreScreen({navigation, route}: Props) {
                 body="يزامن التاجر كتالوج متجره كل 15 دقيقة — عد لاحقاً"
               />
             )
-          }
-          ListFooterComponent={
-            loadingMore ? (
-              <View style={{paddingVertical: spacing.lg}}>
-                <Loader label="نجلب المزيد…" />
-              </View>
-            ) : null
-          }
-          renderItem={({item}) => (
-            <ProductCard
-              product={item}
-              storeRef={{
-                id: storeId,
-                name: store?.name ?? storeName ?? 'المتجر',
-                storeNumber: store?.store_number,
-              }}
-              onPress={() =>
-                navigation.navigate('Product', {
-                  product: item,
-                  storeRef: {
-                    id: storeId,
-                    name: store?.name ?? storeName ?? 'المتجر',
-                    storeNumber: store?.store_number,
-                  },
-                })
-              }
-            />
-          )}
-        />
-      )}
+          ) : null
+        }
+        ListFooterComponent={
+          loadingMore ? (
+            <View style={{paddingVertical: spacing.lg}}>
+              <Loader label="نجلب المزيد…" />
+            </View>
+          ) : null
+        }
+        renderItem={({item}) => (
+          <ProductCard
+            product={item}
+            storeRef={storeRef}
+            onPress={() => navigation.navigate('Product', {product: item, storeRef})}
+          />
+        )}
+        style={{backgroundColor: palette.bg}}
+      />
     </Screen>
   );
 }
 
-const storeStyles = StyleSheet.create({
-  topRow: {flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.md},
+const heroStyles = StyleSheet.create({
+  wrap: {
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.xl,
+    paddingBottom: spacing.xxl,
+    borderBottomRightRadius: radius.xl,
+    borderBottomLeftRadius: radius.xl,
+  },
+  ring: {
+    position: 'absolute',
+    top: -40,
+    right: -40,
+    width: 160,
+    height: 160,
+    borderRadius: 999,
+    borderWidth: 26,
+    opacity: 0.5,
+  },
+  backBtn: {
+    position: 'absolute',
+    top: spacing.lg,
+    right: spacing.lg,
+    width: 40,
+    height: 40,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  badgesRow: {
+    flexDirection: 'row-reverse',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  badge: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 4,
+    borderRadius: radius.pill,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  ratingBox: {
+    alignItems: 'center',
+    gap: 3,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+  },
+});
+
+const statsStyles = StyleSheet.create({
+  row: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    paddingVertical: spacing.md,
+  },
+  cell: {flex: 1, alignItems: 'center', gap: 1},
+  divider: {width: 1, height: 34},
 });
 
 const regionStyles = StyleSheet.create({
@@ -280,5 +466,29 @@ const regionStyles = StyleSheet.create({
     borderWidth: 1,
     paddingHorizontal: 12,
     paddingVertical: 7,
+  },
+});
+
+const reviewStyles = StyleSheet.create({
+  summary: {
+    alignItems: 'center',
+    gap: spacing.sm,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    padding: spacing.lg,
+  },
+  card: {
+    gap: spacing.sm,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    padding: spacing.md,
+  },
+  verifiedChip: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 3,
+    borderRadius: radius.pill,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
   },
 });

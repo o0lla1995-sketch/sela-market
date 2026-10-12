@@ -19,6 +19,7 @@ import {Toaster} from './components/ui';
 import {Icon} from './components/Icon';
 import {RootNavigator} from './navigation/RootNavigator';
 import {useAuthStore} from './stores/authStore';
+import {useLocationStore} from './stores/locationStore';
 import {primeAndStart} from './services/ordersSync';
 import {fonts} from './theme/tokens';
 
@@ -43,6 +44,28 @@ function InnerApp() {
     if (useAuthStore.getState().token != null) {
       primeAndStart();
     }
+  }, []);
+
+  /* v2.0: مزامنة منطقة/عناوين المستخدم مع الجلسة — عند الدخول تُجلب
+   * عناوين الحساب (وتصبح منطقة الافتراضي «منطقتي»)، وعند الخروج
+   * تُمسح بيانات الحساب وتبقى منطقة الزائر المحلية. */
+  useEffect(() => {
+    let lastToken = useAuthStore.getState().token;
+    if (lastToken != null) {
+      void useLocationStore.getState().syncFromServer();
+    }
+    const unsub = useAuthStore.subscribe(state => {
+      // فقط عند تغيّر الرمز نفسه (لا كل تحديث busy/error).
+      if (state.token !== lastToken) {
+        lastToken = state.token;
+        if (state.token != null) {
+          void useLocationStore.getState().syncFromServer();
+        } else {
+          useLocationStore.getState().reset();
+        }
+      }
+    });
+    return unsub;
   }, []);
 
   return (

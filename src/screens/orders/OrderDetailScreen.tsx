@@ -20,6 +20,7 @@ import {
   SectionTitle,
 } from '../../components/ui';
 import {OrderStatusBadge, OrderTimeline, OrderTotals} from '../../components/OrderViews';
+import {RatingSheet, Stars} from '../../components/RatingSheet';
 import {getMyOrders, getStoreDetail, cancelOrder} from '../../api/endpoints';
 import {ApiError} from '../../api/client';
 import {formatDateTime, relativeTime} from '../../core/time';
@@ -48,6 +49,7 @@ export function OrderDetailScreen({navigation, route}: Props) {
   const [error, setError] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
+  const [ratingOpen, setRatingOpen] = useState(false);
 
   const load = useCallback(async () => {
     if (token == null) {
@@ -148,6 +150,7 @@ export function OrderDetailScreen({navigation, route}: Props) {
   };
 
   const meta = STATUS_META[order.status];
+  const canRate = order.status === 'delivered';
 
   return (
     <Screen>
@@ -156,7 +159,7 @@ export function OrderDetailScreen({navigation, route}: Props) {
         subtitle={`طلب ${order.store?.name ?? ''}`}
         onBack={() => navigation.goBack()}
       />
-      <ScrollView contentContainerStyle={{padding: spacing.lg, gap: spacing.lg}} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{padding: spacing.lg, gap: spacing.lg, paddingBottom: spacing.xxxl}} showsVerticalScrollIndicator={false}>
         {/* حالة الطلب */}
         <Card style={{gap: spacing.md}}>
           <View style={detailStyles.statusRow}>
@@ -170,6 +173,46 @@ export function OrderDetailScreen({navigation, route}: Props) {
           </Text>
           <OrderTimeline order={order} />
         </Card>
+
+        {/* تقييم المتجر — للطلبات المسلّمة فقط (خادم 4.4) */}
+        {canRate ? (
+          order.rating != null ? (
+            <Card style={{gap: spacing.sm}}>
+              <SectionTitle title="تقييمك لهذا الطلب" />
+              <View style={{flexDirection: 'row-reverse', alignItems: 'center', gap: 8}}>
+                <Stars rating={order.rating.stars} size={18} />
+                <Icon name="checkCircle" size={15} color={palette.success} />
+              </View>
+              {order.rating.comment ? (
+                <Text style={[type.small, {color: palette.inkSoft, lineHeight: 20}]}>
+                  «{order.rating.comment}»
+                </Text>
+              ) : null}
+            </Card>
+          ) : (
+            <Card style={{gap: spacing.sm, borderColor: palette.warning}}>
+              <View style={{flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.sm}}>
+                <View style={[detailStyles.rateIcon, {backgroundColor: palette.warningSoft}]}>
+                  <Icon name="star" size={20} color={palette.warning} />
+                </View>
+                <View style={{flex: 1, gap: 2}}>
+                  <Text style={[type.h3, {color: palette.ink}]}>
+                    وصل طلبك؟ قيّم {order.store?.name ?? 'المتجر'}
+                  </Text>
+                  <Text style={{fontSize: 11.5, color: palette.muted}}>
+                    رأيك يبني تقييم المتجر الاحترافي ويساعد بقية المتسوقين
+                  </Text>
+                </View>
+              </View>
+              <Button
+                label="قيّم الآن"
+                variant="soft"
+                icon="star"
+                onPress={() => setRatingOpen(true)}
+              />
+            </Card>
+          )
+        ) : null}
 
         {/* بيانات التسليم */}
         <Card style={{gap: spacing.sm}}>
@@ -305,6 +348,19 @@ export function OrderDetailScreen({navigation, route}: Props) {
           />
         </View>
       </ScrollView>
+
+      {/* نافذة التقييم */}
+      <RatingSheet
+        visible={ratingOpen}
+        onClose={() => setRatingOpen(false)}
+        orderId={order.id}
+        storeName={order.store?.name ?? 'المتجر'}
+        onRated={stars => {
+          setOrder(prev =>
+            prev == null ? prev : {...prev, rating: {stars, comment: null}},
+          );
+        }}
+      />
     </Screen>
   );
 }
@@ -336,6 +392,13 @@ const detailStyles = StyleSheet.create({
     flexDirection: 'row-reverse',
     alignItems: 'center',
     justifyContent: 'space-between',
+  },
+  rateIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   infoRow: {flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.sm},
   itemRow: {
