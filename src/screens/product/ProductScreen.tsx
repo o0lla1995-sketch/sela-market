@@ -1,9 +1,12 @@
 /**
- * ProductScreen.tsx — صفحة المنتج (v1.1 — معرض صور احترافي):
- * معرض صور أفقي بنقاط وعدّاد (صور التسجيل البصري الثلاث للمنتج من
- * نقطة البيع — مضغوطة WebP خفيفة) + عارض ملء الشاشة، بطاقة سعر
- * كبيرة، حالة المخزون، بطاقة المتجر، عدّاد كمية، إضافة للسلة
- * والمفضلة، وقسم «من نفس التصنيف» بذكاء محلي.
+ * ProductScreen.tsx — صفحة المنتج (v1.2 — خيارات الشراء + شفافية الوحدة):
+ * ─────────────────────────────────────────────────────────────────
+ * معرض صور بنقاط وعدّاد + عارض ملء الشاشة، بطاقة سعر كبيرة تشرح
+ * وحدة البيع (كيلو/قطعة/علبة…) بلا لبس، مجموعات خيارات الشراء
+ * (مقاسات/ألوان) كرقائق إلزامية قبل الإضافة — المنتج نفسه بخيارين
+ * سطران مستقلان في السلة، عدّاد كمية بأنصاف الكيلو للوزن مع إجمالي
+ * حيّ يتحدث مع كل لمسة، حالة المخزون، بطاقة المتجر، و«المزيد من
+ * التصنيف».
  */
 import React, {useEffect, useMemo, useState} from 'react';
 import {
@@ -36,10 +39,16 @@ import {StoreAvatar} from '../../components/StoreCard';
 import {absoluteUrl} from '../../api/client';
 import {getStoreProducts} from '../../api/endpoints';
 import {formatMoney} from '../../core/money';
+import {
+  lineKeyOf,
+  optionsComplete,
+  variantTextOf,
+  type Product,
+  type ProductOptionGroup,
+} from '../../core/types';
 import {useCartStore} from '../../stores/cartStore';
 import {useWishlistStore} from '../../stores/wishlistStore';
 import {useToastStore} from '../../stores/toastStore';
-import type {Product} from '../../core/types';
 import type {ShopStackParamList} from '../../navigation/RootNavigator';
 
 type Props = NativeStackScreenProps<ShopStackParamList, 'Product'>;
@@ -53,16 +62,32 @@ export function ProductScreen({navigation, route}: Props) {
   const addProduct = useCartStore(s => s.addProduct);
   const increment = useCartStore(s => s.increment);
   const decrement = useCartStore(s => s.decrement);
-  const cartQty = useCartStore(
-    s => s.carts[String(storeRef.id)]?.lines.find(l => l.productId === product.id)?.quantity ?? 0,
-  );
+  const toast = useToastStore(s => s.show);
   const wishlisted = useWishlistStore(s => s.items[String(product.id)] != null);
   const toggleWishlist = useWishlistStore(s => s.toggle);
-  const toast = useToastStore(s => s.show);
 
   const soldByWeight = product.sold_by_weight === 1;
   const outOfStock = product.stock <= 0;
   const lowStock = !outOfStock && product.stock <= 5;
+  const optionGroups: ProductOptionGroup[] = product.options ?? [];
+
+  /** اختيار المستخدم لكل مجموعة خيارات (اسم المجموعة → القيمة). */
+  const [selection, setSelection] = useState<Record<string, string>>({});
+  const variantText = variantTextOf(optionGroups, selection);
+  const complete = optionsComplete(optionGroups, selection);
+  const activeLineKey = lineKeyOf(product.id, variantText);
+
+  const cartLine = useCartStore(
+    s => s.carts[String(storeRef.id)]?.lines.find(l => l.key === activeLineKey),
+  );
+  const cartQty = cartLine?.quantity ?? 0;
+  /** أسطر أخرى لنفس المنتج بخيارات مختلفة (كم إضافة معلوماتية). */
+  const otherVariantCount = useCartStore(
+    s =>
+      (s.carts[String(storeRef.id)]?.lines ?? []).filter(
+        l => l.productId === product.id && l.key !== activeLineKey,
+      ).length,
+  );
 
   const images = useMemo(
     () => (product.images ?? []).map(absoluteUrl).filter((u): u is string => u != null),
@@ -100,9 +125,20 @@ export function ProductScreen({navigation, route}: Props) {
       toast('نفدت الكمية من المتجر حالياً', 'danger');
       return;
     }
-    addProduct(storeRef, product);
+    if (!complete) {
+      toast(`اختر ${optionGroups.find(g => selection[g.name] == null)!.name} أولاً`, 'danger');
+      return;
+    }
+    addProduct(storeRef, product, variantText);
     toast(`أُضيف «${product.name}» إلى سلة ${storeRef.name}`, 'success');
   };
+
+  /** وحدة البيع المعروضة بلا لبس. */
+  const unitText = soldByWeight
+    ? `بالكيلو — يُطلب بأنصاف الكيلو (٠٫٥ كجم وأكثر)`
+    : product.unit_label
+      ? `الوحدة: ${product.unit_label}`
+      : 'يُباع بالقطعة';
 
   const galleryHeight = screenWidth * 0.86;
 
@@ -122,7 +158,9 @@ export function ProductScreen({navigation, route}: Props) {
               pagingEnabled
               showsHorizontalScrollIndicator={false}
               onMomentumScrollEnd={e => {
-                setSlide(Math.round(e.nativeEvent.contentOffset.x / screenWidth));
+                // RTL: إزاحات سالبة على أندرويد — القيمة المطلقة
+                // تعطي الفهرس الصحيح دائماً.
+                setSlide(Math.round(Math.abs(e.nativeEvent.contentOffset.x) / screenWidth));
               }}
               style={{borderRadius: radius.xl, overflow: 'hidden'}}>
               {images.map((uri, i) => (
@@ -173,20 +211,13 @@ export function ProductScreen({navigation, route}: Props) {
           </View>
         )}
 
-        {/* ─── بطاقة السعر ─── */}
+        {/* ─── بطاقة السعر + وحدة البيع ─── */}
         <Card style={{gap: spacing.md}}>
           <View style={priceStyles.row}>
             <View style={{gap: 2, flex: 1, alignItems: 'flex-start'}}>
               <Text style={[type.small, {color: palette.muted}]}>السعر</Text>
               <Text style={[priceStyles.amount, {color: palette.brandDark}]}>
                 {formatMoney(product.price_minor)}
-              </Text>
-              <Text style={[{fontSize: 12, color: palette.muted}]}>
-                {soldByWeight
-                  ? `لكل ${product.unit_label ?? 'كيلو'} (يُطلب بأنصاف الكيلو)`
-                  : product.unit_label
-                    ? `لكل ${product.unit_label}`
-                    : 'للقطعة'}
               </Text>
             </View>
             <View
@@ -215,6 +246,18 @@ export function ProductScreen({navigation, route}: Props) {
             </Pressable>
           </View>
 
+          {/* وحدة البيع — شفافية كاملة قبل الشراء */}
+          <View
+            style={[
+              priceStyles.unitRow,
+              {backgroundColor: palette.infoSoft, borderColor: palette.info},
+            ]}>
+            <Icon name={soldByWeight ? 'scale' : 'box'} size={16} color={palette.info} />
+            <Text style={[{fontSize: 12.5, color: palette.info, fontFamily: fonts.medium, flex: 1}]}>
+              {unitText}
+            </Text>
+          </View>
+
           {/* حالة المخزون */}
           <View
             style={[
@@ -232,7 +275,7 @@ export function ProductScreen({navigation, route}: Props) {
             />
             <Text
               style={[
-                {fontSize: 12.5, fontFamily: fonts.medium},
+                {fontSize: 12.5, fontFamily: fonts.medium, flex: 1},
                 {color: outOfStock ? palette.danger : lowStock ? palette.warning : palette.success},
               ]}>
               {outOfStock
@@ -255,6 +298,66 @@ export function ProductScreen({navigation, route}: Props) {
             </Pressable>
           ) : null}
         </Card>
+
+        {/* ─── خيارات الشراء (مقاس/لون…) ─── */}
+        {optionGroups.length > 0 ? (
+          <Card style={{gap: spacing.md}}>
+            <View style={{flexDirection: 'row-reverse', alignItems: 'center', gap: 6}}>
+              <Icon name="sliders" size={16} color={palette.brandDark} />
+              <Text style={[type.h3, {color: palette.ink}]}>اختياراتك</Text>
+              {!complete ? (
+                <View style={[optStyles.requiredChip, {backgroundColor: palette.brandSoft, borderColor: palette.brandBorder}]}>
+                  <Text style={{fontSize: 10, color: palette.brandDark, fontFamily: fonts.bold}}>
+                    مطلوب
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+            {optionGroups.map(group => (
+              <View key={group.name} style={{gap: spacing.sm}}>
+                <Text style={[type.smallMedium, {color: palette.inkSoft}]}>
+                  {group.name}
+                </Text>
+                <View style={optStyles.valuesWrap}>
+                  {group.values.map(value => {
+                    const active = selection[group.name] === value;
+                    return (
+                      <Pressable
+                        key={value}
+                        onPress={() =>
+                          setSelection(prev => ({...prev, [group.name]: value}))
+                        }
+                        style={({pressed}) => [
+                          optStyles.valueChip,
+                          {
+                            backgroundColor: active ? palette.brand : palette.surface,
+                            borderColor: active ? palette.brand : palette.lineStrong,
+                            opacity: pressed ? 0.85 : 1,
+                          },
+                        ]}>
+                        <Text
+                          style={[
+                            {fontSize: 13},
+                            {
+                              color: active ? '#FFFFFF' : palette.ink,
+                              fontFamily: active ? fonts.bold : fonts.medium,
+                            },
+                          ]}>
+                          {value}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
+            ))}
+            {variantText != null ? (
+              <Text style={[{fontSize: 11.5, color: palette.muted}]}>
+                ستُضاف بالمواصفة: {variantText}
+              </Text>
+            ) : null}
+          </Card>
+        ) : null}
 
         {/* الوصف */}
         {product.description ? (
@@ -321,15 +424,15 @@ export function ProductScreen({navigation, route}: Props) {
         ) : null}
       </ScrollView>
 
-      {/* شريط الإضافة السفلي */}
+      {/* شريط الإضافة السفلي — إجمالي حيّ + خيارات قبل الإضافة */}
       <BottomFixed>
         {cartQty > 0 ? (
           <View style={bottomStyles.row}>
             <QtyStepper
               qty={cartQty}
               soldByWeight={soldByWeight}
-              onIncrease={() => increment(storeRef.id, product.id)}
-              onDecrease={() => decrement(storeRef.id, product.id)}
+              onIncrease={() => increment(storeRef.id, activeLineKey)}
+              onDecrease={() => decrement(storeRef.id, activeLineKey)}
             />
             <Button
               label={`في السلة — ${formatMoney(product.price_minor * cartQty)}`}
@@ -339,12 +442,25 @@ export function ProductScreen({navigation, route}: Props) {
             />
           </View>
         ) : (
-          <Button
-            label={outOfStock ? 'غير متوفر حالياً' : 'إضافة إلى السلة'}
-            icon="cart"
-            onPress={onAdd}
-            disabled={outOfStock}
-          />
+          <View style={{gap: 6}}>
+            <Button
+              label={
+                outOfStock
+                  ? 'غير متوفر حالياً'
+                  : !complete
+                    ? 'اختر المواصفات أولاً'
+                    : 'إضافة إلى السلة'
+              }
+              icon={complete ? 'cart' : 'sliders'}
+              onPress={onAdd}
+              disabled={outOfStock}
+            />
+            {otherVariantCount > 0 ? (
+              <Text style={[{fontSize: 11, color: palette.muted, textAlign: 'center'}]}>
+                لديك {otherVariantCount} مواصفة أخرى من هذا المنتج في السلة
+              </Text>
+            ) : null}
+          </View>
         )}
       </BottomFixed>
 
@@ -369,6 +485,12 @@ export function ProductScreen({navigation, route}: Props) {
                 index: i,
               })}
               keyExtractor={item => item}
+              onMomentumScrollEnd={e => {
+                // RTL: إزاحة سالبة — القيمة المطلقة تصحح الفهرس.
+                setViewerIndex(
+                  Math.round(Math.abs(e.nativeEvent.contentOffset.x) / screenWidth),
+                );
+              }}
               renderItem={({item}) => (
                 <Image
                   source={{uri: item}}
@@ -435,6 +557,15 @@ const priceStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  unitRow: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 8,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 10,
+  },
   stockRow: {
     flexDirection: 'row-reverse',
     alignItems: 'center',
@@ -443,6 +574,28 @@ const priceStyles = StyleSheet.create({
     borderWidth: 1,
     paddingHorizontal: spacing.md,
     paddingVertical: 10,
+  },
+});
+
+const optStyles = StyleSheet.create({
+  valuesWrap: {
+    flexDirection: 'row-reverse',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  valueChip: {
+    borderRadius: radius.pill,
+    borderWidth: 1.5,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: 9,
+    minWidth: 52,
+    alignItems: 'center',
+  },
+  requiredChip: {
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
   },
 });
 

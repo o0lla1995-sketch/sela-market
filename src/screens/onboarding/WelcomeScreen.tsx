@@ -25,6 +25,7 @@ import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {useTheme} from '../../theme/ThemeProvider';
 import {radius, spacing, type, fonts} from '../../theme/tokens';
 import {Button} from '../../components/ui';
+import {Icon} from '../../components/Icon';
 import {useSettingsStore} from '../../stores/settingsStore';
 import type {RootStackParamList} from '../../navigation/RootNavigator';
 
@@ -237,7 +238,10 @@ export function WelcomeScreen({navigation}: Props) {
         pagingEnabled
         showsHorizontalScrollIndicator={false}
         onMomentumScrollEnd={e => {
-          const i = Math.round(e.nativeEvent.contentOffset.x / width);
+          // RTL على أندرويد يعطي إزاحات سالبة (0، -width، …) — القيمة
+          // المطلقة تصحح الفهرس في الاتجاهين (كان الفهرس السالب يفرّغ
+          // اللوحة بعد أول سحبة).
+          const i = Math.round(Math.abs(e.nativeEvent.contentOffset.x) / width);
           if (i !== slide) {
             artScale.setValue(0.82);
             textOpacity.setValue(0);
@@ -314,20 +318,46 @@ export function WelcomeScreen({navigation}: Props) {
         ]}>
         <Button label="إنشاء حساب جديد" onPress={() => start('register')} icon="user" />
         <Button
-          label="تسجيل الدخول"
+          label="لديك حساب؟ تسجيل الدخول"
           onPress={() => start('login')}
           variant="outline"
           icon="forward"
         />
-        <Pressable onPress={() => start('guest')} hitSlop={8}>
-          <Text style={[type.smallMedium, {color: palette.muted}]}>
-            تصفّح كزائر — الطلب يحتاج تسجيلاً بسيطاً
+        <Pressable
+          onPress={() => start('guest')}
+          hitSlop={8}
+          style={({pressed}) => [
+            guestStyles.btn,
+            {
+              borderColor: palette.line,
+              backgroundColor: palette.surface,
+              opacity: pressed ? 0.75 : 1,
+            },
+          ]}>
+          <Icon name="bag" size={16} color={palette.inkSoft} />
+          <Text style={[type.smallMedium, {color: palette.inkSoft, flex: 1, textAlign: 'center'}]}>
+            الدخول كزائر والتجول في المول
           </Text>
         </Pressable>
+        <Text style={[{fontSize: 10.5, color: palette.muted, textAlign: 'center'}]}>
+          الزائر يتصفح ويجمع سلته بحرية — إتمام الطلب يطلب تسجيلاً بسيطاً برقم الهوية
+        </Text>
       </Animated.View>
     </View>
   );
 }
+
+const guestStyles = StyleSheet.create({
+  btn: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: spacing.sm,
+    borderRadius: 14,
+    borderWidth: 1,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: 13,
+  },
+});
 
 const styles = StyleSheet.create({
   wrap: {flex: 1},

@@ -141,7 +141,11 @@ export function CheckoutScreen({navigation, route}: Props) {
     try {
       const order = await placeOrder(token, {
         storeId,
-        items: entry.lines.map(l => ({productId: l.productId, quantity: l.quantity})),
+        items: entry.lines.map(l => ({
+          productId: l.productId,
+          quantity: l.quantity,
+          variant: l.variant ?? undefined,
+        })),
         regionName,
         address: address.trim(),
         note: note.trim() || undefined,
@@ -276,11 +280,18 @@ export function CheckoutScreen({navigation, route}: Props) {
           <SectionTitle title="ملخص الطلب" />
           <Card style={{gap: spacing.sm}}>
             {entry.lines.map(l => (
-              <View key={l.productId} style={regionStyles.summaryRow}>
-                <Text style={[type.small, {color: palette.inkSoft, flex: 1}]} numberOfLines={1}>
-                  {l.name} × {formatQty(l.quantity, l.soldByWeight)}
-                  {l.soldByWeight ? 'ك' : ''}
-                </Text>
+              <View key={l.key} style={regionStyles.summaryRow}>
+                <View style={{flex: 1, alignItems: 'flex-start', gap: 2}}>
+                  <Text style={[type.small, {color: palette.inkSoft}]} numberOfLines={1}>
+                    {l.name} × {formatQty(l.quantity, l.soldByWeight)}
+                    {l.soldByWeight ? 'ك' : ''}
+                  </Text>
+                  {l.variant != null ? (
+                    <Text style={{fontSize: 10.5, color: palette.brandDark}} numberOfLines={1}>
+                      {l.variant}
+                    </Text>
+                  ) : null}
+                </View>
                 <Text style={[{fontSize: 12.5, color: palette.ink, fontFamily: fonts.medium}]}>
                   {formatMoney(lineTotal(l.priceMinor, l.quantity))}
                 </Text>

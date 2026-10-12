@@ -6,7 +6,7 @@
  *    بالهاتف مرة واحدة ثم فرض شاشة تعيين كلمة مرور فوراً.
  * بعد النجاح: إن كان الدخول بوابة إتمام طلب نعود للسلة مباشرة.
  */
-import React, {useEffect, useState} from 'react';
+import React, {useEffect, useRef, useState} from 'react';
 import {
   KeyboardAvoidingView,
   Modal,
@@ -15,6 +15,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
@@ -55,6 +56,10 @@ export function LoginScreen({navigation, route}: Props) {
   const [password, setPasswordField] = useState('');
   const [legacyPhone, setLegacyPhone] = useState('');
   const [touched, setTouched] = useState(false);
+
+  // v1.2: سلسلة تعبئة — الهوية ← كلمة المرور ← دخول (لوحة المفاتيح
+  // الرقمية للهوية، «التالي» ينقل للكلمة، «دخول» يرسل مباشرة).
+  const passwordRef = useRef<TextInput>(null);
 
   // نسيان كلمة المرور
   const [forgotOpen, setForgotOpen] = useState(false);
@@ -182,15 +187,22 @@ export function LoginScreen({navigation, route}: Props) {
                   onChangeText={setIdNumber}
                   placeholder="9 أرقام"
                   keyboardType="numeric"
+                  numericOnly
                   icon="user"
                   error={idError}
                   maxLength={9}
+                  autoFocus
+                  returnKeyType="next"
+                  onSubmitEditing={() => passwordRef.current?.focus()}
                 />
                 <SecureField
                   label="كلمة المرور"
                   value={password}
                   onChangeText={setPasswordField}
                   placeholder="كلمة مرور حسابك"
+                  inputRef={passwordRef}
+                  returnKeyType="go"
+                  onSubmitEditing={() => void submit()}
                 />
                 <Pressable
                   onPress={() => setForgotOpen(true)}
@@ -227,9 +239,12 @@ export function LoginScreen({navigation, route}: Props) {
                       onChangeText={setLegacyPhone}
                       placeholder="05xxxxxxxx"
                       keyboardType="phone-pad"
+                      numericOnly
                       icon="phone"
                       error={touched ? validatePhone(legacyPhone) : null}
                       maxLength={16}
+                      returnKeyType="go"
+                      onSubmitEditing={() => void submitLegacy()}
                     />
                     <Button
                       label="دخول الحسابات القديمة"
@@ -308,6 +323,7 @@ export function LoginScreen({navigation, route}: Props) {
               onChangeText={setForgotId}
               placeholder="9 أرقام"
               keyboardType="numeric"
+              numericOnly
               icon="user"
               maxLength={9}
             />
@@ -317,6 +333,7 @@ export function LoginScreen({navigation, route}: Props) {
               onChangeText={setForgotPhone}
               placeholder="05xxxxxxxx"
               keyboardType="phone-pad"
+              numericOnly
               icon="phone"
               maxLength={16}
             />
@@ -325,6 +342,8 @@ export function LoginScreen({navigation, route}: Props) {
               value={forgotPw}
               onChangeText={setForgotPw}
               placeholder="8 أحرف على الأقل — رقماً وحرفاً"
+              returnKeyType="go"
+              onSubmitEditing={() => void submitForgot()}
             />
             <Button
               label={forgotBusy ? 'جارٍ الاستعادة…' : 'استعادة وتسجيل الدخول'}

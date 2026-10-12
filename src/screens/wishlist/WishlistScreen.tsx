@@ -75,6 +75,15 @@ export function WishlistScreen({navigation}: Props) {
                     style={{flex: 1}}
                     disabled={outOfStock}
                     onPress={() => {
+                      if ((p.options ?? []).length > 0) {
+                        // منتج بخيارات — يُختار المقاس/اللون في صفحته.
+                        navigation.navigate('Product', {
+                          product: p,
+                          storeRef: {id: p.store_id, name: item.storeName},
+                        });
+                        toast('اختر المواصفة أولاً في صفحة المنتج', 'info');
+                        return;
+                      }
                       addProduct(
                         {id: p.store_id, name: item.storeName},
                         p,

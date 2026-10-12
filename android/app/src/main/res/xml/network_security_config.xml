@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  network_security_config.xml — سياسة الشبكة لسيلا ماركت.
+  ─────────────────────────────────────────────────────────────
+  خادم سيلا منشور على Coolify بعنوان HTTP (sslip.io) — وأندرويد 9+
+  يمنع حركة HTTP غير المعمّاة افتراضياً فيفشل كل نداء API بصمت
+  («تعذر الاتصال» في كل التطبيق).
+
+  الحل المتوافق مع سياسة جوجل بلاي: نسمح بالنص الصريح لخادم سيلا
+  فقط (النطاق ونطاقات sslip.io المرتبطة به)، ويبقى HTTPS إلزامياً
+  لأي وجهة أخرى. عند ترقية الخادم إلى HTTPS يكفي حذف سطر
+  domain-config أدناه.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <!-- خادم سيلا الحالي (نشر Coolify على sslip.io). -->
+        <domain includeSubdomains="false">8jz9a3yyhn3eltmwqgnchn29.130.61.171.201.sslip.io</domain>
+        <!-- أي خادم بديل على sslip.io بنفس البنية (نطاقات Coolify
+             التجريبية المؤقتة) — يظل النص الصريح مقصوراً عليها. -->
+        <domain includeSubdomains="true">sslip.io</domain>
+    </domain-config>
+</network-security-config>

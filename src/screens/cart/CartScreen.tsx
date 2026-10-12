@@ -83,9 +83,9 @@ export function CartScreen({navigation}: Props) {
                 clearStore(entry.storeId);
                 toast(`أُفرغت سلة ${entry.storeName}`, 'info');
               }}
-              onIncrease={(pid) => increment(entry.storeId, pid)}
-              onDecrease={(pid) => decrement(entry.storeId, pid)}
-              onRemove={(pid) => removeLine(entry.storeId, pid)}
+              onIncrease={(lineKey) => increment(entry.storeId, lineKey)}
+              onDecrease={(lineKey) => decrement(entry.storeId, lineKey)}
+              onRemove={(lineKey) => removeLine(entry.storeId, lineKey)}
             />
           )}
           ListFooterComponent={
@@ -135,9 +135,9 @@ function StoreCart({
   onOpenStore: () => void;
   onCheckout: () => void;
   onClear: () => void;
-  onIncrease: (productId: number) => void;
-  onDecrease: (productId: number) => void;
-  onRemove: (productId: number) => void;
+  onIncrease: (lineKey: string) => void;
+  onDecrease: (lineKey: string) => void;
+  onRemove: (lineKey: string) => void;
 }) {
   const subtotal = entry.lines.reduce((s, l) => s + lineTotal(l.priceMinor, l.quantity), 0);
 
@@ -167,11 +167,21 @@ function StoreCart({
 
       {/* الأسطر */}
       {entry.lines.map(line => (
-        <View key={line.productId} style={cartStyles.line}>
+        <View key={line.key} style={cartStyles.line}>
           <View style={{flex: 1, gap: 3, alignItems: 'flex-start'}}>
             <Text style={[type.smallMedium, {color: palette.ink}]} numberOfLines={2}>
               {line.name}
             </Text>
+            {line.variant != null ? (
+              <View style={[cartStyles.variantChip, {backgroundColor: palette.brandSoft}]}>
+                <Icon name="sliders" size={10} color={palette.brandDark} />
+                <Text
+                  style={{fontSize: 10.5, color: palette.brandDark, fontFamily: fonts.medium}}
+                  numberOfLines={1}>
+                  {line.variant}
+                </Text>
+              </View>
+            ) : null}
             <Text style={[{fontSize: 11.5, color: palette.muted}]}>
               {formatMoney(line.priceMinor)} × {formatQty(line.quantity, line.soldByWeight)}
               {line.soldByWeight ? ' كيلو' : line.unitLabel ? ` ${line.unitLabel}` : ''} ={' '}
@@ -185,10 +195,10 @@ function StoreCart({
               qty={line.quantity}
               soldByWeight={line.soldByWeight}
               compact
-              onIncrease={() => onIncrease(line.productId)}
-              onDecrease={() => onDecrease(line.productId)}
+              onIncrease={() => onIncrease(line.key)}
+              onDecrease={() => onDecrease(line.key)}
             />
-            <Pressable onPress={() => onRemove(line.productId)} hitSlop={6}>
+            <Pressable onPress={() => onRemove(line.key)} hitSlop={6}>
               <Text style={[{fontSize: 10.5, color: palette.danger}]}>إزالة</Text>
             </Pressable>
           </View>
@@ -227,6 +237,16 @@ const cartStyles = StyleSheet.create({
     borderTopColor: 'rgba(0,0,0,0.05)',
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.md - 2,
+  },
+  variantChip: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 4,
+    borderRadius: radius.pill,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    alignSelf: 'flex-start',
+    maxWidth: '100%',
   },
   groupFoot: {
     flexDirection: 'row-reverse',

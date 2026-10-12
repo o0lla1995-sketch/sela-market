@@ -1,14 +1,45 @@
 /**
  * StoreCard.tsx — بطاقة متجر: علامة «س» على برتقالي ناعم، الاسم،
- * التصنيف، المنطقة، ووصف مختصر. تنسيقان: صف كامل وبطاقة أفقية
- * للقائمة الأفقية في الرئيسية.
+ * التصنيف بأيقونة نوع المتجر (بقالة/مطعم/ملابس/صيدلية/كافيه…)،
+ * المنطقة، ووصف مختصر. تنسيقان: صف كامل وبطاقة أفقية للقائمة
+ * الأفقية في الرئيسية.
  */
 import React from 'react';
 import {Pressable, StyleSheet, Text, View} from 'react-native';
 import {useTheme} from '../theme/ThemeProvider';
 import {radius, spacing, type, fonts} from '../theme/tokens';
-import {Icon} from './Icon';
+import {Icon, type IconName} from './Icon';
 import type {Store} from '../core/types';
+
+/** v1.2: نوع المتجر — أيقونة دلالية لكل نشاط (مطاعم، ملابس، بقالة،
+ * صيدلية، كافيه…) تُشتق من حقل التصنيف الحر الذي يحدده التاجر. */
+export function storeTypeInfo(
+  category: string | null | undefined,
+): {icon: IconName; label: string} {
+  const c = (category ?? '').trim();
+  if (/مطعم|مطاعم|شاورما|برجر|فلافل|وجبات|حلويات|معجنات|فطور/.test(c)) {
+    return {icon: 'store', label: 'مطعم'};
+  }
+  if (/كافيه|كافيها|قهوة|مقهى|عصير|بوظة/.test(c)) {
+    return {icon: 'box', label: 'كافيه'};
+  }
+  if (/ملابس|ألبسة|البسة|أزياء| أحذية|أحذية|أحذية/.test(c)) {
+    return {icon: 'tag', label: 'ملابس'};
+  }
+  if (/صيدلي|أدوية|دواء/.test(c)) {
+    return {icon: 'shield', label: 'صيدلية'};
+  }
+  if (/خضار|فواكه|خضراوات/.test(c)) {
+    return {icon: 'scale', label: 'خضار وفواكه'};
+  }
+  if (/لحوم|دجاج|أسماك|اسماك/.test(c)) {
+    return {icon: 'cash', label: 'لحوم'};
+  }
+  if (/بقال|سوبر|ماركت|تموين|غذائ/.test(c)) {
+    return {icon: 'bag', label: 'بقالة'};
+  }
+  return {icon: 'grid', label: c.length > 0 ? c : 'متجر'};
+}
 
 export function StoreAvatar({name, size = 46}: {name: string; size?: number}) {
   const {palette} = useTheme();
@@ -53,6 +84,7 @@ export function StoreCard({
   horizontal?: boolean;
 }) {
   const {palette} = useTheme();
+  const typeInfo = storeTypeInfo(store.category);
   return (
     <Pressable
       onPress={onPress}
@@ -74,6 +106,7 @@ export function StoreCard({
         <View style={vStyles.metaRow}>
           {store.category ? (
             <View style={[vStyles.chip, {backgroundColor: palette.brandSoft}]}>
+              <Icon name={typeInfo.icon} size={10} color={palette.brandDark} />
               <Text style={[{fontSize: 10.5, color: palette.brandDark, fontFamily: fonts.medium}]}>
                 {store.category}
               </Text>
@@ -110,7 +143,14 @@ const vStyles = StyleSheet.create({
   },
   metaRow: {flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.sm},
   metaItem: {flexDirection: 'row-reverse', alignItems: 'center', gap: 3},
-  chip: {borderRadius: radius.pill, paddingHorizontal: 8, paddingVertical: 2},
+  chip: {
+    borderRadius: radius.pill,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 3,
+  },
 });
 
 const hStyles = StyleSheet.create({

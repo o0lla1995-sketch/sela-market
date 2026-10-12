@@ -25,7 +25,7 @@ import {ApiError} from '../../api/client';
 import {formatDateTime, relativeTime} from '../../core/time';
 import {formatMoney, formatQty} from '../../core/money';
 import {canCancel, STATUS_META, statusTimestamp} from '../../core/orderStatus';
-import type {Order, Store} from '../../core/types';
+import {lineKeyOf, type Order, type Store} from '../../core/types';
 import {useAuthStore} from '../../stores/authStore';
 import {useCartStore} from '../../stores/cartStore';
 import {useToastStore} from '../../stores/toastStore';
@@ -132,6 +132,7 @@ export function OrderDetailScreen({navigation, route}: Props) {
     reAddLines(
       storeRef,
       order.items.map(it => ({
+        key: lineKeyOf(it.product_id ?? 0, it.variant ?? null),
         productId: it.product_id ?? 0,
         name: it.product_name,
         priceMinor: it.unit_price_minor,
@@ -139,6 +140,7 @@ export function OrderDetailScreen({navigation, route}: Props) {
         soldByWeight: false,
         stock: 999,
         quantity: it.quantity,
+        variant: it.variant ?? null,
       })),
     );
     toast(`أُعيدت بنود الطلب إلى سلة ${storeRef.name}`, 'success');
@@ -201,9 +203,16 @@ export function OrderDetailScreen({navigation, route}: Props) {
           <SectionTitle title={`البنود (${order.items.length})`} />
           {order.items.map(it => (
             <View key={it.id} style={detailStyles.itemRow}>
-              <Text style={[type.smallMedium, {color: palette.ink, flex: 1}]} numberOfLines={2}>
-                {it.product_name}
-              </Text>
+              <View style={{flex: 1, gap: 2, alignItems: 'flex-start'}}>
+                <Text style={[type.smallMedium, {color: palette.ink}]} numberOfLines={2}>
+                  {it.product_name}
+                </Text>
+                {it.variant != null ? (
+                  <Text style={{fontSize: 10.5, color: palette.brandDark}} numberOfLines={1}>
+                    {it.variant}
+                  </Text>
+                ) : null}
+              </View>
               <Text style={[{fontSize: 12, color: palette.muted}]}>
                 {formatMoney(it.unit_price_minor)} × {formatQty(it.quantity, false)}
               </Text>

@@ -3,8 +3,16 @@
  * كلمة مرور (v1.1 — كل حساب محمي). مؤشر قوة كلمة المرور والتأكيد
  * يمنعان الأخطاء قبل الإرسال، والتحقق المسبق يطابق قواعد الخادم.
  */
-import React, {useEffect, useState} from 'react';
-import {KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View} from 'react-native';
+import React, {useEffect, useRef, useState} from 'react';
+import {
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {useTheme} from '../../theme/ThemeProvider';
@@ -46,6 +54,13 @@ export function RegisterScreen({navigation}: Props) {
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [touched, setTouched] = useState(false);
+
+  // v1.2: سلسلة تعبئة — «التالي» على كل لوحة ينقل للحقل التالي
+  // و«إنشاء الحساب» على الأخير يرسل مباشرة بلا أزرار وسيطة.
+  const idRef = useRef<TextInput>(null);
+  const phoneRef = useRef<TextInput>(null);
+  const pwRef = useRef<TextInput>(null);
+  const confirmRef = useRef<TextInput>(null);
 
   useEffect(() => {
     const unsub = navigation.addListener('beforeRemove', clearError);
@@ -107,6 +122,9 @@ export function RegisterScreen({navigation}: Props) {
               maxLength={60}
               icon="user"
               error={nameError}
+              autoFocus
+              returnKeyType="next"
+              onSubmitEditing={() => idRef.current?.focus()}
             />
             <Field
               label="رقم الهوية (9 أرقام)"
@@ -117,10 +135,14 @@ export function RegisterScreen({navigation}: Props) {
               }}
               placeholder="401234567"
               keyboardType="numeric"
-              maxLength={12}
+              numericOnly
+              maxLength={9}
               icon="doc"
               error={idError}
               hint="رقم الهوية هو معرّفك الوحيد على المنصة — مستخدم واحد لكل هوية"
+              inputRef={idRef}
+              returnKeyType="next"
+              onSubmitEditing={() => phoneRef.current?.focus()}
             />
             <Field
               label="رقم الجوال"
@@ -131,10 +153,14 @@ export function RegisterScreen({navigation}: Props) {
               }}
               placeholder="0598765432"
               keyboardType="phone-pad"
+              numericOnly
               maxLength={15}
               icon="phone"
               error={phoneError}
               hint="يستخدمه المتجر للتواصل معك عند التوصيل واستعادة كلمة المرور"
+              inputRef={phoneRef}
+              returnKeyType="next"
+              onSubmitEditing={() => pwRef.current?.focus()}
             />
             <SecureField
               label="كلمة المرور"
@@ -148,6 +174,9 @@ export function RegisterScreen({navigation}: Props) {
               showStrength
               strength={strength}
               hint="تحمي حسابك وطلباتك — لا تشاركها مع أحد"
+              inputRef={pwRef}
+              returnKeyType="next"
+              onSubmitEditing={() => confirmRef.current?.focus()}
             />
             <SecureField
               label="تأكيد كلمة المرور"
@@ -155,6 +184,9 @@ export function RegisterScreen({navigation}: Props) {
               onChangeText={setConfirm}
               placeholder="أعد كتابة كلمة المرور"
               error={confirmError}
+              inputRef={confirmRef}
+              returnKeyType="go"
+              onSubmitEditing={() => void submit()}
             />
             {error ? (
               <Text style={[type.small, {color: palette.danger, textAlign: 'center'}]}>

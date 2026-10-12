@@ -47,9 +47,11 @@ export function ProductCard({
   const addProduct = useCartStore(s => s.addProduct);
   const increment = useCartStore(s => s.increment);
   const decrement = useCartStore(s => s.decrement);
-  const cartQty = useCartStore(
-    s => s.carts[String(storeRef.id)]?.lines.find(l => l.productId === product.id)?.quantity ?? 0,
+  const hasOptions = (product.options ?? []).length > 0;
+  const cartLine = useCartStore(
+    s => s.carts[String(storeRef.id)]?.lines.find(l => l.productId === product.id),
   );
+  const cartQty = cartLine?.quantity ?? 0;
   const wishlisted = useWishlistStore(s => s.items[String(product.id)] != null);
   const toggleWishlist = useWishlistStore(s => s.toggle);
   const toast = useToastStore(s => s.show);
@@ -62,6 +64,12 @@ export function ProductCard({
   const firstImage = absoluteUrl(product.images?.[0]);
 
   const onAdd = () => {
+    if (hasOptions) {
+      // منتج بخيارات (مقاس/لون) — لا إضافة عمياء: يُفتح لاختيار
+      // المواصفة في صفحة المنتج.
+      onPress();
+      return;
+    }
     if (outOfStock) {
       toast('نفدت الكمية من المتجر حالياً', 'danger');
       return;
@@ -112,6 +120,16 @@ export function ProductCard({
             {soldByWeight ? 'بالوزن' : (product.unit_label ?? 'قطعة')}
           </Text>
         </View>
+
+        {/* شارة خيارات (مقاس/لون) — المنتج يحتاج اختيار مواصفة */}
+        {hasOptions ? (
+          <View style={[styles.optionsChip, {backgroundColor: palette.brand}]}>
+            <Icon name="sliders" size={11} color="#FFFFFF" />
+            <Text style={{fontSize: 9.5, color: '#FFFFFF', fontFamily: fonts.bold}}>
+              خيارات
+            </Text>
+          </View>
+        ) : null}
 
         {/* قلب المفضلة */}
         <Pressable
@@ -164,16 +182,23 @@ export function ProductCard({
 
       {/* السعر + الإضافة/الكمية */}
       <View style={styles.bottomRow}>
-        <Text style={[styles.price, {color: palette.brandDark}]}>
-          {formatMoney(product.price_minor)}
-        </Text>
-        {cartQty > 0 ? (
+        <View style={{gap: 0, alignItems: 'flex-start'}}>
+          <Text style={[styles.price, {color: palette.brandDark}]}>
+            {formatMoney(product.price_minor)}
+          </Text>
+          {cartLine?.variant != null ? (
+            <Text style={{fontSize: 9.5, color: palette.muted}} numberOfLines={1}>
+              {cartLine.variant}
+            </Text>
+          ) : null}
+        </View>
+        {cartQty > 0 && !hasOptions ? (
           <QtyStepper
             qty={cartQty}
             soldByWeight={soldByWeight}
             compact
-            onIncrease={() => increment(storeRef.id, product.id)}
-            onDecrease={() => decrement(storeRef.id, product.id)}
+            onIncrease={() => cartLine && increment(storeRef.id, cartLine.key)}
+            onDecrease={() => cartLine && decrement(storeRef.id, cartLine.key)}
           />
         ) : (
           <Pressable
@@ -186,7 +211,12 @@ export function ProductCard({
                 opacity: pressed ? 0.85 : 1,
               },
             ]}>
-            <Icon name="plus" size={17} color="#FFFFFF" strokeWidth={2.6} />
+            <Icon
+              name={hasOptions ? 'sliders' : 'plus'}
+              size={hasOptions ? 15 : 17}
+              color="#FFFFFF"
+              strokeWidth={2.6}
+            />
           </Pressable>
         )}
       </View>
@@ -239,6 +269,17 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
   },
   stockBadgeText: {fontSize: 10, color: '#FFFFFF', fontFamily: fonts.bold},
+  optionsChip: {
+    position: 'absolute',
+    top: 7,
+    left: 44,
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 3,
+    borderRadius: radius.pill,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+  },
   countChip: {
     position: 'absolute',
     bottom: 7,

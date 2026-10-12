@@ -29,6 +29,13 @@ export interface StoreDetail {
   deliveryRegions: DeliveryRegion[];
 }
 
+/** مجموعة خيارات شراء لمنتج (مقاسات/ألوان…) — يحددها التاجر
+ * في نقطة البيع وتُزامَن مع الخادم (v4.3). */
+export interface ProductOptionGroup {
+  name: string;
+  values: string[];
+}
+
 /** منتج داخل متجر (GET /api/market/stores/:id/products). */
 export interface Product {
   id: number;
@@ -45,6 +52,9 @@ export interface Product {
   /** v1.1: روابط صور المنتج (مسارات نسبية على الخادم — تُسكب مع
    *  عنوان الخادم عند العرض). صور التسجيل البصري بزواياها الثلاث. */
   images?: string[];
+  /** v1.2 (خادم 4.3): مجموعات خيارات الشراء (مقاس/لون…) —
+   *  تُبنى من متغيرات الملابس في نقطة البيع. null = بلا خيارات. */
+  options?: ProductOptionGroup[] | null;
 }
 
 /** منتج عابر للمتاجر (GET /api/market/products) — يضيف معلومات المتجر. */
@@ -81,6 +91,9 @@ export interface OrderItem {
   product_id: number | null;
   product_ref: string | null;
   product_name: string;
+  /** v1.2 (خادم 4.3): لقطة الخيار المختار وقت الشراء
+   *  (مثال: «المقاس: L · اللون: كحلي») — null = بلا خيارات. */
+  variant?: string | null;
   unit_price_minor: number;
   quantity: number;
   line_total_minor: number;
@@ -131,8 +144,12 @@ export interface StoreRef {
   storeNumber?: string;
 }
 
-/** سطر سلة — لقطة منتج لحظة الإضافة (السعر المرجعي هو الخادم عند الطلب). */
+/** سطر سلة — لقطة منتج لحظة الإضافة (السعر المرجعي هو الخادم عند الطلب).
+ *  v1.2: السطر يتحدد بالمنتج + الخيار المختار — المنتج نفسه
+ *  بمقاسين مختلفين سطران مستقلان (key فريدة لكل مزيج). */
 export interface CartLine {
+  /** `${productId}:${variant ?? ''}` — هوية السطر للعمليات. */
+  key: string;
   productId: number;
   name: string;
   priceMinor: number;
@@ -140,6 +157,42 @@ export interface CartLine {
   soldByWeight: boolean;
   stock: number;
   quantity: number;
+  /** لقطة الخيار المختار («المقاس: L · اللون: كحلي») أو null. */
+  variant: string | null;
+}
+
+/** مفتاح سطر السلة — مزيج المنتج والخيار المختار. */
+export function lineKeyOf(productId: number, variant: string | null): string {
+  return `${productId}:${variant ?? ''}`;
+}
+
+/** يبني نص لقطة الخيار من مجموعة الخيارات واختيارات المستخدم. */
+export function variantTextOf(
+  groups: ProductOptionGroup[] | null | undefined,
+  selection: Record<string, string>,
+): string | null {
+  if (groups == null || groups.length === 0) {
+    return null;
+  }
+  const parts: string[] = [];
+  for (const g of groups) {
+    const value = selection[g.name];
+    if (value != null && value.length > 0) {
+      parts.push(`${g.name}: ${value}`);
+    }
+  }
+  return parts.length > 0 ? parts.join(' · ') : null;
+}
+
+/** هل اكتمل اختيار كل مجموعات الخيارات؟ (لا الإضافة قبلها) */
+export function optionsComplete(
+  groups: ProductOptionGroup[] | null | undefined,
+  selection: Record<string, string>,
+): boolean {
+  if (groups == null || groups.length === 0) {
+    return true;
+  }
+  return groups.every(g => selection[g.name] != null && selection[g.name].length > 0);
 }
 
 /** سلة متجر واحد — طلب منفصل لكل متجر (قرار معماري مثبت). */

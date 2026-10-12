@@ -1,10 +1,11 @@
 /**
- * HomeScreen.tsx — رئيسية المول (v1.1 — إعادة تصميم شاملة):
- * تروسة بطل: تحية باسم المستخدم + جرس الإشعارات + المفضلة، مدخل
- * بحث بارز، شريط ثقة (الدفع عند الاستلام · توصيل لكل المناطق)،
- * تصنيفات أفقية بعدّاداتها، متاجر المول، ثم شبكة أحدث المنتجات
- * بصورها (لا نهائية + سحب للتحديث). البيانات تعبر طبقة الكاش —
- * تُعرض آخر لقطة فوراً عند الفتح وعند ضعف الشبكة بدل شاشة خطأ.
+ * HomeScreen.tsx — رئيسية المول (v1.2):
+ * تروسة بطل: تحية باسم المستخدم + جرس الإشعارات + المفضلة ومدخل
+ * بحث بارز (حذفنا شريط ملاحظة التوصيل والدفع بطلب المستخدم —
+ * التفاصيل تظهر عند إتمام الطلب فقط)، تصنيفات أفقية بعدّاداتها،
+ * متاجر المول، ثم شبكة أحدث المنتجات بصورها (لا نهائية + سحب
+ * للتحديث). البيانات تعبر طبقة الكاش — تُعرض آخر لقطة فوراً عند
+ * الفتح وعند ضعف الشبكة بدل شاشة خطأ.
  */
 import React, {useCallback, useEffect, useState} from 'react';
 import {FlatList, Pressable, StyleSheet, Text, View} from 'react-native';
@@ -201,23 +202,6 @@ export function HomeScreen({navigation}: Props) {
                   <Icon name="sliders" size={14} color="#FFFFFF" />
                 </View>
               </Pressable>
-
-              {/* شريط الثقة */}
-              <View style={heroStyles.trustRow}>
-                <View style={heroStyles.trustItem}>
-                  <Icon name="cash" size={14} color={palette.success} />
-                  <Text style={[heroStyles.trustText, {color: palette.inkSoft}]}>
-                    الدفع نقداً عند الاستلام
-                  </Text>
-                </View>
-                <View style={[heroStyles.trustDivider, {backgroundColor: palette.line}]} />
-                <View style={heroStyles.trustItem}>
-                  <Icon name="truck" size={14} color={palette.info} />
-                  <Text style={[heroStyles.trustText, {color: palette.inkSoft}]}>
-                    توصيل لكل المناطق
-                  </Text>
-                </View>
-              </View>
             </View>
 
             {/* شريط البيانات المحفوظة */}
@@ -410,15 +394,6 @@ const heroStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  trustRow: {
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.md,
-  },
-  trustItem: {flexDirection: 'row-reverse', alignItems: 'center', gap: 5},
-  trustText: {fontSize: 11, fontFamily: fonts.medium},
-  trustDivider: {width: 1, height: 12},
 });
 
 const staleStyles = StyleSheet.create({

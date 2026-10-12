@@ -210,7 +210,8 @@ export function OrderListCard({
         {items.slice(0, 3).map(it => (
           <View key={it.id} style={[listStyles.itemChip, {backgroundColor: palette.surfaceAlt}]}>
             <Text style={[{fontSize: 11, color: palette.inkSoft}]} numberOfLines={1}>
-              {it.product_name} × {formatQty(it.quantity, false)}
+              {it.product_name}
+              {it.variant != null ? ` (${it.variant})` : ''} × {formatQty(it.quantity, false)}
             </Text>
           </View>
         ))}

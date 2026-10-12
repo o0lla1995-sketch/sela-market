@@ -193,7 +193,8 @@ export async function deleteAccount(token: string | null): Promise<{ok: true}> {
 
 export interface PlaceOrderInput {
   storeId: number;
-  items: {productId: number; quantity: number}[];
+  /** v1.2 (خادم 4.3): variant = لقطة الخيار المختار لكل سطر. */
+  items: {productId: number; quantity: number; variant?: string | null}[];
   regionName: string;
   address?: string;
   note?: string;

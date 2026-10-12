@@ -357,6 +357,11 @@ export function Field({
   icon,
   maxLength,
   hint,
+  autoFocus,
+  returnKeyType = 'default',
+  onSubmitEditing,
+  inputRef,
+  numericOnly = false,
 }: {
   label: string;
   value: string;
@@ -369,6 +374,12 @@ export function Field({
   icon?: IconName;
   maxLength?: number;
   hint?: string;
+  autoFocus?: boolean;
+  returnKeyType?: 'default' | 'done' | 'go' | 'next' | 'search' | 'send';
+  onSubmitEditing?: () => void;
+  inputRef?: React.RefObject<TextInput>;
+  /** v1.2: قبول الأرقام فقط (هوية/جوال) — يمنع لصق الحروف. */
+  numericOnly?: boolean;
 }) {
   const {palette} = useTheme();
   return (
@@ -381,18 +392,27 @@ export function Field({
             backgroundColor: palette.surface,
             borderColor: error ? palette.danger : palette.line,
           },
-          multiline ? {height: 92, alignItems: 'flex-start'} : null,
+          multiline ? {height: 96, alignItems: 'flex-start'} : null,
         ]}>
         {icon ? <Icon name={icon} size={19} color={palette.muted} /> : null}
         <TextInput
+          ref={inputRef}
           value={value}
-          onChangeText={onChangeText}
+          onChangeText={t => onChangeText(numericOnly ? t.replace(/[^0-9]/g, '') : t)}
           placeholder={placeholder}
           placeholderTextColor={palette.muted}
           keyboardType={keyboardType}
           secureTextEntry={secure}
           multiline={multiline}
           maxLength={maxLength}
+          autoFocus={autoFocus}
+          returnKeyType={returnKeyType}
+          onSubmitEditing={onSubmitEditing}
+          blurOnSubmit={returnKeyType !== 'next' && !multiline}
+          autoCorrect={false}
+          autoCapitalize="none"
+          textContentType="none"
+          importantForAutofill="no"
           style={[
             type.body,
             fieldStyles.input,
@@ -419,9 +439,9 @@ const fieldStyles = StyleSheet.create({
     borderRadius: radius.md,
     borderWidth: 1,
     paddingHorizontal: spacing.md,
-    height: 50,
+    height: 54,
   },
-  input: {flex: 1, padding: 0, textAlign: 'right'},
+  input: {flex: 1, padding: 0, textAlign: 'right', writingDirection: 'rtl'},
 });
 
 /* ═══════════════ SearchBar ═══════════════ */
@@ -824,6 +844,10 @@ export function SecureField({
   hint,
   showStrength = false,
   strength,
+  autoFocus,
+  returnKeyType = 'done',
+  onSubmitEditing,
+  inputRef,
 }: {
   label: string;
   value: string;
@@ -834,6 +858,10 @@ export function SecureField({
   showStrength?: boolean;
   /** 0–3 من passwordStrength(). */
   strength?: 0 | 1 | 2 | 3;
+  autoFocus?: boolean;
+  returnKeyType?: 'default' | 'done' | 'go' | 'next' | 'search' | 'send';
+  onSubmitEditing?: () => void;
+  inputRef?: React.RefObject<TextInput>;
 }) {
   const {palette} = useTheme();
   const [visible, setVisible] = useState(false);
@@ -851,11 +879,20 @@ export function SecureField({
         ]}>
         <Icon name="lock" size={19} color={palette.muted} />
         <TextInput
+          ref={inputRef}
           value={value}
           onChangeText={onChangeText}
           placeholder={placeholder}
           placeholderTextColor={palette.muted}
           secureTextEntry={!visible}
+          autoFocus={autoFocus}
+          returnKeyType={returnKeyType}
+          onSubmitEditing={onSubmitEditing}
+          blurOnSubmit
+          autoCorrect={false}
+          autoCapitalize="none"
+          textContentType="none"
+          importantForAutofill="no"
           style={[type.body, fieldStyles.input, {color: palette.ink}]}
         />
         <Pressable
