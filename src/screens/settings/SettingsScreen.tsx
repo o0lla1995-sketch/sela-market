@@ -2,7 +2,10 @@
  * SettingsScreen.tsx — الإعدادات:
  * • المظهر (المود): فاتح / داكن / حسب النظام — فوري بلا إعادة تشغيل.
  * • الإشعارات: تفعيل/تعطيل + طلب إذن النظام (Android 13+).
- * • متقدم: رابط خادم سيلا (قابل للتجاوز للاختبار).
+ * • الحساب: تغيير كلمة المرور (يتطلب الحالية).
+ *
+ * v1.1: حُذف قسم «متقدم — خادم سيلا» نهائياً بطلب صريح — الخادم
+ * الرسمي الوحيد مضبوط في التطبيق ولا شيء يخص المستخدم فيه.
  */
 import React, {useEffect, useState} from 'react';
 import {ScrollView, StyleSheet, Text, View} from 'react-native';
@@ -20,12 +23,13 @@ import {
   SwitchRow,
 } from '../../components/ui';
 import {useSettingsStore} from '../../stores/settingsStore';
+import {useAuthStore} from '../../stores/authStore';
+import {passwordProblem} from '../../api/endpoints';
 import {
   areNotificationsEnabled,
   requestNotificationsPermission,
 } from '../../services/localNotifications';
 import {useToastStore} from '../../stores/toastStore';
-import {DEFAULT_SERVER_URL} from '../../core/config';
 import type {ThemeMode} from '../../core/types';
 import type {ShopStackParamList} from '../../navigation/RootNavigator';
 
@@ -35,12 +39,14 @@ export function SettingsScreen({navigation}: Props) {
   const {palette, mode, setMode} = useTheme();
   const notificationsEnabled = useSettingsStore(s => s.notificationsEnabled);
   const setNotificationsEnabled = useSettingsStore(s => s.setNotificationsEnabled);
-  const serverUrl = useSettingsStore(s => s.serverUrl);
-  const setServerUrl = useSettingsStore(s => s.setServerUrl);
+  const user = useAuthStore(s => s.user);
+  const setPassword = useAuthStore(s => s.setPassword);
   const toast = useToastStore(s => s.show);
 
   const [osPermission, setOsPermission] = useState(true);
-  const [serverDraft, setServerDraft] = useState(serverUrl);
+  const [currentPw, setCurrentPw] = useState('');
+  const [newPw, setNewPw] = useState('');
+  const [savingPw, setSavingPw] = useState(false);
 
   useEffect(() => {
     void areNotificationsEnabled().then(setOsPermission);
@@ -59,20 +65,26 @@ export function SettingsScreen({navigation}: Props) {
     setNotificationsEnabled(v);
   };
 
-  const saveServer = () => {
-    const clean = serverDraft.trim().replace(/\/+$/, '');
-    if (clean.length === 0) {
-      setServerUrl('');
-      setServerDraft('');
-      toast('عودة للخادم الرسمي', 'success');
+  const changePassword = async () => {
+    const problem = passwordProblem(newPw);
+    if (problem != null) {
+      toast(problem, 'danger');
       return;
     }
-    if (!/^https?:\/\/.+\..+/.test(clean)) {
-      toast('الرابط يجب أن يبدأ بـ http:// أو https://', 'danger');
+    if (currentPw.trim().length === 0) {
+      toast('أدخل كلمة المرور الحالية', 'danger');
       return;
     }
-    setServerUrl(clean);
-    toast('حُدّث رابط الخادم', 'success');
+    setSavingPw(true);
+    const ok = await setPassword(newPw, currentPw);
+    setSavingPw(false);
+    if (ok) {
+      setCurrentPw('');
+      setNewPw('');
+      toast('غُيّرت كلمة المرور بنجاح', 'success');
+    } else {
+      toast('تعذر تغيير كلمة المرور — تحقق من الحالية', 'danger');
+    }
   };
 
   return (
@@ -122,38 +134,40 @@ export function SettingsScreen({navigation}: Props) {
           </Card>
         </View>
 
-        {/* الخادم */}
-        <View style={{gap: spacing.md}}>
-          <SectionTitle title="متقدم — خادم سيلا" />
-          <Card style={{gap: spacing.md}}>
-            <Text style={[type.small, {color: palette.inkSoft, lineHeight: 20}]}>
-              يتفاهم التطبيق مع خادم سيلا الرسمي. لا تغيّر هذا إلا بأمر من
-              الإدارة (لأغراض الاختبار على خادم بديل).
-            </Text>
-            <Field
-              label="رابط الخادم"
-              value={serverDraft}
-              onChangeText={setServerDraft}
-              placeholder={DEFAULT_SERVER_URL}
-              icon="server"
-              hint={serverUrl ? `الحالي: ${serverUrl}` : 'الحالي: الخادم الرسمي'}
-            />
-            <View style={{flexDirection: 'row-reverse', gap: spacing.md}}>
-              <Button label="حفظ" small style={{flex: 1}} onPress={saveServer} />
-              <Button
-                label="استعادة الافتراضي"
-                small
-                variant="outline"
-                style={{flex: 1}}
-                onPress={() => {
-                  setServerDraft('');
-                  setServerUrl('');
-                  toast('عودة للخادم الرسمي', 'success');
-                }}
+        {/* الحساب: تغيير كلمة المرور */}
+        {user != null && (
+          <View style={{gap: spacing.md}}>
+            <SectionTitle title="الحساب" />
+            <Card style={{gap: spacing.md}}>
+              <Text style={[type.small, {color: palette.inkSoft, lineHeight: 20}]}>
+                حسابك محمي بكلمة مرور. يمكنك تغييرها في أي وقت — ستحتاج
+                كلمتك الحالية لتأكيد التغيير.
+              </Text>
+              <Field
+                label="كلمة المرور الحالية"
+                value={currentPw}
+                onChangeText={setCurrentPw}
+                placeholder="••••••••"
+                icon="lock"
+                secure
               />
-            </View>
-          </Card>
-        </View>
+              <Field
+                label="كلمة المرور الجديدة"
+                value={newPw}
+                onChangeText={setNewPw}
+                placeholder="8 أحرف على الأقل — رقماً وحرفاً"
+                icon="lock"
+                secure
+              />
+              <Button
+                label={savingPw ? 'جارٍ الحفظ…' : 'تغيير كلمة المرور'}
+                small
+                disabled={savingPw}
+                onPress={() => void changePassword()}
+              />
+            </Card>
+          </View>
+        )}
       </ScrollView>
     </Screen>
   );

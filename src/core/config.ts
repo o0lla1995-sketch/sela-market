@@ -4,16 +4,16 @@
 import {MMKV} from 'react-native-mmkv';
 
 /** إصدار التطبيق المعروض للمستخدم (يجب أن يطابق versionName في Gradle). */
-export const APP_VERSION = '1.0.0';
-export const APP_BUILD_CODE = 1;
+export const APP_VERSION = '1.1.0';
+export const APP_BUILD_CODE = 2;
 export const APP_VERSION_LABEL = `${APP_VERSION} (${APP_BUILD_CODE})`;
 
 /**
- * الرابط الافتراضي لخادم سيلا (نفس خادم التراخيص ومنصة المتجر —
- * نشر Coolify واحد). يمكن للمستخدم تجاوزه من الإعدادات (خيار متقدم)
- * ويُحفظ في settingsStore.
+ * الرابط الافتراضي لخادم سيلا — نفس خادم التراخيص ومنصة المتجر
+ * (نشر Coolify واحد) الذي يتصل به تطبيق نقطة البيع بنجاح.
  */
-export const DEFAULT_SERVER_URL = 'https://sila.pornxvideo.com';
+export const DEFAULT_SERVER_URL =
+  'http://8jz9a3yyhn3eltmwqgnchn29.130.61.171.201.sslip.io';
 
 /** مهلة كل نداء API قبل الإلغاء (ملي ثانية). */
 export const API_TIMEOUT_MS = 20000;

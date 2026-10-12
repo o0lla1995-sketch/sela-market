@@ -57,7 +57,14 @@ export type IconName =
   | 'chevronDown'
   | 'note'
   | 'emptyBag'
-  | 'flame';
+  | 'flame'
+  | 'lock'
+  | 'eye'
+  | 'eyeOff'
+  | 'sliders'
+  | 'photo'
+  | 'chevronLeft'
+  | 'sort';
 
 export interface IconProps {
   name: IconName;
@@ -440,6 +447,60 @@ export function Icon({name, size = 22, color = '#17171C', strokeWidth = 2}: Icon
       return (
         <Svg {...common}>
           <Path d="M12 3.5s5 3.8 5 9a5 5 0 0 1-10 0c0-2 1-3.4 2.2-4.6.2 1.5.9 2.4 2 2.6-.6-2.6 0-5.5.8-7Z" />
+        </Svg>
+      );
+    case 'lock':
+      return (
+        <Svg {...common}>
+          <Rect x="5" y="10.5" width="14" height="9.5" rx="2.2" />
+          <Path d="M8 10.5V8a4 4 0 0 1 8 0v2.5" />
+          <Circle cx="12" cy="15.2" r="1.1" />
+        </Svg>
+      );
+    case 'eye':
+      return (
+        <Svg {...common}>
+          <Path d="M2.5 12S6 5.8 12 5.8 21.5 12 21.5 12 18 18.2 12 18.2 2.5 12 2.5 12Z" />
+          <Circle cx="12" cy="12" r="3" />
+        </Svg>
+      );
+    case 'eyeOff':
+      return (
+        <Svg {...common}>
+          <Path d="M4 4l16 16" />
+          <Path d="M9.9 6.2A9.6 9.6 0 0 1 12 5.8c6 0 9.5 6.2 9.5 6.2a17 17 0 0 1-3 3.5" />
+          <Path d="M6.4 8A16.9 16.9 0 0 0 2.5 12S6 18.2 12 18.2a9.4 9.4 0 0 0 3.4-.6" />
+          <Path d="M9.9 9.9a3 3 0 0 0 4.2 4.2" />
+        </Svg>
+      );
+    case 'sliders':
+      return (
+        <Svg {...common}>
+          <Path d="M5 5v6M5 15v4M12 5v3M12 12v7M19 5v9M19 18v1" />
+          <Circle cx="5" cy="13" r="2" />
+          <Circle cx="12" cy="10" r="2" />
+          <Circle cx="19" cy="16" r="2" />
+        </Svg>
+      );
+    case 'photo':
+      return (
+        <Svg {...common}>
+          <Rect x="3" y="5" width="18" height="14" rx="2.5" />
+          <Circle cx="9" cy="10.5" r="1.6" />
+          <Path d="M4.5 17.5 9.8 13l3.4 3 2.6-2.2 3.7 3.7" />
+        </Svg>
+      );
+    case 'chevronLeft':
+      return (
+        <Svg {...common}>
+          <Path d="M14.5 5.5 8 12l6.5 6.5" />
+        </Svg>
+      );
+    case 'sort':
+      return (
+        <Svg {...common}>
+          <Path d="M7 5v14M7 19l-3-3M7 19l3-3" />
+          <Path d="M13.5 7h7M13.5 12h5M13.5 17h3" />
         </Svg>
       );
     default:

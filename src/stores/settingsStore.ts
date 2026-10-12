@@ -1,7 +1,9 @@
 /**
  * settingsStore.ts — إعدادات المستخدم الدائمة (MMKV):
- * المود (فاتح/داكن/تلقائي)، الإشعارات، رابط الخادم (متقدم)،
- * شاشة الترحيب، العناوين المحفوظة، آخر منطقة توصيل مستخدمة.
+ * المود (فاتح/داكن/تلقائي)، الإشعارات، شاشة الترحيب،
+ * العناوين المحفوظة، آخر منطقة توصيل مستخدمة.
+ * v1.1: حُذف حقل رابط الخادم المتقدم نهائياً (الخادم الرسمي
+ * الوحيد في config.ts — لا شيء يحتاجه المستخدم لتغييره).
  */
 import {create} from 'zustand';
 import {storage} from '../core/config';
@@ -12,14 +14,12 @@ const KEY = 'settings:v1';
 interface SettingsState {
   themeMode: ThemeMode;
   notificationsEnabled: boolean;
-  serverUrl: string;
   onboarded: boolean;
   savedAddresses: string[];
   lastRegionByStore: Record<string, string>;
   /** إعدادات الجلسة الحالية للطبقة العاملة (لا تُحفظ). */
   setThemeMode: (m: ThemeMode) => void;
   setNotificationsEnabled: (v: boolean) => void;
-  setServerUrl: (url: string) => void;
   setOnboarded: () => void;
   addAddress: (address: string) => void;
   removeAddress: (address: string) => void;
@@ -29,7 +29,6 @@ interface SettingsState {
 interface PersistedSettings {
   themeMode: ThemeMode;
   notificationsEnabled: boolean;
-  serverUrl: string;
   onboarded: boolean;
   savedAddresses: string[];
   lastRegionByStore: Record<string, string>;
@@ -45,7 +44,6 @@ function load(): PersistedSettings {
           ? parsed.themeMode
           : 'system',
         notificationsEnabled: parsed.notificationsEnabled !== false,
-        serverUrl: typeof parsed.serverUrl === 'string' ? parsed.serverUrl : '',
         onboarded: parsed.onboarded === true,
         savedAddresses: Array.isArray(parsed.savedAddresses)
           ? parsed.savedAddresses.filter(a => typeof a === 'string').slice(0, 5)
@@ -62,7 +60,6 @@ function load(): PersistedSettings {
   return {
     themeMode: 'system',
     notificationsEnabled: true,
-    serverUrl: '',
     onboarded: false,
     savedAddresses: [],
     lastRegionByStore: {},
@@ -75,7 +72,6 @@ function persist(state: SettingsState): void {
   const data: PersistedSettings = {
     themeMode: state.themeMode,
     notificationsEnabled: state.notificationsEnabled,
-    serverUrl: state.serverUrl,
     onboarded: state.onboarded,
     savedAddresses: state.savedAddresses,
     lastRegionByStore: state.lastRegionByStore,
@@ -86,7 +82,6 @@ function persist(state: SettingsState): void {
 export const useSettingsStore = create<SettingsState>((set, get) => ({
   themeMode: initial.themeMode,
   notificationsEnabled: initial.notificationsEnabled,
-  serverUrl: initial.serverUrl,
   onboarded: initial.onboarded,
   savedAddresses: initial.savedAddresses,
   lastRegionByStore: initial.lastRegionByStore,
@@ -97,10 +92,6 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   },
   setNotificationsEnabled: (v) => {
     set({notificationsEnabled: v});
-    persist(get());
-  },
-  setServerUrl: (url) => {
-    set({serverUrl: url.trim()});
     persist(get());
   },
   setOnboarded: () => {

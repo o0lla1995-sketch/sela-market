@@ -42,6 +42,9 @@ export interface Product {
   unit_label: string | null;
   description: string | null;
   store_id: number;
+  /** v1.1: روابط صور المنتج (مسارات نسبية على الخادم — تُسكب مع
+   *  عنوان الخادم عند العرض). صور التسجيل البصري بزواياها الثلاث. */
+  images?: string[];
 }
 
 /** منتج عابر للمتاجر (GET /api/market/products) — يضيف معلومات المتجر. */
@@ -60,6 +63,15 @@ export interface CategoryCount {
 export interface MarketUser {
   name: string;
   idNumber: string;
+}
+
+/** رد الدخول — may carry mustSetPassword when a legacy account
+ * (created before passwords) logs in via the migration path. */
+export interface AuthResponse {
+  ok: true;
+  token: string;
+  user: MarketUser;
+  mustSetPassword?: boolean;
 }
 
 /** سطر طلب كما يخزنه الخادم. */

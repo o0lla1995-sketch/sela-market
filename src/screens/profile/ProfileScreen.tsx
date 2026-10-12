@@ -87,7 +87,7 @@ export function ProfileScreen({navigation}: Props) {
             </View>
             <Text style={[type.h3, {color: palette.ink}]}>أنت تتسوق كزائر</Text>
             <Text style={[type.small, {color: palette.muted, textAlign: 'center', lineHeight: 20}]}>
-              سجّل الدخول برقم الهوية والجوال لمتابعة طلباتك وتتبعها من كل المتاجر
+              سجّل الدخول برقم الهوية وكلمة المرور لمتابعة طلباتك وتتبعها من كل المتاجر
             </Text>
             <View style={{flexDirection: 'row-reverse', gap: spacing.md, width: '100%'}}>
               <Button

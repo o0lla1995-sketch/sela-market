@@ -1,19 +1,36 @@
 /**
- * ProductCard.tsx — بطاقة منتج لشبكة المنتجات (عابر للمتاجر أو داخل
- * متجر): الاسم والسعر والوحدة ومتجره، قلب للمفضلة، وزر إضافة فوري
- * للسلة مع عدّاد كمية مصغّر إن كان المنتج في السلة.
+ * ProductCard.tsx — بطاقة منتج (v1.1 — تصميم الصورة أولاً):
+ * صورة المنتج تتصدر البطاقة (WebP خفيفة من الخادم مع بديل مرسوم)،
+ * شارات الوحدة/المخزون على الصورة، قلب مفضلة، سعر بارز، وإضافة
+ * فورية للسلة مع عدّاد مصغّر — بمعايير بطاقات المتاجر العالمية.
  */
 import React from 'react';
-import {Pressable, StyleSheet, Text, View} from 'react-native';
+import {Image, Pressable, StyleSheet, Text, View} from 'react-native';
 import {useTheme} from '../theme/ThemeProvider';
-import {radius, spacing, type, fonts} from '../theme/tokens';
+import {radius, shadowFor, spacing, type, fonts} from '../theme/tokens';
 import {Icon} from './Icon';
 import {QtyStepper} from './ui';
-import {formatMoney, formatQty} from '../core/money';
+import {absoluteUrl} from '../api/client';
+import {formatMoney} from '../core/money';
 import type {CrossProduct, Product, StoreRef} from '../core/types';
 import {useCartStore} from '../stores/cartStore';
 import {useWishlistStore} from '../stores/wishlistStore';
 import {useToastStore} from '../stores/toastStore';
+
+/** بديل مرسوم عند غياب الصورة — سهم أول الاسم داخل إطار ناعم. */
+function PhotoPlaceholder({name, tint, border, inkColor}: {name: string; tint: string; border: string; inkColor: string}) {
+  const initial = name.trim().charAt(0) || '؟';
+  return (
+    <View style={[styles.photo, {backgroundColor: tint, borderColor: border}]}>
+      <Text style={{fontSize: 40, fontFamily: fonts.black, color: inkColor, opacity: 0.35}}>
+        {initial}
+      </Text>
+      <View style={styles.photoIconWrap}>
+        <Icon name="photo" size={14} color={inkColor} />
+      </View>
+    </View>
+  );
+}
 
 export function ProductCard({
   product,
@@ -39,7 +56,10 @@ export function ProductCard({
 
   const soldByWeight = product.sold_by_weight === 1;
   const outOfStock = product.stock <= 0;
+  const lowStock = !outOfStock && product.stock <= 5;
   const displayName = storeName ?? (product as CrossProduct).store_name ?? '';
+  const imageCount = product.images?.length ?? 0;
+  const firstImage = absoluteUrl(product.images?.[0]);
 
   const onAdd = () => {
     if (outOfStock) {
@@ -58,65 +78,95 @@ export function ProductCard({
         {
           backgroundColor: palette.surface,
           borderColor: palette.line,
-          opacity: pressed ? 0.9 : 1,
+          opacity: pressed ? 0.92 : 1,
         },
+        shadowFor(palette.isDark),
       ]}>
-      {/* رأس البطاقة: الوحدة/الوزن + المفضلة */}
-      <View style={styles.topRow}>
+      {/* الصورة + الشارات */}
+      <View style={styles.photoWrap}>
+        {firstImage != null ? (
+          <Image
+            source={{uri: firstImage}}
+            style={styles.photo}
+            resizeMode="cover"
+            progressiveRenderingEnabled
+          />
+        ) : (
+          <PhotoPlaceholder
+            name={product.name}
+            tint={palette.brandSoft}
+            border={palette.brandBorder}
+            inkColor={palette.brandDark}
+          />
+        )}
+
+        {/* شارة الوحدة أعلى الصورة */}
         <View
-          style={[
-            styles.unitChip,
-            {backgroundColor: palette.surfaceAlt, borderColor: palette.line},
-          ]}>
+          style={[styles.unitChip, {backgroundColor: palette.overlay}]}>
           <Icon
             name={soldByWeight ? 'scale' : 'box'}
-            size={13}
-            color={palette.muted}
+            size={12}
+            color="#FFFFFF"
           />
-          <Text style={[{fontSize: 10.5, color: palette.muted, fontFamily: fonts.medium}]}>
+          <Text style={{fontSize: 10, color: '#FFFFFF', fontFamily: fonts.medium}}>
             {soldByWeight ? 'بالوزن' : (product.unit_label ?? 'قطعة')}
           </Text>
         </View>
+
+        {/* قلب المفضلة */}
         <Pressable
           onPress={() => {
             const added = toggleWishlist(product, displayName);
             toast(added ? 'أُضيف إلى المفضلة' : 'أُزيل من المفضلة', 'info');
           }}
-          hitSlop={10}>
+          hitSlop={10}
+          style={[styles.heartBtn, {backgroundColor: palette.surface}]}>
           <Icon
             name={wishlisted ? 'heartFilled' : 'heart'}
-            size={20}
+            size={17}
             color={wishlisted ? palette.danger : palette.muted}
           />
         </Pressable>
+
+        {/* شارات حالة على الصورة */}
+        {outOfStock ? (
+          <View style={[styles.stockBadge, {backgroundColor: palette.danger}]}>
+            <Text style={styles.stockBadgeText}>نفدت</Text>
+          </View>
+        ) : lowStock ? (
+          <View style={[styles.stockBadge, {backgroundColor: palette.warning}]}>
+            <Text style={styles.stockBadgeText}>بقي القليل</Text>
+          </View>
+        ) : null}
+
+        {/* عدّاد الصور */}
+        {imageCount > 1 ? (
+          <View style={[styles.countChip, {backgroundColor: palette.overlay}]}>
+            <Icon name="photo" size={10} color="#FFFFFF" />
+            <Text style={{fontSize: 9.5, color: '#FFFFFF', fontFamily: fonts.medium}}>
+              {imageCount}
+            </Text>
+          </View>
+        ) : null}
       </View>
 
-      {/* اسم المنتج + المتجر */}
-      <Text style={[type.bodyMedium, {color: palette.ink}]} numberOfLines={2}>
-        {product.name}
-      </Text>
-      {displayName ? (
-        <Text style={[{fontSize: 11.5, color: palette.muted, fontFamily: fonts.medium}]} numberOfLines={1}>
-          من {displayName}
+      {/* النصوص */}
+      <View style={styles.texts}>
+        <Text style={[type.smallMedium, {color: palette.ink}]} numberOfLines={2}>
+          {product.name}
         </Text>
-      ) : null}
+        {displayName ? (
+          <Text style={[{fontSize: 10.5, color: palette.muted, fontFamily: fonts.medium}]} numberOfLines={1}>
+            من {displayName}
+          </Text>
+        ) : null}
+      </View>
 
       {/* السعر + الإضافة/الكمية */}
       <View style={styles.bottomRow}>
-        <View style={styles.priceCol}>
-          <Text style={[styles.price, {color: palette.brandDark}]}>
-            {formatMoney(product.price_minor)}
-          </Text>
-          {outOfStock ? (
-            <Text style={[{fontSize: 11, color: palette.danger, fontFamily: fonts.medium}]}>
-              نفدت الكمية
-            </Text>
-          ) : product.stock <= 5 ? (
-            <Text style={[{fontSize: 11, color: palette.warning, fontFamily: fonts.medium}]}>
-              بقي القليل
-            </Text>
-          ) : null}
-        </View>
+        <Text style={[styles.price, {color: palette.brandDark}]}>
+          {formatMoney(product.price_minor)}
+        </Text>
         {cartQty > 0 ? (
           <QtyStepper
             qty={cartQty}
@@ -129,9 +179,12 @@ export function ProductCard({
           <Pressable
             onPress={onAdd}
             disabled={outOfStock}
-            style={[
+            style={({pressed}) => [
               styles.addBtn,
-              {backgroundColor: outOfStock ? palette.line : palette.brand},
+              {
+                backgroundColor: outOfStock ? palette.line : palette.brand,
+                opacity: pressed ? 0.85 : 1,
+              },
             ]}>
             <Icon name="plus" size={17} color="#FFFFFF" strokeWidth={2.6} />
           </Pressable>
@@ -146,37 +199,70 @@ const styles = StyleSheet.create({
     flex: 1,
     borderRadius: radius.lg,
     borderWidth: 1,
-    padding: spacing.md,
-    gap: 6,
-    minHeight: 150,
+    padding: spacing.sm,
+    gap: spacing.sm,
   },
-  topRow: {
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+  photoWrap: {position: 'relative'},
+  photo: {
+    width: '100%',
+    height: 138,
+    borderRadius: radius.md,
+    overflow: 'hidden',
   },
   unitChip: {
+    position: 'absolute',
+    top: 7,
+    right: 7,
     flexDirection: 'row-reverse',
     alignItems: 'center',
-    gap: 4,
+    gap: 3,
     borderRadius: radius.pill,
-    borderWidth: 1,
-    paddingHorizontal: 8,
+    paddingHorizontal: 7,
     paddingVertical: 3,
   },
-  bottomRow: {
-    flexDirection: 'row-reverse',
-    alignItems: 'flex-end',
-    justifyContent: 'space-between',
-    marginTop: 'auto',
-  },
-  priceCol: {gap: 1, alignItems: 'flex-start'},
-  price: {fontSize: 16.5, fontFamily: fonts.bold},
-  addBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 13,
+  heartBtn: {
+    position: 'absolute',
+    top: 7,
+    left: 7,
+    width: 30,
+    height: 30,
+    borderRadius: 999,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  stockBadge: {
+    position: 'absolute',
+    bottom: 7,
+    right: 7,
+    borderRadius: radius.pill,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  stockBadgeText: {fontSize: 10, color: '#FFFFFF', fontFamily: fonts.bold},
+  countChip: {
+    position: 'absolute',
+    bottom: 7,
+    left: 7,
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 3,
+    borderRadius: radius.pill,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+  },
+  texts: {gap: 2, minHeight: 38},
+  bottomRow: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  price: {fontSize: 16.5, fontFamily: fonts.bold},
+  addBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  photoIconWrap: {position: 'absolute', bottom: 8, left: 8},
 });

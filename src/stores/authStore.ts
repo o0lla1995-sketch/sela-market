@@ -2,6 +2,10 @@
  * authStore.ts — جلسة مستخدم المتجر: التسجيل والدخول والخروج وحذف
  * الحساب فوق /api/market/auth/*. الرمز يُحفظ في MMKV (صلاحية 90 يوماً
  * من الخادم — عند انتهائها يُعاد الدخول).
+ *
+ * v1.1: كلمات المرور — كل حساب محمي بكلمة (scrypt على الخادم)،
+ * والدخول برقم الهوية + كلمة المرور. الحسابات القديمة تدخل مرة
+ * واحدة بالهاتف ثم يفرض التطبيق تعيين كلمة مرور (mustSetPassword).
  */
 import {create} from 'zustand';
 import {storage} from '../core/config';
@@ -16,13 +20,29 @@ interface PersistedAuth {
   user: MarketUser;
 }
 
+export type LoginOutcome =
+  | {ok: true; mustSetPassword: boolean}
+  | {ok: false; error: string};
+
 interface AuthState {
   token: string | null;
   user: MarketUser | null;
   busy: boolean;
   error: string | null;
-  register: (idNumber: string, name: string, phone: string) => Promise<boolean>;
-  login: (idNumber: string, phone: string) => Promise<boolean>;
+  register: (
+    idNumber: string,
+    name: string,
+    phone: string,
+    password: string,
+  ) => Promise<boolean>;
+  login: (idNumber: string, password: string) => Promise<LoginOutcome>;
+  /** مسار الترحيل: حساب قديم أنشئ قبل كلمات المرور. */
+  legacyLogin: (idNumber: string, phone: string) => Promise<LoginOutcome>;
+  /** تعيين كلمة المرور بعد الترحيل أو تغييرها من الإعدادات. */
+  setPassword: (password: string, currentPassword?: string) => Promise<boolean>;
+  /** استعادة عند النسيان — تُبطِل كل الجلسات وتعيد جلسة جديدة. */
+  resetPassword: (idNumber: string, phone: string, newPassword: string)
+    => Promise<boolean>;
   logout: () => void;
   deleteAccount: () => Promise<boolean>;
   clearError: () => void;
@@ -53,34 +73,78 @@ function saveSession(session: PersistedAuth | null): void {
 
 const session = loadSession();
 
+function errorMessage(e: unknown, fallback: string): string {
+  return e instanceof ApiError ? e.message : fallback;
+}
+
 export const useAuthStore = create<AuthState>((set, get) => ({
   token: session?.token ?? null,
   user: session?.user ?? null,
   busy: false,
   error: null,
 
-  register: async (idNumber, name, phone) => {
+  register: async (idNumber, name, phone, password) => {
     set({busy: true, error: null});
     try {
-      const res = await api.register({idNumber, name, phone});
+      const res = await api.register({idNumber, name, phone, password});
       saveSession({token: res.token, user: res.user});
       set({token: res.token, user: res.user, busy: false});
       return true;
     } catch (e) {
-      set({busy: false, error: e instanceof ApiError ? e.message : 'تعذر إنشاء الحساب — تحقق من الإنترنت'});
+      set({busy: false, error: errorMessage(e, 'تعذر إنشاء الحساب — تحقق من الإنترنت')});
       return false;
     }
   },
 
-  login: async (idNumber, phone) => {
+  login: async (idNumber, password) => {
     set({busy: true, error: null});
     try {
-      const res = await api.login({idNumber, phone});
+      const res = await api.login({idNumber, password});
+      saveSession({token: res.token, user: res.user});
+      set({token: res.token, user: res.user, busy: false});
+      return {ok: true, mustSetPassword: res.mustSetPassword === true};
+    } catch (e) {
+      const error = errorMessage(e, 'تعذر تسجيل الدخول — تحقق من الإنترنت');
+      set({busy: false, error});
+      return {ok: false, error};
+    }
+  },
+
+  legacyLogin: async (idNumber, phone) => {
+    set({busy: true, error: null});
+    try {
+      const res = await api.legacyLogin({idNumber, phone});
+      saveSession({token: res.token, user: res.user});
+      set({token: res.token, user: res.user, busy: false});
+      return {ok: true, mustSetPassword: res.mustSetPassword === true};
+    } catch (e) {
+      const error = errorMessage(e, 'تعذر تسجيل الدخول — تحقق من الإنترنت');
+      set({busy: false, error});
+      return {ok: false, error};
+    }
+  },
+
+  setPassword: async (password, currentPassword) => {
+    set({busy: true, error: null});
+    try {
+      await api.setPassword(get().token ?? '', {password, currentPassword});
+      set({busy: false});
+      return true;
+    } catch (e) {
+      set({busy: false, error: errorMessage(e, 'تعذر حفظ كلمة المرور')});
+      return false;
+    }
+  },
+
+  resetPassword: async (idNumber, phone, newPassword) => {
+    set({busy: true, error: null});
+    try {
+      const res = await api.resetPassword({idNumber, phone, newPassword});
       saveSession({token: res.token, user: res.user});
       set({token: res.token, user: res.user, busy: false});
       return true;
     } catch (e) {
-      set({busy: false, error: e instanceof ApiError ? e.message : 'تعذر تسجيل الدخول — تحقق من الإنترنت'});
+      set({busy: false, error: errorMessage(e, 'تعذر استعادة كلمة المرور')});
       return false;
     }
   },
@@ -98,7 +162,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       set({token: null, user: null, busy: false});
       return true;
     } catch (e) {
-      set({busy: false, error: e instanceof ApiError ? e.message : 'تعذر حذف الحساب — تحقق من الإنترنت'});
+      set({busy: false, error: errorMessage(e, 'تعذر حذف الحساب — تحقق من الإنترنت')});
       return false;
     }
   },

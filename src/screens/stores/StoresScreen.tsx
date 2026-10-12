@@ -10,6 +10,7 @@ import {spacing, type} from '../../theme/tokens';
 import {Chip, ErrorState, Loader, Screen, AppHeader, EmptyState} from '../../components/ui';
 import {StoreCard} from '../../components/StoreCard';
 import {getStores} from '../../api/endpoints';
+import {cachedFetch} from '../../api/cached';
 import {ApiError} from '../../api/client';
 import type {Store} from '../../core/types';
 import type {ShopStackParamList} from '../../navigation/RootNavigator';
@@ -27,13 +28,14 @@ export function StoresScreen({navigation}: Props) {
   const load = useCallback(async () => {
     setError(null);
     setLoading(true);
-    try {
-      setStores(await getStores());
-    } catch (e) {
-      setError(e instanceof ApiError ? e.message : 'تعذر تحميل المتاجر');
-    } finally {
-      setLoading(false);
+    // كاش أولاً: آخر لقطة تُعرض حتى عند فشل التحديث (بلا شاشة خطأ).
+    const res = await cachedFetch('stores', () => getStores());
+    if (res.data != null) {
+      setStores(res.data);
+    } else if (res.error != null) {
+      setError(res.error);
     }
+    setLoading(false);
   }, []);
 
   useEffect(() => {

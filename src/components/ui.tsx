@@ -3,7 +3,7 @@
  * كل مكون يستهلك الثيم من ThemeProvider (فاتح/داكن) ويحترم الـ RTL
  * (I18nManager.forceRTL مفعل من App) وقاعدة «صفر إيموجي».
  */
-import React, {useMemo} from 'react';
+import React, {useMemo, useState} from 'react';
 import {
   ActivityIndicator,
   I18nManager,
@@ -18,7 +18,7 @@ import {
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {useTheme} from '../theme/ThemeProvider';
-import {radius, shadowFor, spacing, type, fonts} from '../theme/tokens';
+import {radius, shadowFor, spacing, type, fonts, type Palette} from '../theme/tokens';
 import {Icon, type IconName} from './Icon';
 import {useToastStore} from '../stores/toastStore';
 
@@ -774,6 +774,148 @@ const loaderStyles = StyleSheet.create({
 export function Skeleton({style}: {style?: ViewStyle}) {
   const {palette} = useTheme();
   return <View style={[{backgroundColor: palette.skeleton, borderRadius: radius.md}, style]} />;
+}
+
+/** شبكة بطاقات منتجات هيكلية أثناء التحميل (شكل النتيجة النهائية). */
+export function ProductGridSkeleton({count = 6}: {count?: number}) {
+  const rows = Math.ceil(count / 2);
+  return (
+    <View style={{gap: spacing.lg}}>
+      {Array.from({length: rows}).map((_, r) => (
+        <View key={r} style={{flexDirection: 'row', gap: spacing.lg}}>
+          {[0, 1].map(c => (
+            <View key={c} style={{flex: 1, gap: spacing.sm}}>
+              <Skeleton style={{height: 150, borderRadius: radius.lg}} />
+              <Skeleton style={{height: 14, borderRadius: 6, width: '85%'}} />
+              <Skeleton style={{height: 14, borderRadius: 6, width: '45%'}} />
+            </View>
+          ))}
+        </View>
+      ))}
+    </View>
+  );
+}
+
+/** صفّان أفقيان هيكليان (تصنيفات/متاجر) أثناء التحميل. */
+export function RowSkeleton() {
+  return (
+    <View style={{gap: spacing.md}}>
+      <View style={{flexDirection: 'row', gap: spacing.md}}>
+        {Array.from({length: 4}).map((_, i) => (
+          <Skeleton
+            key={i}
+            style={{width: 76, height: 92, borderRadius: radius.lg}}
+          />
+        ))}
+      </View>
+    </View>
+  );
+}
+
+/* ═══════════════ SecureField (كلمة المرور) ═══════════════ */
+
+/** حقل كلمة مرور مع زر إظهار/إخفاء وشارحة القوة (التسجيل). */
+export function SecureField({
+  label,
+  value,
+  onChangeText,
+  placeholder,
+  error,
+  hint,
+  showStrength = false,
+  strength,
+}: {
+  label: string;
+  value: string;
+  onChangeText: (t: string) => void;
+  placeholder?: string;
+  error?: string | null;
+  hint?: string;
+  showStrength?: boolean;
+  /** 0–3 من passwordStrength(). */
+  strength?: 0 | 1 | 2 | 3;
+}) {
+  const {palette} = useTheme();
+  const [visible, setVisible] = useState(false);
+  const levels = showStrength ? STRENGTH_LABELS[strength ?? 0] : null;
+  return (
+    <View style={{gap: 7}}>
+      <Text style={[type.smallMedium, {color: palette.inkSoft}]}>{label}</Text>
+      <View
+        style={[
+          fieldStyles.box,
+          {
+            backgroundColor: palette.surface,
+            borderColor: error ? palette.danger : palette.line,
+          },
+        ]}>
+        <Icon name="lock" size={19} color={palette.muted} />
+        <TextInput
+          value={value}
+          onChangeText={onChangeText}
+          placeholder={placeholder}
+          placeholderTextColor={palette.muted}
+          secureTextEntry={!visible}
+          style={[type.body, fieldStyles.input, {color: palette.ink}]}
+        />
+        <Pressable
+          onPress={() => setVisible(v => !v)}
+          hitSlop={10}
+          accessibilityRole="button"
+          accessibilityLabel={visible ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'}>
+          <Icon
+            name={visible ? 'eyeOff' : 'eye'}
+            size={19}
+            color={palette.muted}
+          />
+        </Pressable>
+      </View>
+      {showStrength && levels != null && value.length > 0 ? (
+        <View style={{flexDirection: 'row', alignItems: 'center', gap: 7, marginTop: 2}}>
+          <View style={{flex: 1, flexDirection: 'row', gap: 4, height: 4}}>
+            {[0, 1, 2, 3].map(i => (
+              <View
+                key={i}
+                style={{
+                  flex: 1,
+                  borderRadius: 4,
+                  backgroundColor:
+                    i <= (strength ?? 0)
+                      ? strengthColor(strength ?? 0, palette)
+                      : palette.surfaceSunken,
+                }}
+              />
+            ))}
+          </View>
+          <Text
+            style={[
+              type.tiny,
+              {color: strengthColor(strength ?? 0, palette)},
+            ]}>
+            {levels}
+          </Text>
+        </View>
+      ) : null}
+      {error ? (
+        <Text style={[type.tiny, {color: palette.danger, marginTop: 2}]}>{error}</Text>
+      ) : hint ? (
+        <Text style={[type.tiny, {color: palette.muted, marginTop: 2}]}>{hint}</Text>
+      ) : null}
+    </View>
+  );
+}
+
+const STRENGTH_LABELS = ['قصيرة جداً', 'مقبولة', 'جيدة', 'قوية'] as const;
+
+function strengthColor(level: 0 | 1 | 2 | 3, palette: Palette): string {
+  switch (level) {
+    case 0:
+      return palette.danger;
+    case 1:
+      return palette.warning;
+    default:
+      return palette.success;
+  }
 }
 
 /* ═══════════════ SectionTitle ═══════════════ */

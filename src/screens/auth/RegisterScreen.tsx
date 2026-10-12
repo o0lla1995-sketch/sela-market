@@ -1,6 +1,7 @@
 /**
- * RegisterScreen.tsx — إنشاء حساب: رقم هوية فريد + الاسم + الجوال
- * (نفس حقول الخادم حرفياً). التحقق المسبق يمنع الأخطاء قبل الإرسال.
+ * RegisterScreen.tsx — إنشاء حساب: رقم هوية فريد + الاسم + الجوال +
+ * كلمة مرور (v1.1 — كل حساب محمي). مؤشر قوة كلمة المرور والتأكيد
+ * يمنعان الأخطاء قبل الإرسال، والتحقق المسبق يطابق قواعد الخادم.
  */
 import React, {useEffect, useState} from 'react';
 import {KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View} from 'react-native';
@@ -8,9 +9,16 @@ import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {useTheme} from '../../theme/ThemeProvider';
 import {spacing, type} from '../../theme/tokens';
-import {AppHeader, Button, Field, Screen} from '../../components/ui';
+import {
+  AppHeader,
+  Button,
+  Field,
+  Screen,
+  SecureField,
+} from '../../components/ui';
 import {useAuthStore} from '../../stores/authStore';
 import {useToastStore} from '../../stores/toastStore';
+import {passwordProblem, passwordStrength} from '../../api/endpoints';
 import {
   cleanIdNumber,
   cleanPhone,
@@ -23,7 +31,7 @@ import type {RootStackParamList} from '../../navigation/RootNavigator';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Register'>;
 
-export function RegisterScreen({navigation, route}: Props) {
+export function RegisterScreen({navigation}: Props) {
   const {palette} = useTheme();
   const insets = useSafeAreaInsets();
   const register = useAuthStore(s => s.register);
@@ -31,11 +39,12 @@ export function RegisterScreen({navigation, route}: Props) {
   const error = useAuthStore(s => s.error);
   const clearError = useAuthStore(s => s.clearError);
   const toast = useToastStore(s => s.show);
-  const reason = route.params?.reason;
 
   const [idNumber, setIdNumber] = useState('');
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirm, setConfirm] = useState('');
   const [touched, setTouched] = useState(false);
 
   useEffect(() => {
@@ -46,13 +55,28 @@ export function RegisterScreen({navigation, route}: Props) {
   const idError = touched ? validateIdNumber(idNumber) : null;
   const nameError = touched ? validateName(name) : null;
   const phoneError = touched ? validatePhone(phone) : null;
+  const strength = passwordStrength(password);
+  const pwProblem = touched ? passwordProblem(password) : null;
+  const confirmError =
+    touched && confirm !== password ? 'كلمتا المرور غير متطابقتين' : null;
 
   const submit = async () => {
     setTouched(true);
-    if (validateIdNumber(idNumber) || validateName(name) || validatePhone(phone)) {
+    if (
+      validateIdNumber(idNumber) ||
+      validateName(name) ||
+      validatePhone(phone) ||
+      passwordProblem(password) != null ||
+      confirm !== password
+    ) {
       return;
     }
-    const ok = await register(cleanIdNumber(idNumber), name.trim(), cleanPhone(phone));
+    const ok = await register(
+      cleanIdNumber(idNumber),
+      name.trim(),
+      cleanPhone(phone),
+      password,
+    );
     if (ok) {
       primeAndStart();
       toast(`أهلاً ${name.trim().split(' ')[0]} في سيلا ماركت`, 'success');
@@ -110,7 +134,27 @@ export function RegisterScreen({navigation, route}: Props) {
               maxLength={15}
               icon="phone"
               error={phoneError}
-              hint="يستخدمه المتجر للتواصل معك عند التوصيل"
+              hint="يستخدمه المتجر للتواصل معك عند التوصيل واستعادة كلمة المرور"
+            />
+            <SecureField
+              label="كلمة المرور"
+              value={password}
+              onChangeText={t => {
+                setPassword(t);
+                clearError();
+              }}
+              placeholder="8 أحرف على الأقل — رقماً وحرفاً"
+              error={pwProblem}
+              showStrength
+              strength={strength}
+              hint="تحمي حسابك وطلباتك — لا تشاركها مع أحد"
+            />
+            <SecureField
+              label="تأكيد كلمة المرور"
+              value={confirm}
+              onChangeText={setConfirm}
+              placeholder="أعد كتابة كلمة المرور"
+              error={confirmError}
             />
             {error ? (
               <Text style={[type.small, {color: palette.danger, textAlign: 'center'}]}>

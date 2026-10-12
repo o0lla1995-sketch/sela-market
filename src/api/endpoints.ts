@@ -94,12 +94,41 @@ export interface AuthResponse {
   ok: true;
   token: string;
   user: MarketUser;
+  /** مسار الترحيل: حساب قديم أنشئ قبل كلمات المرور. */
+  mustSetPassword?: boolean;
+}
+
+/** v1.1: سياسة كلمة المرور — نفس قواعد الخادم (8+ حرفاً ورقم). */
+export function passwordProblem(password: string): string | null {
+  if (password == null || password.length < 8 || password.length > 72) {
+    return 'كلمة المرور 8 أحرف على الأقل';
+  }
+  if (!/[0-9]/.test(password) || !/[^0-9]/.test(password)) {
+    return 'يجب أن تحتوي رقماً وحرفاً على الأقل';
+  }
+  return null;
+}
+
+/** قوة كلمة المرور للعرض التدريجي في نموذج التسجيل. */
+export function passwordStrength(password: string): 0 | 1 | 2 | 3 {
+  if (password.length < 8) {
+    return 0;
+  }
+  let score = 1;
+  if (/[0-9]/.test(password) && /[^0-9]/.test(password)) {
+    score = 2;
+  }
+  if (password.length >= 12 && /[a-zA-Zا-ي]/.test(password) && /[0-9]/.test(password)) {
+    score = 3;
+  }
+  return score as 0 | 1 | 2 | 3;
 }
 
 export async function register(input: {
   idNumber: string;
   name: string;
   phone: string;
+  password: string;
 }): Promise<AuthResponse> {
   return apiRequest<AuthResponse>('/api/market/auth/register', {
     method: 'POST',
@@ -109,9 +138,44 @@ export async function register(input: {
 
 export async function login(input: {
   idNumber: string;
+  password: string;
+}): Promise<AuthResponse> {
+  return apiRequest<AuthResponse>('/api/market/auth/login', {
+    method: 'POST',
+    body: input,
+  });
+}
+
+/** دخول حساب قديم بلا كلمة مرور (مسار الترحيل — هاتف + هوية). */
+export async function legacyLogin(input: {
+  idNumber: string;
   phone: string;
 }): Promise<AuthResponse> {
   return apiRequest<AuthResponse>('/api/market/auth/login', {
+    method: 'POST',
+    body: input,
+  });
+}
+
+/** تعيين/تغيير كلمة المرور (يتطلب الجلسة؛ التغيير يتطلب الحالية). */
+export async function setPassword(token: string, input: {
+  password: string;
+  currentPassword?: string;
+}): Promise<{ok: true}> {
+  return apiRequest<{ok: true}>('/api/market/auth/set-password', {
+    method: 'POST',
+    token,
+    body: input,
+  });
+}
+
+/** استعادة كلمة المرور: رقم الهوية + الجوال المسجل. */
+export async function resetPassword(input: {
+  idNumber: string;
+  phone: string;
+  newPassword: string;
+}): Promise<AuthResponse> {
+  return apiRequest<AuthResponse>('/api/market/auth/reset', {
     method: 'POST',
     body: input,
   });
