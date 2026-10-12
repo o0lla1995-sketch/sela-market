@@ -1,0 +1,20 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- سمة التطبيق الأساسية — سيلا ماركت: فاتح، دافئ، تجاري حيوي.
+         parent DayNight حتى تتبع الألوان الأصلية (النوافذ/الحوارات)
+         وضع النظام فاتحاً أو داكناً مثل واجهة التطبيق نفسها. -->
+    <style name="AppTheme" parent="Theme.AppCompat.DayNight.NoActionBar">
+        <item name="android:editTextBackground">@drawable/rn_edit_text_material</item>
+        <item name="android:windowBackground">@color/app_bg</item>
+        <!-- تطبيق تسوق حديث: edge-to-edge (المحتوى خلف أشرطة النظام
+             الشفافة) هو السلوك المعياري على Android 15+ مع targetSdk
+             36 — الـ insets تُدار في JS عبر react-native-safe-area-context
+             على كل شاشة. لذا لا نفعّل خيار الانسحاب (windowOptOut). -->
+    </style>
+
+    <!-- Cold-start splash theme — يُظهر علامة سيلا ماركت فور الإطلاق. -->
+    <style name="MarketSplash" parent="AppTheme">
+        <item name="android:windowBackground">@drawable/splash_background</item>
+    </style>
+
+</resources>

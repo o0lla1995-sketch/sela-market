@@ -1,0 +1,247 @@
+name: Android Release APK
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build Release APK
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Android SDK components
+        run: |
+          # Recent runner images removed sdkmanager from PATH —
+          # resolve it via ANDROID_HOME (falling back to PATH).
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -x "$SDKMANAGER" ]; then SDKMANAGER="$(command -v sdkmanager)"; fi
+          echo "using: $SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses > /dev/null || true
+          # NDK r28 (16 KB page-size alignment for every native lib — a
+          # hard Google Play requirement for apps targeting API 35+)
+          # + the android-36 platform and matching build-tools required
+          # by targetSdk/compileSdk 36. Strict — no || true — so a
+          # missing component fails loudly instead of silently.
+          "$SDKMANAGER" "ndk;28.2.13676358" "platforms;android-36" "build-tools;36.0.0" > /dev/null
+          "$SDKMANAGER" "cmake;3.22.1" > /dev/null || true
+
+      - name: Install JS dependencies
+        run: npm ci
+
+      # منطق الأعمال يبوّب كل ريليز — الاختبار الأحمر لا يُشحن أبداً.
+      - name: Run the business-logic test suite
+        run: npx jest --ci --silent
+
+      - name: TypeScript check
+        run: npx tsc --noEmit
+
+      # توقيع النشر الرسمي: مفتاح سيلا ماركت الخاص من أسرار المستودع
+      # (لا يعيش في الشجرة أبداً). عند غيابه يرتد لمفتاح debug.
+      - name: Restore release keystore from secrets
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "no keystore secrets — building with the debug key"
+            exit 0
+          fi
+          echo "$KEYSTORE_BASE64" | base64 -d > android/app/play-release.keystore
+          printf 'storeFile=play-release.keystore\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' \
+            "$KEYSTORE_PASSWORD" "$KEY_ALIAS" "$KEY_PASSWORD" > android/keystore.properties
+          ls -la android/app/play-release.keystore
+
+      - name: Gradle cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('android/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: gradle-${{ runner.os }}-
+
+      - name: Build Release APK
+        working-directory: android
+        run: ./gradlew assembleRelease --stacktrace --no-daemon
+
+      - name: Derive versioned APK name
+        id: version
+        run: |
+          # Name the APK after the version so every release is
+          # instantly distinguishable in the downloads list.
+          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+            APK_NAME="Sela-Market-${GITHUB_REF_NAME}"
+          else
+            SHORT_SHA=$(echo "$GITHUB_SHA" | cut -c1-7)
+            APK_NAME="Sela-Market-dev-${SHORT_SHA}"
+          fi
+          echo "apk_name=$APK_NAME" >> "$GITHUB_OUTPUT"
+          cp android/app/build/outputs/apk/release/app-release.apk "/tmp/${APK_NAME}.apk"
+          ls -la /tmp/*.apk
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.version.outputs.apk_name }}
+          path: /tmp/${{ steps.version.outputs.apk_name }}.apk
+          retention-days: 90
+
+      - name: Create GitHub Release with APK
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            "/tmp/${{ steps.version.outputs.apk_name }}.apk#تطبيق سيلا ماركت $GITHUB_REF_NAME (APK)" \
+            --title "سيلا ماركت Sela Market $GITHUB_REF_NAME" \
+            --generate-notes
+
+  # حزمة AAB الموقّعة لرفعها على Google Play — تُبنى بمفتاح سيلا ماركت
+  # من أسرار المستودع وتُرفق بالريليز نفسه.
+  build-aab:
+    name: Build Signed AAB (Play)
+    runs-on: ubuntu-latest
+    needs: build
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Android SDK components
+        run: |
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -x "$SDKMANAGER" ]; then SDKMANAGER="$(command -v sdkmanager)"; fi
+          echo "using: $SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses > /dev/null || true
+          "$SDKMANAGER" "ndk;28.2.13676358" "platforms;android-36" "build-tools;36.0.0" > /dev/null
+          "$SDKMANAGER" "cmake;3.22.1" > /dev/null || true
+
+      - name: Install JS dependencies
+        run: npm ci
+
+      - name: Restore release keystore from secrets
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "no keystore secrets — skipping AAB (debug-signed)"
+            exit 0
+          fi
+          echo "$KEYSTORE_BASE64" | base64 -d > android/app/play-release.keystore
+          printf 'storeFile=play-release.keystore\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' \
+            "$KEYSTORE_PASSWORD" "$KEY_ALIAS" "$KEY_PASSWORD" > android/keystore.properties
+          ls -la android/app/play-release.keystore
+
+      - name: Gradle cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('android/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: gradle-${{ runner.os }}-
+
+      - name: Build Signed Release AAB
+        working-directory: android
+        run: ./gradlew bundleRelease --stacktrace --no-daemon
+
+      - name: Derive versioned AAB name
+        id: version
+        run: |
+          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+            AAB_NAME="Sela-Market-${GITHUB_REF_NAME}"
+          else
+            SHORT_SHA=$(echo "$GITHUB_SHA" | cut -c1-7)
+            AAB_NAME="Sela-Market-dev-${SHORT_SHA}"
+          fi
+          echo "aab_name=$AAB_NAME" >> "$GITHUB_OUTPUT"
+          if [ -f android/app/build/outputs/bundle/release/app-release.aab ]; then
+            cp android/app/build/outputs/bundle/release/app-release.aab "/tmp/${AAB_NAME}.aab"
+            ls -la /tmp/*.aab
+          else
+            echo "aab_name=" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Attach AAB to the GitHub Release
+        if: startsWith(github.ref, 'refs/tags/') && steps.version.outputs.aab_name != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "$GITHUB_REF_NAME" \
+            "/tmp/${{ steps.version.outputs.aab_name }}.aab#تطبيق سيلا ماركت $GITHUB_REF_NAME (AAB — Google Play)"
+
+      # مفتاح التوقيع نفسه يرافق أصول الريليز (كما في مستودع سيلا) حتى
+      # يبقى بحوزة التاجر لكل تحديث مستقبلي.
+      - name: Attach keystore + credentials to the GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            exit 0
+          fi
+          echo "$KEYSTORE_BASE64" | base64 -d > /tmp/sela-market-play-release.keystore
+          cat > /tmp/sela-market-KEYSTORE-CREDENTIALS.txt <<EOF
+          ═══ سيلا ماركت (Sela Market) — مفتاح توقيع النسخ الرسمية ═══
+
+          الملف: sela-market-play-release.keystore
+
+          كلمة مرور المخزن (storePassword): $KEYSTORE_PASSWORD
+          اسم المفتاح (keyAlias): $KEY_ALIAS
+          كلمة مرور المفتاح (keyPassword): $KEY_PASSWORD
+
+          ─────────────────────────────────────────────
+          هذا الملف يُستخدم لتوقيع APK و AAB وعند فقدانه لن
+          تستطيع تحديث التطبيق لنفس المستخدمين — احتفظ بنسخة
+          احتياطية آمنة خارج الجهاز.
+
+          مثال الاستخدام (android/keystore.properties):
+          storeFile=play-release.keystore
+          storePassword=$KEYSTORE_PASSWORD
+          keyAlias=$KEY_ALIAS
+          keyPassword=$KEY_PASSWORD
+          EOF
+          gh release upload "$GITHUB_REF_NAME" \
+            "/tmp/sela-market-play-release.keystore#ملف Keystore التوقيع (احتفظ به — مطلوب لكل تحديث مستقبلي)" \
+            "/tmp/sela-market-KEYSTORE-CREDENTIALS.txt#بيانات مفتاح التوقيع (كلمات المرور)"

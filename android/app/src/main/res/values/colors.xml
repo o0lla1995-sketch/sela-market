@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- هوية سيلا ماركت: برتقالي سيلا على خلفية دافئة فاتحة (قطبية
+         معاكسة لتطبيق نقطة البيع الداكن — وجهة استهلاكية نهارية). -->
+    <color name="splash_bg">#F97316</color>
+    <color name="app_bg">#FBFAF8</color>
+    <color name="accent">#F97316</color>
+    <color name="ink">#17171C</color>
+</resources>

@@ -1,0 +1,9 @@
+// RN 0.77: الربط التلقائي داخل React Native Gradle Plugin (الشكل
+// الرسمي لقالب 0.77 — نفس إعداد تطبيق نقطة البيع سيلا).
+pluginManagement { includeBuild("../node_modules/@react-native/gradle-plugin") }
+plugins { id("com.facebook.react.settings") }
+extensions.configure(com.facebook.react.ReactSettingsExtension){ ex -> ex.autolinkLibrariesFromCommand() }
+
+rootProject.name = 'SelaMarket'
+include ':app'
+includeBuild("../node_modules/@react-native/gradle-plugin")

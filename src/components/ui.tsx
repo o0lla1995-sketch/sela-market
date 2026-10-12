@@ -1,0 +1,894 @@
+/**
+ * ui.tsx — طقم مكونات سيلا ماركت الأساسي.
+ * كل مكون يستهلك الثيم من ThemeProvider (فاتح/داكن) ويحترم الـ RTL
+ * (I18nManager.forceRTL مفعل من App) وقاعدة «صفر إيموجي».
+ */
+import React, {useMemo} from 'react';
+import {
+  ActivityIndicator,
+  I18nManager,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+  type ViewStyle,
+} from 'react-native';
+import {SafeAreaView} from 'react-native-safe-area-context';
+import {useTheme} from '../theme/ThemeProvider';
+import {radius, shadowFor, spacing, type, fonts} from '../theme/tokens';
+import {Icon, type IconName} from './Icon';
+import {useToastStore} from '../stores/toastStore';
+
+/* ═══════════════ Screen ═══════════════ */
+
+export function Screen({
+  children,
+  scroll = false,
+  style,
+  contentStyle,
+  onRefresh,
+  refreshing,
+}: {
+  children: React.ReactNode;
+  scroll?: boolean;
+  style?: ViewStyle | ViewStyle[];
+  contentStyle?: ViewStyle | ViewStyle[];
+  onRefresh?: () => void;
+  refreshing?: boolean;
+}) {
+  const {palette} = useTheme();
+  const body = scroll ? (
+    <ScrollView
+      contentContainerStyle={[styles.grow, contentStyle]}
+      showsVerticalScrollIndicator={false}
+      refreshControl={
+        onRefresh ? (
+          <RefreshControl
+            refreshing={!!refreshing}
+            onRefresh={onRefresh}
+            tintColor={palette.brand}
+            colors={[palette.brand]}
+          />
+        ) : undefined
+      }>
+      {children}
+    </ScrollView>
+  ) : (
+    <View style={[styles.grow, contentStyle]}>{children}</View>
+  );
+  return (
+    <SafeAreaView
+      style={[styles.safe, {backgroundColor: palette.bg}, style]}
+      edges={['top', 'right', 'left']}>
+      {body}
+    </SafeAreaView>
+  );
+}
+
+/* ═══════════════ AppHeader ═══════════════ */
+
+export function AppHeader({
+  title,
+  subtitle,
+  onBack,
+  right,
+  big = false,
+}: {
+  title: string;
+  subtitle?: string;
+  onBack?: () => void;
+  right?: React.ReactNode;
+  big?: boolean;
+}) {
+  const {palette} = useTheme();
+  return (
+    <View
+      style={[
+        headerStyles.row,
+        {backgroundColor: palette.bg, paddingHorizontal: spacing.lg},
+      ]}>
+      {onBack ? (
+        <Pressable
+          onPress={onBack}
+          hitSlop={10}
+          style={[headerStyles.backBtn, {backgroundColor: palette.surface, borderColor: palette.line}]}>
+          <Icon
+            name={I18nManager.isRTL ? 'back' : 'forward'}
+            size={20}
+            color={palette.ink}
+          />
+        </Pressable>
+      ) : null}
+      <View style={headerStyles.titles}>
+        <Text
+          style={[
+            big ? type.h1 : type.h3,
+            {color: palette.ink},
+          ]}
+          numberOfLines={1}>
+          {title}
+        </Text>
+        {subtitle ? (
+          <Text style={[type.small, {color: palette.muted, marginTop: 2}]} numberOfLines={1}>
+            {subtitle}
+          </Text>
+        ) : null}
+      </View>
+      {right}
+    </View>
+  );
+}
+
+const headerStyles = StyleSheet.create({
+  row: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    paddingVertical: spacing.md,
+    gap: spacing.md,
+  },
+  backBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  titles: {flex: 1, alignItems: 'flex-start'},
+});
+
+/* ═══════════════ Button ═══════════════ */
+
+type ButtonVariant = 'solid' | 'soft' | 'outline' | 'ghost' | 'danger' | 'success';
+
+export function Button({
+  label,
+  onPress,
+  variant = 'solid',
+  icon,
+  disabled = false,
+  loading = false,
+  small = false,
+  style,
+}: {
+  label: string;
+  onPress?: () => void;
+  variant?: ButtonVariant;
+  icon?: IconName;
+  disabled?: boolean;
+  loading?: boolean;
+  small?: boolean;
+  style?: ViewStyle;
+}) {
+  const {palette} = useTheme();
+
+  const colors = useMemo(() => {
+    switch (variant) {
+      case 'soft':
+        return {bg: palette.brandSoft, fg: palette.brandDark, border: 'transparent'};
+      case 'outline':
+        return {bg: 'transparent', fg: palette.ink, border: palette.lineStrong};
+      case 'ghost':
+        return {bg: 'transparent', fg: palette.inkSoft, border: 'transparent'};
+      case 'danger':
+        return {bg: palette.danger, fg: '#FFFFFF', border: 'transparent'};
+      case 'success':
+        return {bg: palette.success, fg: '#FFFFFF', border: 'transparent'};
+      default:
+        return {bg: palette.brand, fg: palette.onBrand, border: 'transparent'};
+    }
+  }, [variant, palette]);
+
+  const height = small ? 38 : 50;
+  const opacity = disabled ? 0.45 : 1;
+
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={disabled || loading}
+      style={({pressed: p}) => [
+        btnStyles.base,
+        {
+          height,
+          borderRadius: radius.lg,
+          backgroundColor: colors.bg,
+          borderColor: colors.border,
+          opacity,
+          transform: [{scale: p && !disabled ? 0.98 : 1}],
+        },
+        style,
+      ]}>
+      {loading ? (
+        <ActivityIndicator size="small" color={colors.fg} />
+      ) : (
+        <>
+          {icon ? <Icon name={icon} size={small ? 17 : 20} color={colors.fg} /> : null}
+          <Text
+            style={[
+              small ? type.smallMedium : type.bodyMedium,
+              {color: colors.fg, fontFamily: fonts.bold},
+            ]}>
+            {label}
+          </Text>
+        </>
+      )}
+    </Pressable>
+  );
+}
+
+const btnStyles = StyleSheet.create({
+  base: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    borderWidth: 1,
+    paddingHorizontal: spacing.xl,
+  },
+});
+
+/* ═══════════════ Card ═══════════════ */
+
+export function Card({
+  children,
+  style,
+  onPress,
+  padded = true,
+}: {
+  children: React.ReactNode;
+  style?: ViewStyle | ViewStyle[];
+  onPress?: () => void;
+  padded?: boolean;
+}) {
+  const {palette} = useTheme();
+  const base: ViewStyle[] = [
+    {
+      backgroundColor: palette.surface,
+      borderRadius: radius.lg,
+      borderWidth: 1,
+      borderColor: palette.line,
+    },
+    ...(padded ? [{padding: spacing.lg}] : []),
+    ...(style ? (Array.isArray(style) ? style : [style]) : []),
+  ];
+  if (onPress != null) {
+    return (
+      <Pressable onPress={onPress} style={({pressed}) => [base, pressed ? {opacity: 0.85} : null]}>
+        {children}
+      </Pressable>
+    );
+  }
+  return <View style={base}>{children}</View>;
+}
+
+/* ═══════════════ Chip ═══════════════ */
+
+export function Chip({
+  label,
+  active = false,
+  onPress,
+  icon,
+}: {
+  label: string;
+  active?: boolean;
+  onPress?: () => void;
+  icon?: IconName;
+}) {
+  const {palette} = useTheme();
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={onPress == null}
+      style={[
+        chipStyles.base,
+        {
+          backgroundColor: active ? palette.brand : palette.surface,
+          borderColor: active ? palette.brand : palette.line,
+        },
+      ]}>
+      {icon ? (
+        <Icon name={icon} size={15} color={active ? palette.onBrand : palette.muted} />
+      ) : null}
+      <Text
+        style={[
+          type.smallMedium,
+          {color: active ? palette.onBrand : palette.inkSoft},
+        ]}>
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
+const chipStyles = StyleSheet.create({
+  base: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 6,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 7,
+  },
+});
+
+/* ═══════════════ Badge ═══════════════ */
+
+export function Badge({count}: {count: number}) {
+  const {palette} = useTheme();
+  if (count <= 0) {
+    return null;
+  }
+  return (
+    <View style={[badgeStyles.base, {backgroundColor: palette.brand}]}>
+      <Text style={[badgeStyles.text, {color: palette.onBrand}]} numberOfLines={1}>
+        {count > 99 ? '99+' : String(count)}
+      </Text>
+    </View>
+  );
+}
+
+const badgeStyles = StyleSheet.create({
+  base: {
+    minWidth: 19,
+    height: 19,
+    borderRadius: 10,
+    paddingHorizontal: 5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  text: {fontSize: 10.5, fontFamily: fonts.bold},
+});
+
+/* ═══════════════ Field ═══════════════ */
+
+export function Field({
+  label,
+  value,
+  onChangeText,
+  placeholder,
+  error,
+  keyboardType = 'default',
+  secure = false,
+  multiline = false,
+  icon,
+  maxLength,
+  hint,
+}: {
+  label: string;
+  value: string;
+  onChangeText: (t: string) => void;
+  placeholder?: string;
+  error?: string | null;
+  keyboardType?: 'default' | 'numeric' | 'phone-pad' | 'email-address';
+  secure?: boolean;
+  multiline?: boolean;
+  icon?: IconName;
+  maxLength?: number;
+  hint?: string;
+}) {
+  const {palette} = useTheme();
+  return (
+    <View style={fieldStyles.wrap}>
+      <Text style={[type.smallMedium, {color: palette.inkSoft}]}>{label}</Text>
+      <View
+        style={[
+          fieldStyles.box,
+          {
+            backgroundColor: palette.surface,
+            borderColor: error ? palette.danger : palette.line,
+          },
+          multiline ? {height: 92, alignItems: 'flex-start'} : null,
+        ]}>
+        {icon ? <Icon name={icon} size={19} color={palette.muted} /> : null}
+        <TextInput
+          value={value}
+          onChangeText={onChangeText}
+          placeholder={placeholder}
+          placeholderTextColor={palette.muted}
+          keyboardType={keyboardType}
+          secureTextEntry={secure}
+          multiline={multiline}
+          maxLength={maxLength}
+          style={[
+            type.body,
+            fieldStyles.input,
+            {color: palette.ink},
+            multiline ? {textAlignVertical: 'top', paddingTop: 0} : null,
+          ]}
+        />
+      </View>
+      {error ? (
+        <Text style={[type.tiny, {color: palette.danger, marginTop: 4}]}>{error}</Text>
+      ) : hint ? (
+        <Text style={[type.tiny, {color: palette.muted, marginTop: 4}]}>{hint}</Text>
+      ) : null}
+    </View>
+  );
+}
+
+const fieldStyles = StyleSheet.create({
+  wrap: {gap: 7},
+  box: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: spacing.sm,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    paddingHorizontal: spacing.md,
+    height: 50,
+  },
+  input: {flex: 1, padding: 0, textAlign: 'right'},
+});
+
+/* ═══════════════ SearchBar ═══════════════ */
+
+export function SearchBar({
+  value,
+  onChangeText,
+  placeholder = 'ابحث عن منتج أو متجر…',
+  onSubmit,
+  autoFocus = false,
+}: {
+  value: string;
+  onChangeText: (t: string) => void;
+  placeholder?: string;
+  onSubmit?: () => void;
+  autoFocus?: boolean;
+}) {
+  const {palette} = useTheme();
+  return (
+    <View
+      style={[
+        searchStyles.box,
+        {backgroundColor: palette.surface, borderColor: palette.line},
+      ]}>
+      <Icon name="search" size={19} color={palette.muted} />
+      <TextInput
+        value={value}
+        onChangeText={onChangeText}
+        placeholder={placeholder}
+        placeholderTextColor={palette.muted}
+        onSubmitEditing={onSubmit}
+        autoFocus={autoFocus}
+        returnKeyType="search"
+        style={[type.body, searchStyles.input, {color: palette.ink}]}
+      />
+      {value.length > 0 ? (
+        <Pressable onPress={() => onChangeText('')} hitSlop={8}>
+          <Icon name="close" size={16} color={palette.muted} />
+        </Pressable>
+      ) : null}
+    </View>
+  );
+}
+
+const searchStyles = StyleSheet.create({
+  box: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: spacing.sm,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    paddingHorizontal: spacing.lg,
+    height: 48,
+  },
+  input: {flex: 1, padding: 0, textAlign: 'right'},
+});
+
+/* ═══════════════ Segmented ═══════════════ */
+
+export function Segmented<T extends string>({
+  options,
+  value,
+  onChange,
+}: {
+  options: {value: T; label: string; icon?: IconName}[];
+  value: T;
+  onChange: (v: T) => void;
+}) {
+  const {palette} = useTheme();
+  return (
+    <View
+      style={[
+        segStyles.box,
+        {backgroundColor: palette.surfaceAlt, borderColor: palette.line},
+      ]}>
+      {options.map(opt => {
+        const active = opt.value === value;
+        return (
+          <Pressable
+            key={opt.value}
+            onPress={() => onChange(opt.value)}
+            style={[
+              segStyles.opt,
+              active && {backgroundColor: palette.surface, ...shadowFor(palette.isDark)},
+            ]}>
+            {opt.icon ? (
+              <Icon
+                name={opt.icon}
+                size={17}
+                color={active ? palette.brand : palette.muted}
+              />
+            ) : null}
+            <Text
+              style={[
+                type.smallMedium,
+                {color: active ? palette.ink : palette.muted},
+              ]}>
+              {opt.label}
+            </Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+const segStyles = StyleSheet.create({
+  box: {
+    flexDirection: 'row-reverse',
+    borderRadius: radius.md,
+    borderWidth: 1,
+    padding: 4,
+    gap: 4,
+  },
+  opt: {
+    flex: 1,
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    borderRadius: radius.sm + 1,
+    paddingVertical: 9,
+  },
+});
+
+/* ═══════════════ SwitchRow ═══════════════ */
+
+export function SwitchRow({
+  icon,
+  label,
+  description,
+  value,
+  onValueChange,
+}: {
+  icon: IconName;
+  label: string;
+  description?: string;
+  value: boolean;
+  onValueChange: (v: boolean) => void;
+}) {
+  const {palette} = useTheme();
+  return (
+    <View style={switchStyles.row}>
+      <View style={[switchStyles.iconChip, {backgroundColor: palette.brandSoft}]}>
+        <Icon name={icon} size={20} color={palette.brandDark} />
+      </View>
+      <View style={switchStyles.texts}>
+        <Text style={[type.bodyMedium, {color: palette.ink}]}>{label}</Text>
+        {description ? (
+          <Text style={[type.tiny, {color: palette.muted, marginTop: 2}]}>{description}</Text>
+        ) : null}
+      </View>
+      <Pressable
+        onPress={() => onValueChange(!value)}
+        style={[
+          switchStyles.track,
+          {backgroundColor: value ? palette.brand : palette.lineStrong},
+        ]}>
+        <View
+          style={[
+            switchStyles.thumb,
+            {backgroundColor: '#FFFFFF'},
+            value ? {alignSelf: 'flex-start'} : {alignSelf: 'flex-end'},
+          ]}
+        />
+      </Pressable>
+    </View>
+  );
+}
+
+const switchStyles = StyleSheet.create({
+  row: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingVertical: spacing.md,
+  },
+  iconChip: {
+    width: 42,
+    height: 42,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  texts: {flex: 1, alignItems: 'flex-start'},
+  track: {width: 50, height: 30, borderRadius: 15, padding: 3},
+  thumb: {width: 24, height: 24, borderRadius: 12},
+});
+
+/* ═══════════════ QtyStepper ═══════════════ */
+
+export function QtyStepper({
+  qty,
+  soldByWeight,
+  onIncrease,
+  onDecrease,
+  onRemove,
+  compact = false,
+}: {
+  qty: number;
+  soldByWeight: boolean;
+  onIncrease: () => void;
+  onDecrease: () => void;
+  onRemove?: () => void;
+  compact?: boolean;
+}) {
+  const {palette} = useTheme();
+  const unit = soldByWeight ? (qty < 1 ? 'نصف' : 'كيلو') : 'قطعة';
+  return (
+    <View
+      style={[
+        stepperStyles.box,
+        {backgroundColor: palette.brandSoft, borderColor: palette.brandBorder},
+        compact && stepperStyles.compact,
+      ]}>
+      <Pressable onPress={onIncrease} hitSlop={8} style={stepperStyles.btn}>
+        <Icon name="plus" size={compact ? 15 : 17} color={palette.brandDark} strokeWidth={2.4} />
+      </Pressable>
+      <View style={stepperStyles.value}>
+        <Text style={[type.smallMedium, {color: palette.brandDark, fontFamily: fonts.bold}]}>
+          {soldByWeight ? (qty % 1 === 0 ? String(qty) : String(qty)) : String(qty)}
+        </Text>
+        {!compact ? (
+          <Text style={[{fontSize: 10, color: palette.brandDark, fontFamily: fonts.medium}]}>
+            {unit}
+          </Text>
+        ) : null}
+      </View>
+      <Pressable onPress={onDecrease} hitSlop={8} style={stepperStyles.btn}>
+        <Icon name="minus" size={compact ? 15 : 17} color={palette.brandDark} strokeWidth={2.4} />
+      </Pressable>
+    </View>
+  );
+}
+
+const stepperStyles = StyleSheet.create({
+  box: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    borderRadius: radius.md,
+    borderWidth: 1,
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+    gap: 2,
+  },
+  compact: {paddingHorizontal: 4},
+  btn: {width: 30, height: 30, alignItems: 'center', justifyContent: 'center'},
+  value: {minWidth: 44, alignItems: 'center'},
+});
+
+/* ═══════════════ EmptyState ═══════════════ */
+
+export function EmptyState({
+  icon,
+  title,
+  body,
+  actionLabel,
+  onAction,
+}: {
+  icon: IconName;
+  title: string;
+  body?: string;
+  actionLabel?: string;
+  onAction?: () => void;
+}) {
+  const {palette} = useTheme();
+  return (
+    <View style={emptyStyles.box}>
+      <View style={[emptyStyles.iconWrap, {backgroundColor: palette.surfaceAlt}]}>
+        <Icon name={icon} size={34} color={palette.muted} />
+      </View>
+      <Text style={[type.h3, {color: palette.ink, marginTop: spacing.lg}]}>{title}</Text>
+      {body ? (
+        <Text
+          style={[
+            type.small,
+            {color: palette.muted, marginTop: spacing.sm, textAlign: 'center'},
+          ]}>
+          {body}
+        </Text>
+      ) : null}
+      {actionLabel && onAction ? (
+        <View style={{marginTop: spacing.lg}}>
+          <Button label={actionLabel} onPress={onAction} variant="soft" small />
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+const emptyStyles = StyleSheet.create({
+  box: {alignItems: 'center', paddingHorizontal: spacing.xxl, paddingVertical: spacing.xxxl * 1.6},
+  iconWrap: {
+    width: 84,
+    height: 84,
+    borderRadius: 42,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+});
+
+/* ═══════════════ ErrorState ═══════════════ */
+
+export function ErrorState({message, onRetry}: {message: string; onRetry?: () => void}) {
+  const {palette} = useTheme();
+  return (
+    <View style={emptyStyles.box}>
+      <View style={[emptyStyles.iconWrap, {backgroundColor: palette.dangerSoft}]}>
+        <Icon name="warning" size={34} color={palette.danger} />
+      </View>
+      <Text style={[type.h3, {color: palette.ink, marginTop: spacing.lg}]}>
+        تعذر تحميل البيانات
+      </Text>
+      <Text
+        style={[
+          type.small,
+          {color: palette.muted, marginTop: spacing.sm, textAlign: 'center'},
+        ]}>
+        {message}
+      </Text>
+      {onRetry ? (
+        <View style={{marginTop: spacing.lg}}>
+          <Button label="إعادة المحاولة" onPress={onRetry} variant="soft" icon="refresh" small />
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+/* ═══════════════ Loader ═══════════════ */
+
+export function Loader({label = 'جارٍ التحميل…'}: {label?: string}) {
+  const {palette} = useTheme();
+  return (
+    <View style={loaderStyles.box}>
+      <ActivityIndicator size="large" color={palette.brand} />
+      <Text style={[type.small, {color: palette.muted, marginTop: spacing.md}]}>
+        {label}
+      </Text>
+    </View>
+  );
+}
+
+const loaderStyles = StyleSheet.create({
+  box: {alignItems: 'center', paddingVertical: spacing.xxxl * 1.5},
+});
+
+/* ═══════════════ Skeleton ═══════════════ */
+
+export function Skeleton({style}: {style?: ViewStyle}) {
+  const {palette} = useTheme();
+  return <View style={[{backgroundColor: palette.skeleton, borderRadius: radius.md}, style]} />;
+}
+
+/* ═══════════════ SectionTitle ═══════════════ */
+
+export function SectionTitle({
+  title,
+  actionLabel,
+  onAction,
+}: {
+  title: string;
+  actionLabel?: string;
+  onAction?: () => void;
+}) {
+  const {palette} = useTheme();
+  return (
+    <View style={sectionStyles.row}>
+      <Text style={[type.h2, {color: palette.ink}]}>{title}</Text>
+      {actionLabel && onAction ? (
+        <Pressable onPress={onAction} hitSlop={8}>
+          <Text style={[type.smallMedium, {color: palette.brandDark}]}>{actionLabel}</Text>
+        </Pressable>
+      ) : null}
+    </View>
+  );
+}
+
+const sectionStyles = StyleSheet.create({
+  row: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.md,
+  },
+});
+
+/* ═══════════════ Toaster ═══════════════ */
+
+export function Toaster() {
+  const {palette} = useTheme();
+  const toasts = useToastStore(s => s.toasts);
+  const dismiss = useToastStore(s => s.dismiss);
+  if (toasts.length === 0) {
+    return null;
+  }
+  return (
+    <View style={toastStyles.wrap} pointerEvents="box-none">
+      {toasts.slice(-3).map(t => {
+        const tone =
+          t.tone === 'success' ? palette.success :
+          t.tone === 'danger' ? palette.danger : palette.info;
+        return (
+          <Pressable
+            key={t.id}
+            onPress={() => dismiss(t.id)}
+            style={[
+              toastStyles.toast,
+              {backgroundColor: palette.ink, borderRightColor: tone},
+            ]}>
+            <Text style={[type.smallMedium, {color: '#FFFFFF'}]}>{t.text}</Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+const toastStyles = StyleSheet.create({
+  wrap: {
+    position: 'absolute',
+    top: 54,
+    left: spacing.lg,
+    right: spacing.lg,
+    gap: 8,
+    zIndex: 999,
+  },
+  toast: {
+    borderRadius: radius.md,
+    borderRightWidth: 4,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+  },
+});
+
+/* ═══════════════ BottomFixed ═══════════════ */
+
+/** حاوية مثبتة أسفل الشاشة فوق محتوى قابل للتمرير (أزرار الدفع). */
+export function BottomFixed({children}: {children: React.ReactNode}) {
+  const {palette} = useTheme();
+  return (
+    <View
+      style={[
+        fixedStyles.box,
+        {
+          backgroundColor: palette.surface,
+          borderTopColor: palette.line,
+        },
+      ]}>
+      {children}
+    </View>
+  );
+}
+
+const fixedStyles = StyleSheet.create({
+  box: {
+    borderTopWidth: 1,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+  },
+});
+
+/* ═══════════════ Global styles ═══════════════ */
+
+const styles = StyleSheet.create({
+  safe: {flex: 1},
+  grow: {flexGrow: 1},
+});
+
+export {spacing, radius, type, fonts};

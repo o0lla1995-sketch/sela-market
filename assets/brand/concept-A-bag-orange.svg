@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FB923C"/>
+      <stop offset="55%" stop-color="#F97316"/>
+      <stop offset="100%" stop-color="#EA580C"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="50%" cy="34%" r="66%">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.22"/>
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1024" height="1024" fill="url(#bg)"/>
+  <rect width="1024" height="1024" fill="url(#glow)"/>
+  <path d="M 335.2 360.0 C 335.2 198.0, 688.8 198.0, 688.8 360.0" fill="none" stroke="#FFFFFF" stroke-width="54" stroke-linecap="round"/>
+  <path d="M 326.0 330.0 H 698.0 Q 772.0 330.0 772.0 404.0 V 716.0 Q 772.0 790.0 698.0 790.0 H 326.0 Q 252.0 790.0 252.0 716.0 V 404.0 Q 252.0 330.0 326.0 330.0 Z" fill="#FFFFFF"/>
+  <path d="M 326.0 330.0 H 698.0 Q 772.0 330.0 772.0 404.0 V 716.0 Q 772.0 790.0 698.0 790.0 H 326.0 Q 252.0 790.0 252.0 716.0 V 404.0 Q 252.0 330.0 326.0 330.0 Z" fill="none" stroke="#EA580C" stroke-opacity="0.18" stroke-width="10"/>
+  <text x="512" y="694" font-family="Tajawal" font-weight="900" font-size="300" fill="#F97316" text-anchor="middle">س</text>
+</svg>

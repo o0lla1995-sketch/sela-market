@@ -1,0 +1,83 @@
+apply plugin: "com.android.application"
+apply plugin: "org.jetbrains.kotlin.android"
+apply plugin: "com.facebook.react"
+
+react {
+    // v1: RN 0.75+ — turns every autolinked library project (screens,
+    // svg, mmkv, netinfo, safe-area) into a Gradle dependency of :app so
+    // their codegen tasks run BEFORE the app's CMake configure. Without
+    // this call the CXX build fails with "add_subdirectory ... codegen/jni/
+    // which is not an existing directory".
+    autolinkLibrariesWithApp()
+}
+
+def enableProguardInReleaseBuilds = false
+
+def jscFlavor = 'org.webkit:android-jsc:+'
+
+// توقيع النشر الرسمي: ملف keystore.properties بجانب هذا السكربت يحمل
+// مفتاح سيلا ماركت (يُنشأ من أسرار المستودع في CI). عند غيابه (نسخ
+// محلية/تطوير) يرتد البناء إلى مفتاح debug فلا يتعطل شيء.
+def keystorePropertiesFile = rootProject.file("keystore.properties")
+def keystoreProperties = new Properties()
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+}
+
+android {
+    ndkVersion rootProject.ext.ndkVersion
+    buildToolsVersion rootProject.ext.buildToolsVersion
+    compileSdk rootProject.ext.compileSdkVersion
+
+    namespace "com.sela.market"
+    defaultConfig {
+        applicationId "com.sela.market"
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
+        versionCode 1
+        versionName "1.0.0"
+    }
+
+    signingConfigs {
+        debug {
+            storeFile file('debug.keystore')
+            storePassword 'android'
+            keyAlias 'androiddebugkey'
+            keyPassword 'android'
+        }
+        // مفتاح النشر الرسمي — يُحمَّل فقط عند وجود keystore.properties
+        // (لا يُرفع إلى المستودع أبداً).
+        release {
+            if (keystorePropertiesFile.exists()) {
+                storeFile file(keystoreProperties['storeFile'])
+                storePassword keystoreProperties['storePassword']
+                keyAlias keystoreProperties['keyAlias']
+                keyPassword keystoreProperties['keyPassword']
+            }
+        }
+    }
+    buildTypes {
+        debug {
+            signingConfig signingConfigs.debug
+        }
+        release {
+            signingConfig keystorePropertiesFile.exists() ? signingConfigs.release : signingConfigs.debug
+            minifyEnabled enableProguardInReleaseBuilds
+            proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
+        }
+    }
+}
+
+dependencies {
+    // The version of react-native is set by the React Native Gradle Plugin
+    implementation("com.facebook.react:react-android")
+
+    // NotificationCompat لإشعارات حالة الطلب المحلية.
+    implementation("androidx.core:core-ktx:1.13.1")
+
+    if (hermesEnabled.toBoolean()) {
+        implementation("com.facebook.react:hermes-android")
+    } else {
+        implementation jscFlavor
+    }
+}

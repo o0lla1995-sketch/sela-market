@@ -1,0 +1,284 @@
+/**
+ * OrderViews.tsx — مكونات الطلب: شارة الحالة، خط الزمن، بطاقة الطلب
+ * في القائمة، وبطاقة تفاصيل الطلب.
+ */
+import React from 'react';
+import {Pressable, StyleSheet, Text, View} from 'react-native';
+import {useTheme} from '../theme/ThemeProvider';
+import {radius, spacing, type, fonts, toneColors} from '../theme/tokens';
+import {Icon} from './Icon';
+import {Card} from './ui';
+import {formatDateTime, relativeTime} from '../core/time';
+import {formatMoney, formatQty} from '../core/money';
+import {
+  STATUS_META,
+  TIMELINE_STEPS,
+  statusTimestamp,
+  timelineIndex,
+} from '../core/orderStatus';
+import type {Order} from '../core/types';
+
+/* ─── شارة الحالة ─── */
+
+export function OrderStatusBadge({status}: {status: Order['status']}) {
+  const {palette} = useTheme();
+  const meta = STATUS_META[status];
+  const c = toneColors(palette, meta.tone);
+  return (
+    <View
+      style={[
+        badgeStyles.box,
+        {backgroundColor: c.bg, borderColor: c.border},
+      ]}>
+      <Icon
+        name={
+          status === 'delivered' ? 'checkCircle' :
+          status === 'rejected' || status === 'cancelled' ? 'xCircle' :
+          status === 'sent' ? 'truck' :
+          status === 'accepted' ? 'clock' :
+          status === 'returned' ? 'refresh' : 'bag'
+        }
+        size={13}
+        color={c.fg}
+      />
+      <Text style={[{fontSize: 11.5, color: c.fg, fontFamily: fonts.bold}]}>
+        {meta.label}
+      </Text>
+    </View>
+  );
+}
+
+const badgeStyles = StyleSheet.create({
+  box: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 5,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+});
+
+/* ─── خط الزمن ─── */
+
+export function OrderTimeline({order}: {order: Order}) {
+  const {palette} = useTheme();
+  const current = timelineIndex(order.status);
+
+  // الحالات الطرفية خارج المسار الطبيعي تُعرض كملخص خاص بها.
+  if (current < 0) {
+    const meta = STATUS_META[order.status];
+    const c = toneColors(palette, meta.tone);
+    return (
+      <View
+        style={[
+          timelineStyles.fallback,
+          {backgroundColor: c.bg, borderColor: c.border, borderRightColor: c.fg},
+        ]}>
+        <Icon name="info" size={17} color={c.fg} />
+        <View style={{flex: 1, gap: 2}}>
+          <Text style={[type.smallMedium, {color: c.fg, fontFamily: fonts.bold}]}>
+            {meta.label}
+          </Text>
+          <Text style={[{fontSize: 11.5, color: palette.inkSoft}]}>
+            {meta.description}
+            {order.reject_reason ? ` — ${order.reject_reason}` : ''}
+          </Text>
+        </View>
+      </View>
+    );
+  }
+
+  return (
+    <View style={{gap: 0}}>
+      {TIMELINE_STEPS.map((step, i) => {
+        const done = i < current;
+        const active = i === current;
+        const isLast = i === TIMELINE_STEPS.length - 1;
+        const ts =
+          step.status === 'new' ? order.created_at :
+          step.status === 'accepted' ? order.accepted_at :
+          step.status === 'sent' ? order.sent_at :
+          order.delivered_at;
+        return (
+          <View key={step.status} style={timelineStyles.row}>
+            {/* العمود الدائري */}
+            <View style={timelineStyles.rail}>
+              <View
+                style={[
+                  timelineStyles.dot,
+                  {
+                    backgroundColor: done || active ? palette.brand : palette.surface,
+                    borderColor: done || active ? palette.brand : palette.lineStrong,
+                  },
+                ]}>
+                {done ? (
+                  <Icon name="check" size={11} color="#FFFFFF" strokeWidth={3} />
+                ) : active ? (
+                  <View style={[timelineStyles.innerDot, {backgroundColor: '#FFFFFF'}]} />
+                ) : null}
+              </View>
+              {!isLast ? (
+                <View
+                  style={[
+                    timelineStyles.line,
+                    {backgroundColor: done ? palette.brand : palette.line},
+                  ]}
+                />
+              ) : null}
+            </View>
+            {/* النص */}
+            <View style={[timelineStyles.texts, {marginBottom: isLast ? 0 : spacing.md}]}>
+              <Text
+                style={[
+                  type.smallMedium,
+                  {
+                    color: done || active ? palette.ink : palette.muted,
+                    fontFamily: active || done ? fonts.bold : fonts.medium,
+                    opacity: done ? 0.75 : 1,
+                  },
+                ]}>
+                {step.label}
+              </Text>
+              <Text style={[{fontSize: 11, color: palette.muted}]}>
+                {active
+                  ? step.hint
+                  : ts != null
+                    ? formatDateTime(ts)
+                    : step.hint}
+              </Text>
+            </View>
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
+const timelineStyles = StyleSheet.create({
+  fallback: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: spacing.md,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderRightWidth: 4,
+    padding: spacing.md,
+  },
+  row: {flexDirection: 'row-reverse'},
+  rail: {alignItems: 'center', width: 26},
+  dot: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  innerDot: {width: 8, height: 8, borderRadius: 4},
+  line: {width: 2.5, flex: 1, minHeight: 18},
+  texts: {flex: 1, paddingBottom: 2, gap: 1, alignItems: 'flex-start'},
+});
+
+/* ─── بطاقة الطلب في القائمة ─── */
+
+export function OrderListCard({
+  order,
+  onPress,
+}: {
+  order: Order;
+  onPress: () => void;
+}) {
+  const {palette} = useTheme();
+  const items = order.items ?? [];
+  return (
+    <Card onPress={onPress} style={{gap: spacing.sm}}>
+      <View style={listStyles.topRow}>
+        <View style={{flex: 1, gap: 2, alignItems: 'flex-start'}}>
+          <Text style={[type.smallMedium, {color: palette.muted, fontFamily: fonts.medium}]}>
+            {order.order_number}
+          </Text>
+          <Text style={[type.bodyMedium, {color: palette.ink, fontFamily: fonts.bold}]} numberOfLines={1}>
+            {order.store?.name ?? 'متجر'}
+          </Text>
+        </View>
+        <OrderStatusBadge status={order.status} />
+      </View>
+
+      <View style={listStyles.itemsRow}>
+        {items.slice(0, 3).map(it => (
+          <View key={it.id} style={[listStyles.itemChip, {backgroundColor: palette.surfaceAlt}]}>
+            <Text style={[{fontSize: 11, color: palette.inkSoft}]} numberOfLines={1}>
+              {it.product_name} × {formatQty(it.quantity, false)}
+            </Text>
+          </View>
+        ))}
+        {items.length > 3 ? (
+          <View style={[listStyles.itemChip, {backgroundColor: palette.surfaceAlt}]}>
+            <Text style={[{fontSize: 11, color: palette.muted}]}>
+              +{items.length - 3}
+            </Text>
+          </View>
+        ) : null}
+      </View>
+
+      <View style={listStyles.bottomRow}>
+        <Text style={[{fontSize: 12, color: palette.muted}]}>
+          {relativeTime(statusTimestamp(order))}
+        </Text>
+        <Text style={[{fontSize: 15, color: palette.brandDark, fontFamily: fonts.bold}]}>
+          {formatMoney(order.total_minor)}
+        </Text>
+      </View>
+    </Card>
+  );
+}
+
+const listStyles = StyleSheet.create({
+  topRow: {flexDirection: 'row-reverse', alignItems: 'flex-start', gap: spacing.sm},
+  itemsRow: {flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 6},
+  itemChip: {borderRadius: radius.sm, paddingHorizontal: 8, paddingVertical: 3, maxWidth: 170},
+  bottomRow: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+});
+
+/* ─── ملخص مبالغ ─── */
+
+export function OrderTotals({order}: {order: Order}) {
+  const {palette} = useTheme();
+  const rows: {label: string; value: string; strong?: boolean}[] = [
+    {label: 'إجمالي المنتجات', value: formatMoney(order.items_total_minor)},
+    {label: `التوصيل (${order.region_name ?? '—'})`, value: formatMoney(order.delivery_fee_minor)},
+    {label: 'الإجمالي مع التوصيل', value: formatMoney(order.total_minor), strong: true},
+  ];
+  if (order.returned_minor > 0) {
+    rows.push({label: 'المُرجَع', value: `− ${formatMoney(order.returned_minor)}`});
+  }
+  return (
+    <View style={{gap: spacing.sm}}>
+      {rows.map(r => (
+        <View key={r.label} style={listStyles.bottomRow}>
+          <Text
+            style={[
+              type.small,
+              {color: r.strong ? palette.ink : palette.muted},
+              r.strong ? {fontFamily: fonts.bold} : null,
+            ]}>
+            {r.label}
+          </Text>
+          <Text
+            style={[
+              {fontSize: 14, fontFamily: r.strong ? fonts.bold : fonts.medium},
+              {color: r.strong ? palette.brandDark : palette.inkSoft},
+            ]}>
+            {r.value}
+          </Text>
+        </View>
+      ))}
+    </View>
+  );
+}
