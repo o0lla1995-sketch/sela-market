@@ -322,6 +322,16 @@ export function RootNavigator() {
   /* v2.1: بوابة البصمة — جلسة محفوظة + الخيار مفعّل ⇒ نبدأ عندها. */
   const needsGate = onboarded && biometricLoginEnabled && sessionToken != null;
 
+  /* v2.2: إصلاح اختفاء شاشة الترحيب — كانت تُسجَّل في المكدس لكن
+   * initialRouteName يبدأ دائماً من Main، فلا تُعرض أبداً لمستخدم
+   * جديد. الترتيب الصحيح: الترحيب أولاً لغير المُهيَّئين، ثم بوابة
+   * البصمة، وإلا الرئيسية. */
+  const initialRoute = !onboarded
+    ? 'Welcome'
+    : needsGate
+      ? 'BiometricGate'
+      : 'Main';
+
   return (
     <NavigationContainer
       theme={{
@@ -336,7 +346,7 @@ export function RootNavigator() {
         },
       }}>
       <RootStack.Navigator
-        initialRouteName={needsGate ? 'BiometricGate' : 'Main'}
+        initialRouteName={initialRoute}
         screenOptions={{headerShown: false}}>
         {!onboarded ? (
           <RootStack.Screen

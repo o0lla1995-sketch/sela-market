@@ -1,7 +1,9 @@
 /**
- * StoresScreen.tsx — دليل متاجر المول (v2.0): بحث محلي فوري +
- * أقسام حسب التصنيف + فلتر منطقتك (متاجر تخدم منطقتك مرتبة برسم
- * التوصيل الأرخص أولاً مع رسم كل متجر — مقارنة حقيقية بين المتاجر).
+ * StoresScreen.tsx — دليل متاجر المول (v2.2): بحث محلي فوري + أقسام
+ * حسب التصنيف + **فلترة مناطق ذكية**: شرائح كل مناطق التوصيل المتاحة
+ * عبر المول (من الخادم) — أي مستخدم (زائر أو عضو، ومن دون تحديد
+ * منطقته) يستطيع تصفح متاجر أي منطقة ومقارنة رسوم توصيلها؛ منطقة
+ * المستخدم تُعلَّم بشارة «منطقتي» وتُقدَّم أولاً.
  */
 import React, {useCallback, useEffect, useMemo, useState} from 'react';
 import {FlatList, Pressable, StyleSheet, Text, View} from 'react-native';
@@ -11,9 +13,8 @@ import {spacing, type, fonts} from '../../theme/tokens';
 import {Icon} from '../../components/Icon';
 import {Chip, ErrorState, Loader, Screen, AppHeader, EmptyState} from '../../components/ui';
 import {StoreCard} from '../../components/StoreCard';
-import {getStores} from '../../api/endpoints';
+import {getStores, getDeliveryRegions} from '../../api/endpoints';
 import {cachedFetch} from '../../api/cached';
-import {ApiError} from '../../api/client';
 import type {Store} from '../../core/types';
 import {useLocationStore} from '../../stores/locationStore';
 import type {ShopStackParamList} from '../../navigation/RootNavigator';
@@ -25,33 +26,30 @@ export function StoresScreen({navigation}: Props) {
   const {palette} = useTheme();
   const myRegion = useLocationStore(s => s.myRegion);
   const [stores, setStores] = useState<Store[]>([]);
+  const [regions, setRegions] = useState<string[]>([]);
   const [regionStores, setRegionStores] = useState<Store[]>([]);
+  const [selectedRegion, setSelectedRegion] = useState<string | null>(null);
+  const [regionLoading, setRegionLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState<string | null>(null);
-  const [regionMode, setRegionMode] = useState(false);
 
   const load = useCallback(async () => {
     setError(null);
     setLoading(true);
     // كاش أولاً: آخر لقطة تُعرض حتى عند فشل التحديث (بلا شاشة خطأ).
-    const [allRes, regionRes] = await Promise.all([
+    const [allRes, regionsRes] = await Promise.all([
       cachedFetch('stores', () => getStores()),
-      useLocationStore.getState().myRegion != null
-        ? cachedFetch(
-            `stores:region:${useLocationStore.getState().myRegion}`,
-            () => getStores({region: useLocationStore.getState().myRegion!}),
-          )
-        : Promise.resolve(null),
+      cachedFetch('market:regions', () => getDeliveryRegions()),
     ]);
     if (allRes.data != null) {
       setStores(allRes.data);
     } else if (allRes.error != null) {
       setError(allRes.error);
     }
-    if (regionRes?.data != null) {
-      setRegionStores(regionRes.data);
+    if (regionsRes.data != null) {
+      setRegions(regionsRes.data);
     }
     setLoading(false);
   }, []);
@@ -60,28 +58,31 @@ export function StoresScreen({navigation}: Props) {
     void load();
   }, [load]);
 
-  /* مزامنة قائمة المنطقة عند تغيّر منطقة المستخدم. */
+  /* جلب متاجر المنطقة المختارة — كاش لكل منطقة على حدة. */
   useEffect(() => {
     let alive = true;
-    if (myRegion == null) {
+    if (selectedRegion == null) {
       setRegionStores([]);
-      if (regionMode) {
-        setRegionMode(false);
-      }
       return;
     }
+    setRegionLoading(true);
     (async () => {
-      const res = await cachedFetch(`stores:region:${myRegion}`, () =>
-        getStores({region: myRegion}),
+      const res = await cachedFetch(`stores:region:${selectedRegion}`, () =>
+        getStores({region: selectedRegion}),
       );
-      if (alive && res.data != null) {
-        setRegionStores(res.data);
+      if (alive) {
+        if (res.data != null) {
+          setRegionStores(res.data);
+        } else {
+          setRegionStores([]);
+        }
+        setRegionLoading(false);
       }
     })();
     return () => {
       alive = false;
     };
-  }, [myRegion, regionMode]);
+  }, [selectedRegion]);
 
   const categories = useMemo(() => {
     const set = new Set<string>();
@@ -93,11 +94,18 @@ export function StoresScreen({navigation}: Props) {
     return Array.from(set).slice(0, 12);
   }, [stores]);
 
+  /* منطقة المستخدم أولاً ثم بقية المناطق أبجدياً — وصول أسرع
+   * لأهم خيار دون فرضه على المستخدم. */
+  const orderedRegions = useMemo(() => {
+    if (myRegion == null || !regions.includes(myRegion)) {
+      return regions;
+    }
+    return [myRegion, ...regions.filter(r => r !== myRegion)];
+  }, [regions, myRegion]);
+
   const filtered = useMemo(() => {
-    // وضع منطقتي: متاجر تخدم منطقتي مرتبة من الخادم برسم التوصيل
-    // الأرخص أولاً — مقارنة حقيقية بين المتاجر.
-    let list = regionMode ? regionStores : stores;
-    if (!regionMode && category != null) {
+    let list = selectedRegion != null ? regionStores : stores;
+    if (category != null) {
       list = list.filter(s => (s.category ?? '').trim() === category);
     }
     const q = query.trim();
@@ -110,15 +118,15 @@ export function StoresScreen({navigation}: Props) {
       );
     }
     return list;
-  }, [stores, regionStores, regionMode, category, query]);
+  }, [stores, regionStores, selectedRegion, category, query]);
 
   return (
     <Screen>
       <AppHeader
         title="متاجر المول"
         subtitle={
-          regionMode
-            ? `تخدم ${myRegion} — الأرخص توصيلاً أولاً`
+          selectedRegion != null
+            ? `تخدم ${selectedRegion} — الأرخص توصيلاً أولاً`
             : `${stores.length} متجراً منشوراً الآن`
         }
         big
@@ -131,40 +139,65 @@ export function StoresScreen({navigation}: Props) {
           active={query.length > 0}
           onPress={() => navigation.navigate('Search')}
         />
-        {/* فلتر منطقتي — متاح فقط عند تحديد منطقة */}
-        {myRegion != null ? (
-          <Pressable
-            onPress={() => setRegionMode(!regionMode)}
-            style={({pressed}) => [
-              styles.regionToggle,
-              {
-                backgroundColor: regionMode ? palette.brand : palette.surface,
-                borderColor: regionMode ? palette.brand : palette.line,
-                opacity: pressed ? 0.8 : 1,
-              },
-            ]}>
-            <Icon
-              name="truck"
-              size={13}
-              color={regionMode ? '#FFFFFF' : palette.brandDark}
-            />
-            <Text
-              style={{
-                fontSize: 12,
-                fontFamily: fonts.bold,
-                color: regionMode ? '#FFFFFF' : palette.brandDark,
-              }}>
-              تخدم منطقتي ({myRegion})
-            </Text>
-          </Pressable>
+
+        {/* v2.2: فلترة المناطق الذكية — كل المناطق بلا اشتراط تحديد
+         * منطقة المستخدم؛ منطقته تُعلَّم وتُقدَّم أولاً. */}
+        {regions.length > 0 ? (
+          <FlatList
+            horizontal
+            data={orderedRegions}
+            keyExtractor={r => r}
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{gap: spacing.sm, paddingVertical: spacing.xs}}
+            renderItem={({item}) => {
+              const active = selectedRegion === item;
+              const mine = item === myRegion;
+              return (
+                <Pressable
+                  onPress={() => setSelectedRegion(active ? null : item)}
+                  style={({pressed}) => [
+                    styles.regionChip,
+                    {
+                      backgroundColor: active ? palette.brand : palette.surface,
+                      borderColor: active ? palette.brand : mine ? palette.brandBorder : palette.line,
+                      opacity: pressed ? 0.8 : 1,
+                    },
+                  ]}>
+                  {mine ? (
+                    <Icon
+                      name="pin"
+                      size={12}
+                      color={active ? '#FFFFFF' : palette.brandDark}
+                    />
+                  ) : (
+                    <Icon
+                      name="truck"
+                      size={12}
+                      color={active ? '#FFFFFF' : palette.muted}
+                    />
+                  )}
+                  <Text
+                    style={{
+                      fontSize: 12,
+                      fontFamily: fonts.bold,
+                      color: active ? '#FFFFFF' : mine ? palette.brandDark : palette.inkSoft,
+                    }}>
+                    {item}
+                    {mine ? ' · منطقتي' : ''}
+                  </Text>
+                </Pressable>
+              );
+            }}
+          />
         ) : null}
-        {!regionMode && categories.length > 0 ? (
+
+        {categories.length > 0 ? (
           <FlatList
             horizontal
             data={categories}
             keyExtractor={c => c}
             showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{gap: spacing.sm, paddingVertical: spacing.sm}}
+            contentContainerStyle={{gap: spacing.sm, paddingVertical: spacing.xs}}
             renderItem={({item}) => (
               <Chip
                 label={item}
@@ -180,6 +213,8 @@ export function StoresScreen({navigation}: Props) {
         <Loader label="نجلب المتاجر…" />
       ) : error != null ? (
         <ErrorState message={error} onRetry={load} />
+      ) : selectedRegion != null && regionLoading ? (
+        <Loader label={`نجلب متاجر تخدم ${selectedRegion}…`} />
       ) : (
         <FlatList
           data={filtered}
@@ -187,13 +222,13 @@ export function StoresScreen({navigation}: Props) {
           contentContainerStyle={{padding: spacing.lg, gap: spacing.md, paddingBottom: useTabBottomClearance()}}
           showsVerticalScrollIndicator={false}
           ListEmptyComponent={
-            regionMode && regionStores.length === 0 ? (
+            selectedRegion != null && regionStores.length === 0 ? (
               <EmptyState
                 icon="truck"
-                title={`لا متاجر تخدم «${myRegion}» حالياً`}
-                body="جرّب إلغاء فلتر المنطقة لتصفح كل متاجر المول، أو غيّر منطقتك من الرئيسية"
+                title={`لا متاجر تخدم «${selectedRegion}» حالياً`}
+                body="جرّب تصفح كل المتاجر أو اختر منطقة أخرى — التجار يضيفون مناطق توصيل جديدة باستمرار"
                 actionLabel="تصفح كل المتاجر"
-                onAction={() => setRegionMode(false)}
+                onAction={() => setSelectedRegion(null)}
               />
             ) : (
               <EmptyState
@@ -210,7 +245,7 @@ export function StoresScreen({navigation}: Props) {
           renderItem={({item}) => (
             <StoreCard
               store={item}
-              myRegion={regionMode ? myRegion : null}
+              myRegion={selectedRegion}
               onPress={() =>
                 navigation.navigate('Store', {storeId: item.id, storeName: item.name})
               }
@@ -228,15 +263,13 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
     paddingBottom: spacing.sm,
   },
-  regionToggle: {
+  regionChip: {
     flexDirection: 'row-reverse',
     alignItems: 'center',
     gap: 6,
-    alignSelf: 'flex-start',
     borderRadius: 999,
     borderWidth: 1.5,
     paddingHorizontal: 12,
     paddingVertical: 7,
-    marginVertical: 4,
   },
 });

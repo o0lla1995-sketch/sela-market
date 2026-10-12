@@ -1,9 +1,9 @@
 /**
- * LoginScreen.tsx — تسجيل الدخول: رقم الهوية + كلمة المرور (v1.1 —
- * كل حساب محمي بكلمة مرور). يتضمن:
+ * LoginScreen.tsx — تسجيل الدخول: رقم الهوية + كلمة المرور.
+ * v2.2: أُزيل مسار الدخول برقم الهاتف (الحسابات القديمة) بطلب
+ * صريح من المالك — التطبيق غير منشور للعلن ولا مستخدمين حقيقيين،
+ * وكل حساب يُنشأ بكلمة مرور منذ v1.1. يتضمن:
  *  • «نسيت كلمة المرور؟» — استعادة برقم الهوية + الجوال المسجل.
- *  • مسار ترحيل للحسابات القديمة (أنشئت قبل كلمات المرور): الدخول
- *    بالهاتف مرة واحدة ثم فرض شاشة تعيين كلمة مرور فوراً.
  * بعد النجاح: إن كان الدخول بوابة إتمام طلب نعود للسلة مباشرة.
  */
 import React, {useEffect, useRef, useState} from 'react';
@@ -29,7 +29,6 @@ import {
   Screen,
   SecureField,
 } from '../../components/ui';
-import {Icon} from '../../components/Icon';
 import {useAuthStore} from '../../stores/authStore';
 import {useSettingsStore} from '../../stores/settingsStore';
 import {authenticateBiometric} from '../../services/biometrics';
@@ -45,8 +44,6 @@ export function LoginScreen({navigation, route}: Props) {
   const {palette} = useTheme();
   const insets = useSafeAreaInsets();
   const login = useAuthStore(s => s.login);
-  const legacyLogin = useAuthStore(s => s.legacyLogin);
-  const setPassword = useAuthStore(s => s.setPassword);
   /* v2.1: الدخول بالبصمة — توفرها فقط عند جلسة محفوظة + الخيار مفعّل */
   const savedSessionToken = useAuthStore(s => s.token);
   const biometricLoginEnabled = useSettingsStore(s => s.biometricLoginEnabled);
@@ -60,7 +57,6 @@ export function LoginScreen({navigation, route}: Props) {
 
   const [idNumber, setIdNumber] = useState('');
   const [password, setPasswordField] = useState('');
-  const [legacyPhone, setLegacyPhone] = useState('');
   const [touched, setTouched] = useState(false);
 
   // v1.2: سلسلة تعبئة — الهوية ← كلمة المرور ← دخول (لوحة المفاتيح
@@ -73,10 +69,6 @@ export function LoginScreen({navigation, route}: Props) {
   const [forgotPhone, setForgotPhone] = useState('');
   const [forgotPw, setForgotPw] = useState('');
   const [forgotBusy, setForgotBusy] = useState(false);
-
-  // ترحيل: بعد دخول حساب قديم بلا كلمة مرور → تعيين إلزامي
-  const [migrating, setMigrating] = useState(false);
-  const [migratePw, setMigratePw] = useState('');
 
   useEffect(() => {
     const unsub = navigation.addListener('beforeRemove', clearError);
@@ -100,42 +92,7 @@ export function LoginScreen({navigation, route}: Props) {
     }
     const result = await login(cleanIdNumber(idNumber), password);
     if (result.ok) {
-      if (result.mustSetPassword) {
-        setMigrating(true);
-        return;
-      }
       finishLogin();
-    }
-  };
-
-  /** دخول حساب قديم بالهاتف (قبل تعيين كلمة مرور). */
-  const submitLegacy = async () => {
-    setTouched(true);
-    if (validateIdNumber(idNumber) || validatePhone(legacyPhone)) {
-      return;
-    }
-    const result = await legacyLogin(cleanIdNumber(idNumber), cleanPhone(legacyPhone));
-    if (result.ok) {
-      if (result.mustSetPassword) {
-        setMigrating(true);
-        return;
-      }
-      finishLogin();
-    }
-  };
-
-  const completeMigration = async () => {
-    const problem = passwordProblem(migratePw);
-    if (problem != null) {
-      toast(problem, 'danger');
-      return;
-    }
-    const ok = await setPassword(migratePw);
-    if (ok) {
-      setMigrating(false);
-      finishLogin('أُمّن حسابك بكلمة مرور — أهلاً بك');
-    } else {
-      toast('تعذر حفظ كلمة المرور — حاول مجدداً', 'danger');
     }
   };
 
@@ -164,13 +121,8 @@ export function LoginScreen({navigation, route}: Props) {
   return (
     <Screen style={{paddingBottom: insets.bottom}}>
       <AppHeader
-        title={migrating ? 'تأمين حسابك' : 'تسجيل الدخول'}
+        title="تسجيل الدخول"
         onBack={() => {
-          if (migrating) {
-            // الترحيل إلزامي قبل المتابعة — خروج كامل من الشاشة
-            setMigrating(false);
-            useAuthStore.getState().logout();
-          }
           if (navigation.canGoBack()) {
             navigation.goBack();
           }
@@ -184,8 +136,7 @@ export function LoginScreen({navigation, route}: Props) {
           contentContainerStyle={{padding: spacing.lg, gap: spacing.lg}}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}>
-          {!migrating ? (
-            <>
+          <>
               <View style={{gap: spacing.md}}>
                 <Field
                   label="رقم الهوية"
@@ -256,75 +207,7 @@ export function LoginScreen({navigation, route}: Props) {
                 </View>
               ) : null}
 
-              {/* مسار الترحيل: حساب أنشئ قبل كلمات المرور */}
-              <View
-                style={[
-                  styles.legacyBox,
-                  {backgroundColor: palette.infoSoft, borderColor: palette.info},
-                ]}>
-                <View style={{flexDirection: 'row', gap: spacing.sm, alignItems: 'flex-start'}}>
-                  <Icon name="info" size={18} color={palette.info} />
-                  <View style={{flex: 1, gap: spacing.md}}>
-                    <Text style={[type.small, {color: palette.inkSoft, lineHeight: 20}]}>
-                      أنشأت حسابك قبل التحديث الأخير؟ ادخل مرة واحدة برقم
-                      الجوال المسجل وسنطلب منك تعيين كلمة مرور فوراً.
-                    </Text>
-                    <Field
-                      label="رقم الجوال المسجل"
-                      value={legacyPhone}
-                      onChangeText={setLegacyPhone}
-                      placeholder="05xxxxxxxx"
-                      keyboardType="phone-pad"
-                      numericOnly
-                      icon="phone"
-                      error={touched ? validatePhone(legacyPhone) : null}
-                      maxLength={16}
-                      returnKeyType="go"
-                      onSubmitEditing={() => void submitLegacy()}
-                    />
-                    <Button
-                      label="دخول الحسابات القديمة"
-                      small
-                      variant="outline"
-                      disabled={busy}
-                      onPress={() => void submitLegacy()}
-                    />
-                  </View>
-                </View>
-              </View>
             </>
-          ) : (
-            <View style={{gap: spacing.lg}}>
-              <View
-                style={[
-                  styles.legacyBox,
-                  {backgroundColor: palette.brandSoft, borderColor: palette.brandBorder},
-                ]}>
-                <View style={{flexDirection: 'row', gap: spacing.sm, alignItems: 'flex-start'}}>
-                  <Icon name="shield" size={20} color={palette.brand} />
-                  <Text style={[type.small, {color: palette.inkSoft, lineHeight: 20, flex: 1}]}>
-                    حسابك أنشئ قبل إضافة كلمات المرور. اختر كلمة مرور
-                    الآن لحماية حسابك — خطوة واحدة ولن تُطلب مجدداً.
-                  </Text>
-                </View>
-              </View>
-              <SecureField
-                label="كلمة المرور الجديدة"
-                value={migratePw}
-                onChangeText={setMigratePw}
-                placeholder="8 أحرف على الأقل — رقماً وحرفاً"
-                showStrength
-                strength={
-                  migratePw.length === 0 ? 0 : passwordProblem(migratePw) != null ? 1 : 2
-                }
-              />
-              <Button
-                label={busy ? 'جارٍ الحفظ…' : 'حفظ ومتابعة'}
-                disabled={busy}
-                onPress={() => void completeMigration()}
-              />
-            </View>
-          )}
 
           {error != null && !busy ? (
             <Text style={[type.small, {color: palette.danger, textAlign: 'center'}]}>
@@ -403,11 +286,6 @@ const styles = StyleSheet.create({
   dividerLine: {
     flex: 1,
     height: 1,
-  },
-  legacyBox: {
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    padding: spacing.lg,
   },
   sheetOverlay: {flex: 1, justifyContent: 'flex-end'},
   sheet: {

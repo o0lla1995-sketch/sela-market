@@ -10,6 +10,15 @@
  *   تُفسد الردود المضغوطة على HTTP غير المعمّى فيصل المتاجر الصغيرة
  *   (بلا ضغط) وتفشل قوائم المنتجات (مضغوطة) — طلب بلا ضغط يلغي
  *   المشكلة من جذورها، والحمولات أصلاً صغيرة.
+ * • v2.2 — مقاومة سلسلة 304 (السبب الجذري لاختفاء المنتجات):
+ *   بعض بروكسيات مزودي الجوال على HTTP الصريح تخزن الرد ثم تحوّل
+ *   الطلبات التالية لشرطية وتمرر 304 بجسم فارغ للتطبيق بدل دمجه.
+ *   العلاج ثلاث طبقات:
+ *   1) ترويسات طلب Cache-Control: no-cache, no-store + Pragma: no-cache
+ *      — تمنع أي كاش في المسار من خدمة/تحويل الطلب شرطياً.
+ *   2) عند وصول 304 رغم ذلك: إعادة فورية برابط فريد (كسر الكاش —
+ *      _=millis) يجبر أي وسيط على جلب الرد الكامل من الأصل.
+ *   3) الخادم منذ 4.7 لا يرسل ETag أصلاً — لا يمكن للوسيط إعادة التحقق.
  * • إعادة محاولة تلقائية (حتى 3 محاولات بتباعد متصاعد) للأخطاء
  *   الشبكية على القراءات (تلتقط عتبة الاتصال البارد الأولى بعد
  *   فتح التطبيق وضعف الشبكة اللحظي).
@@ -112,20 +121,29 @@ interface RequestOptions {
 async function requestOnce<T>(
   path: string,
   options: RequestOptions,
+  cacheBust = false,
 ): Promise<T> {
   const {method = 'GET', body, token, timeoutMs = API_TIMEOUT_MS} = options;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
+  // كسر الكاش عند أي وسيط: رابط فريد لكل محاولة تعافٍ من 304 —
+  // البروكسي لا يملك نسخة مخزنة لهذا الرابط أصلاً فيضطر لسؤال الأصل.
+  const bust = cacheBust
+    ? `${path.includes('?') ? '&' : '?'}_=${Date.now()}`
+    : '';
   let response: Response;
   try {
-    response = await fetch(`${currentBaseUrl()}${path}`, {
+    response = await fetch(`${currentBaseUrl()}${path}${bust}`, {
       method,
       headers: {
         'Content-Type': 'application/json',
         // بلا ضغط: يمنع بوابة Coolify من gzip الردود الكبيرة التي
-        // تفسدها بعض شبكات الجوال على HTTP الصريح (سبب اختفاء
-        // المنتجات مع ظهور المتاجر في v1.2).
+        // تفسدها بعض شبكات الجوال على HTTP الصريح.
         'Accept-Encoding': 'identity',
+        // v2.2: لا كاش عند أي وسيط — لا يخزن الرد ولا يحوّل الطلب
+        // لشرطي (إعادة تحقق 304) مهما كانت بروكسيات الشبكة.
+        'Cache-Control': 'no-cache, no-store',
+        Pragma: 'no-cache',
         ...(token ? {'x-market-token': token} : {}),
       },
       body: body !== undefined ? JSON.stringify(body) : undefined,
@@ -139,6 +157,20 @@ async function requestOnce<T>(
     throw new ApiError('تعذر الاتصال — تحقق من اتصال الإنترنت', 'NETWORK', 0);
   }
   clearTimeout(timer);
+
+  // v2.2: 304 من وسيط مكسور (طلبنا لم يكن شرطياً أصلاً) — جسم فارغ
+  // لا يُحلّل. نعيد فوراً برابط فريد يجبر الرد الكامل من الأصل؛
+  // إن تكرر فالخلل أعمق من الكاش ونخبر المستخدم بوضوح.
+  if (response.status === 304) {
+    if (!cacheBust) {
+      return requestOnce<T>(path, options, true);
+    }
+    throw new ApiError(
+      'الشبكة تعيد ردوداً مكسورة (304) — جرّب تبديل الاتصال واي فاي/بيانات',
+      'BAD_GATEWAY_304',
+      304,
+    );
+  }
 
   let data: Record<string, unknown> = {};
   try {
