@@ -125,9 +125,13 @@ export const useInterestStore = create<InterestState>((set, get) => ({
   topCategories: (limit = 3) => {
     const now = Date.now();
     const {entries} = get();
+    // عتبة 0.75 (ربع القيمة الأصلية): مشاهدة واحدة تبني «اهتماماً»
+    // نحو 6 أيام، ومفضلة نحو 3 أسابيع، وطلباً نحو 5 أسابيع — عتبة
+    // صحيحة زمنياً وحصينة ضد فاصلة الطفو (>=1 كانت تسقط المشاهدة
+    // بعد ميلي ثوانٍ من تسجيلها).
     return Object.values(entries)
       .map(e => ({category: e.category, score: decayed(e, now)}))
-      .filter(e => e.score >= 1)
+      .filter(e => e.score >= 0.75)
       .sort((a, b) => b.score - a.score)
       .slice(0, limit)
       .map(e => e.category);
