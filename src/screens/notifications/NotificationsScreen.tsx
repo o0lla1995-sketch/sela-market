@@ -12,6 +12,7 @@ import {AppHeader, EmptyState, Screen} from '../../components/ui';
 import {relativeTime} from '../../core/time';
 import {useNotificationsStore} from '../../stores/notificationsStore';
 import type {ShopStackParamList} from '../../navigation/RootNavigator';
+import {useStackBottomClearance} from '../../core/layout';
 
 type Props = NativeStackScreenProps<ShopStackParamList, 'Notifications'>;
 
@@ -55,7 +56,7 @@ export function NotificationsScreen({navigation}: Props) {
         <FlatList
           data={items}
           keyExtractor={n => n.id}
-          contentContainerStyle={{padding: spacing.lg, gap: spacing.md, paddingBottom: spacing.xxxl}}
+          contentContainerStyle={{padding: spacing.lg, gap: spacing.md, paddingBottom: useStackBottomClearance()}}
           showsVerticalScrollIndicator={false}
           renderItem={({item}) => {
             const c = toneColors(palette, item.kind === 'order' ? 'brand' : 'info');

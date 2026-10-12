@@ -17,6 +17,7 @@ import {
   type StoreRef,
 } from '../core/types';
 import {lineTotal, minQty, qtyStep} from '../core/money';
+import {effectiveMinor} from '../core/discount';
 
 const KEY = 'cart:v2';
 
@@ -96,6 +97,7 @@ export const useCartStore = create<CartState>((set, get) => ({
       storeId: store.id,
       storeName: store.name,
       storeNumber: store.storeNumber ?? '',
+      storeLogoUrl: store.logoUrl ?? null,
       lines: [],
       updatedAt: Date.now(),
     };
@@ -103,11 +105,17 @@ export const useCartStore = create<CartState>((set, get) => ({
     const addQty = qty ?? step;
     const lineKey = lineKeyOf(product.id, variant);
     const existing = entry.lines.find(l => l.key === lineKey);
+    // v2.1: السعر المدفوع = بعد خصم التاجر؛ listPriceMinor يحفظ
+    // السعر قبل الخصم للعرض المشطوب في السلة والدفع.
+    const finalPrice = effectiveMinor(product);
+    const listPrice =
+      finalPrice < product.price_minor ? product.price_minor : undefined;
     let lines: CartLine[];
     if (existing) {
       lines = entry.lines.map(l =>
         l.key === lineKey
-          ? {...l, quantity: Math.min(100000, l.quantity + addQty), stock: product.stock}
+          ? {...l, quantity: Math.min(100000, l.quantity + addQty), stock: product.stock,
+             priceMinor: finalPrice, listPriceMinor: listPrice}
           : l,
       );
     } else {
@@ -117,7 +125,8 @@ export const useCartStore = create<CartState>((set, get) => ({
           key: lineKey,
           productId: product.id,
           name: product.name,
-          priceMinor: product.price_minor,
+          priceMinor: finalPrice,
+          listPriceMinor: listPrice,
           unitLabel: product.unit_label,
           soldByWeight: product.sold_by_weight === 1,
           stock: product.stock,
@@ -211,6 +220,7 @@ export const useCartStore = create<CartState>((set, get) => ({
       storeId: store.id,
       storeName: store.name,
       storeNumber: store.storeNumber ?? '',
+      storeLogoUrl: store.logoUrl ?? null,
       lines: [],
       updatedAt: Date.now(),
     };

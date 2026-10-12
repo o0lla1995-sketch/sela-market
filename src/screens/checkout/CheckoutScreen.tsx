@@ -24,6 +24,7 @@ import {
 import {getStoreDetail, placeOrder} from '../../api/endpoints';
 import {ApiError} from '../../api/client';
 import {formatMoney, formatQty, lineTotal} from '../../core/money';
+import {cartSavings, lineSavings} from '../../core/discount';
 import {validateAddress} from '../../core/validation';
 import {addressLine, type Address} from '../../core/types';
 import {useAuthStore} from '../../stores/authStore';
@@ -34,6 +35,7 @@ import {useSettingsStore} from '../../stores/settingsStore';
 import {useToastStore} from '../../stores/toastStore';
 import type {DeliveryRegion} from '../../core/types';
 import {useRootNav, type CartStackParamList} from '../../navigation/RootNavigator';
+import {useStackBottomClearance} from '../../core/layout';
 
 type Props = NativeStackScreenProps<CartStackParamList, 'Checkout'>;
 
@@ -197,7 +199,7 @@ export function CheckoutScreen({navigation, route}: Props) {
         subtitle={storeName}
         onBack={() => navigation.goBack()}
       />
-      <ScrollView contentContainerStyle={{padding: spacing.lg, gap: spacing.lg, paddingBottom: 170}} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{padding: spacing.lg, gap: spacing.lg, paddingBottom: useStackBottomClearance() + 130}} showsVerticalScrollIndicator={false}>
         {/* منطقة التوصيل */}
         <View style={{gap: spacing.md}}>
           <SectionTitle title="منطقة التوصيل" />
@@ -379,9 +381,16 @@ export function CheckoutScreen({navigation, route}: Props) {
                     </Text>
                   ) : null}
                 </View>
-                <Text style={[{fontSize: 12.5, color: palette.ink, fontFamily: fonts.medium}]}>
-                  {formatMoney(lineTotal(l.priceMinor, l.quantity))}
-                </Text>
+                <View style={{flexDirection: 'row-reverse', alignItems: 'center', gap: 6}}>
+                  {l.listPriceMinor != null && l.listPriceMinor > l.priceMinor ? (
+                    <Text style={{fontSize: 10.5, color: palette.muted, textDecorationLine: 'line-through'}}>
+                      {formatMoney(lineTotal(l.listPriceMinor, l.quantity))}
+                    </Text>
+                  ) : null}
+                  <Text style={[{fontSize: 12.5, color: palette.ink, fontFamily: fonts.medium}]}>
+                    {formatMoney(lineTotal(l.priceMinor, l.quantity))}
+                  </Text>
+                </View>
               </View>
             ))}
             <View style={[regionStyles.summaryRow, {borderTopWidth: 1, borderTopColor: palette.line, paddingTop: spacing.sm}]}>
@@ -390,6 +399,16 @@ export function CheckoutScreen({navigation, route}: Props) {
                 {formatMoney(itemsSubtotal)}
               </Text>
             </View>
+            {cartSavings(entry?.lines ?? []) > 0 ? (
+              <View style={regionStyles.summaryRow}>
+                <Text style={[type.small, {color: palette.success, fontFamily: fonts.medium}]}>
+                  وفّرت من خصومات المتجر
+                </Text>
+                <Text style={[{fontSize: 13, color: palette.success, fontFamily: fonts.bold}]}>
+                  −{formatMoney(cartSavings(entry?.lines ?? []))}
+                </Text>
+              </View>
+            ) : null}
             <View style={regionStyles.summaryRow}>
               <Text style={[type.small, {color: palette.muted}]}>
                 التوصيل {selectedRegion ? `(${selectedRegion.name})` : ''}

@@ -17,10 +17,13 @@ interface SettingsState {
   onboarded: boolean;
   savedAddresses: string[];
   lastRegionByStore: Record<string, string>;
+  /** v2.1: الدخول بالبصمة عند توفر جلسة محفوظة. */
+  biometricLoginEnabled: boolean;
   /** إعدادات الجلسة الحالية للطبقة العاملة (لا تُحفظ). */
   setThemeMode: (m: ThemeMode) => void;
   setNotificationsEnabled: (v: boolean) => void;
   setOnboarded: () => void;
+  setBiometricLoginEnabled: (v: boolean) => void;
   addAddress: (address: string) => void;
   removeAddress: (address: string) => void;
   rememberRegion: (storeId: number, region: string) => void;
@@ -32,6 +35,7 @@ interface PersistedSettings {
   onboarded: boolean;
   savedAddresses: string[];
   lastRegionByStore: Record<string, string>;
+  biometricLoginEnabled?: boolean;
 }
 
 function load(): PersistedSettings {
@@ -52,6 +56,7 @@ function load(): PersistedSettings {
           parsed.lastRegionByStore && typeof parsed.lastRegionByStore === 'object'
             ? parsed.lastRegionByStore
             : {},
+        biometricLoginEnabled: parsed.biometricLoginEnabled === true,
       };
     }
   } catch {
@@ -63,6 +68,7 @@ function load(): PersistedSettings {
     onboarded: false,
     savedAddresses: [],
     lastRegionByStore: {},
+    biometricLoginEnabled: false,
   };
 }
 
@@ -75,6 +81,7 @@ function persist(state: SettingsState): void {
     onboarded: state.onboarded,
     savedAddresses: state.savedAddresses,
     lastRegionByStore: state.lastRegionByStore,
+    biometricLoginEnabled: state.biometricLoginEnabled,
   };
   storage.set(KEY, JSON.stringify(data));
 }
@@ -85,6 +92,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   onboarded: initial.onboarded,
   savedAddresses: initial.savedAddresses,
   lastRegionByStore: initial.lastRegionByStore,
+  biometricLoginEnabled: initial.biometricLoginEnabled === true,
 
   setThemeMode: (m) => {
     set({themeMode: m});
@@ -96,6 +104,10 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   },
   setOnboarded: () => {
     set({onboarded: true});
+    persist(get());
+  },
+  setBiometricLoginEnabled: (v) => {
+    set({biometricLoginEnabled: v});
     persist(get());
   },
   addAddress: (address) => {

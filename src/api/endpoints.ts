@@ -62,6 +62,9 @@ export interface StoreProductsQuery {
   q?: string;
   page?: number;
   per?: number;
+  /** v2.1 (خادم 4.5): عروض المتجر — المخفّضة فقط مرتبة بالخصم
+   *  الأكبر أولاً (تغذي شريط «عروض المتجر» في صفحة المتجر). */
+  offers?: boolean;
 }
 
 export async function getStoreProducts(
@@ -78,11 +81,68 @@ export async function getStoreProducts(
   if (query.per) {
     params.set('per', String(query.per));
   }
+  if (query.offers) {
+    params.set('offers', '1');
+  }
   const qs = params.toString();
   const res = await apiRequest<{ok: true; products: Product[]}>(
     `/api/market/stores/${storeId}/products${qs ? `?${qs}` : ''}`,
   );
   return res.products;
+}
+
+/* ── v2.1: الجلب المتدرج — الإصلاح الجذري الثالث للاختفاء ────
+ * ─────────────────────────────────────────────────────────────────
+ * الدليل من ثلاث جولات تجربة المستخدم: كل حمولة عملت كانت إطار TCP
+ * واحداً (~430B) وكل حمولة فشلت كانت متعددة الأطر (~2KB). السلم:
+ * نطلب 12 — إن فشل النداء شبكياً ننزل 6 ثم 3 ثم 1 (يدعم الخادم
+ * per=1 منذ 4.5). عند أي نجاح نكمل الصفحات بنفس الحجم حتى العدد
+ * المطلوب. الأسوأ النادر: طلبات متتالية ~200B — تحت عتبة العمل
+ * المثبتة ميدانياً. */
+const PER_LADDER: readonly number[] = [12, 6, 3, 1];
+
+async function fetchAdaptive<T extends {id: number}>(
+  want: number,
+  fetchPage: (per: number, page: number) => Promise<T[]>,
+): Promise<T[]> {
+  let lastError: unknown = null;
+  for (const per of PER_LADDER) {
+    try {
+      const items: T[] = [];
+      let page = 1;
+      // نكمل صفحات بحجم per حتى want أو نهاية الكتالوج
+      for (;;) {
+        const batch = await fetchPage(per, page);
+        if (batch.length === 0) {
+          break;
+        }
+        for (const b of batch) {
+          if (!items.some(x => x.id === b.id)) {
+            items.push(b);
+          }
+        }
+        if (items.length >= want) {
+          break;
+        }
+        page += 1;
+      }
+      return items.slice(0, Math.max(1, want));
+    } catch (e) {
+      lastError = e;
+    }
+  }
+  throw lastError ?? new Error('adaptive fetch failed');
+}
+
+/** منتجات متجر بجلب متدرج — لصفحة المتجر وقسم أحدث المنتجات. */
+export async function getStoreProductsAdaptive(
+  storeId: number,
+  want = 12,
+  query: {q?: string; offers?: boolean} = {},
+): Promise<Product[]> {
+  return fetchAdaptive<Product>(want, (per, page) =>
+    getStoreProducts(storeId, {per, page, q: query.q, offers: query.offers}),
+  );
 }
 
 export interface CrossProductsQuery {
@@ -114,6 +174,16 @@ export async function getCrossProducts(
     `/api/market/products${qs ? `?${qs}` : ''}`,
   );
   return res.products;
+}
+
+/** بحث/تصفح عابر بجلب متدرج — لقسم أحدث المنتجات في الرئيسية. */
+export async function getCrossProductsAdaptive(
+  want = 12,
+  query: {q?: string; category?: string} = {},
+): Promise<CrossProduct[]> {
+  return fetchAdaptive<CrossProduct>(want, (per, page) =>
+    getCrossProducts({per, page, q: query.q, category: query.category}),
+  );
 }
 
 export async function getCategories(): Promise<CategoryCount[]> {

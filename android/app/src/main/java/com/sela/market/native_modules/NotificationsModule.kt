@@ -10,6 +10,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.ContextCompat
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
@@ -61,6 +62,12 @@ class NotificationsModule(reactContext: ReactApplicationContext) :
     }
     nm.createNotificationChannel(orders)
     nm.createNotificationChannel(promos)
+    // v2.1: لون قناة الطلبات من هوية الثيم (برتقالي سيلا) — كان الرمادي
+    // الافتراضي يبدو خارج الهوية على شاشات بعض الأجهزة.
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+      orders.setColor(ContextCompat.getColor(reactApplicationContext, R.color.accent))
+      orders.setLightColor(ContextCompat.getColor(reactApplicationContext, R.color.accent))
+    }
   }
 
   private fun hasPermission(): Boolean {
@@ -126,6 +133,9 @@ class NotificationsModule(reactContext: ReactApplicationContext) :
       }
       val notification = builder
         .setSmallIcon(R.drawable.ic_stat_market)
+        // v2.1: لون الإشعار من لون الثيم (accent = برتقالي سيلا) — يُطبَّق
+        // على الأيقونة الصغيرة وشريط التقدم واسم التطبيق في رأس الإشعار.
+        .setColor(ContextCompat.getColor(ctx, R.color.accent))
         .setContentTitle(rlm + title)
         .setContentText(rlm + body)
         .setStyle(Notification.BigTextStyle().bigText(rlm + body))

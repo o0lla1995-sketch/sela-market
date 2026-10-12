@@ -34,6 +34,7 @@ import {useAuthStore} from '../../stores/authStore';
 import {useLocationStore} from '../../stores/locationStore';
 import {useToastStore} from '../../stores/toastStore';
 import type {AccountStackParamList} from '../../navigation/RootNavigator';
+import {useStackBottomClearance} from '../../core/layout';
 
 type Props = NativeStackScreenProps<AccountStackParamList, 'AddressBook'>;
 
@@ -151,7 +152,7 @@ export function AddressBookScreen({navigation}: Props) {
         <FlatList
           data={addresses}
           keyExtractor={a => String(a.id)}
-          contentContainerStyle={{padding: spacing.lg, gap: spacing.md, paddingBottom: spacing.xxxl}}
+          contentContainerStyle={{padding: spacing.lg, gap: spacing.md, paddingBottom: useStackBottomClearance()}}
           showsVerticalScrollIndicator={false}
           refreshing={loading}
           onRefresh={load}

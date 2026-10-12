@@ -25,6 +25,7 @@ import {ApiError} from '../../api/client';
 import {PRODUCTS_PAGE_SIZE} from '../../core/config';
 import type {CrossProduct} from '../../core/types';
 import type {ShopStackParamList} from '../../navigation/RootNavigator';
+import {useStackBottomClearance} from '../../core/layout';
 
 type Props = NativeStackScreenProps<ShopStackParamList, 'Category'>;
 
@@ -167,7 +168,7 @@ export function CategoryScreen({navigation, route}: Props) {
           keyExtractor={item => `${item.store_id}:${item.id}`}
           numColumns={2}
           columnWrapperStyle={{gap: spacing.md, width: '100%', marginBottom: spacing.md, paddingHorizontal: spacing.lg}}
-          contentContainerStyle={{paddingBottom: spacing.xxxl}}
+          contentContainerStyle={{paddingBottom: useStackBottomClearance()}}
           showsVerticalScrollIndicator={false}
           onEndReached={loadMore}
           onEndReachedThreshold={0.6}

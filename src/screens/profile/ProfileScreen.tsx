@@ -20,6 +20,7 @@ import {APP_VERSION_LABEL} from '../../core/config';
 import {stopOrdersSync} from '../../services/ordersSync';
 import {useToastStore} from '../../stores/toastStore';
 import {useRootNav, type AccountStackParamList} from '../../navigation/RootNavigator';
+import {useTabBottomClearance} from '../../core/layout';
 
 type Props = NativeStackScreenProps<AccountStackParamList, 'Profile'>;
 
@@ -84,7 +85,7 @@ export function ProfileScreen({navigation}: Props) {
     <Screen>
       <AppHeader title="حسابي" big />
 
-      <ScrollView contentContainerStyle={{padding: spacing.lg, gap: spacing.lg, paddingBottom: spacing.xxxl}} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{padding: spacing.lg, gap: spacing.lg, paddingBottom: useTabBottomClearance()}} showsVerticalScrollIndicator={false}>
         {/* بطاقة المستخدم */}
         {token != null && user != null ? (
           <Card style={{gap: spacing.md}}>

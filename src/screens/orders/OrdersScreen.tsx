@@ -26,6 +26,7 @@ import {syncOrdersOnce} from '../../services/ordersSync';
 import type {Order, OrderStatus} from '../../core/types';
 import {useAuthStore} from '../../stores/authStore';
 import {useRootNav, type OrdersStackParamList} from '../../navigation/RootNavigator';
+import {useTabBottomClearance} from '../../core/layout';
 
 type Props = NativeStackScreenProps<OrdersStackParamList, 'Orders'>;
 
@@ -153,7 +154,7 @@ export function OrdersScreen({navigation}: Props) {
         <FlatList
           data={filtered}
           keyExtractor={o => String(o.id)}
-          contentContainerStyle={{padding: spacing.lg, gap: spacing.md}}
+          contentContainerStyle={{padding: spacing.lg, gap: spacing.md, paddingBottom: useTabBottomClearance()}}
           showsVerticalScrollIndicator={false}
           refreshing={refreshing}
           onRefresh={async () => {

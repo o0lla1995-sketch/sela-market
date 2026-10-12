@@ -39,6 +39,7 @@ import {CircleStoreCard} from '../../components/StoreCard';
 import {
   getCategories,
   getCrossProducts,
+  getCrossProductsAdaptive,
   getDeliveryRegions,
   getStoreProducts,
   getStores,
@@ -52,6 +53,7 @@ import {useLocationStore} from '../../stores/locationStore';
 import {useInterestStore} from '../../stores/interestStore';
 import {useNotificationsStore} from '../../stores/notificationsStore';
 import type {ShopStackParamList} from '../../navigation/RootNavigator';
+import {useTabBottomClearance} from '../../core/layout';
 
 type Props = NativeStackScreenProps<ShopStackParamList, 'Home'>;
 
@@ -110,10 +112,11 @@ export function HomeScreen({navigation}: Props) {
     const [storesRes, catsRes, prodsRes, regionRes] = await Promise.all([
       cachedFetch('stores', () => getStores()),
       cachedFetch('categories', () => getCategories()),
+      // v2.1: جلب متدرج (سلم 12→6→3→1) — الإصلاح الجذري الثالث
+      // لاختفاء المنتجات: الحمولات الصغيرة فقط تعبر مسلك شبكات الجوال.
       cachedFetch(
         'products:p1',
-        () => getCrossProducts({page: 1, per: PRODUCTS_PAGE_SIZE}),
-        // المنتج العابر هو الأثقل — مسار احتياطي عند فشله أدناه.
+        () => getCrossProductsAdaptive(PRODUCTS_PAGE_SIZE),
       ),
       region != null
         ? cachedFetch(`stores:region:${region}`, () => getStores({region}))
@@ -287,7 +290,7 @@ export function HomeScreen({navigation}: Props) {
         keyExtractor={item => `${item.store_id}:${item.id}`}
         numColumns={2}
         columnWrapperStyle={gridStyles.row}
-        contentContainerStyle={{paddingBottom: spacing.xxxl}}
+        contentContainerStyle={{paddingBottom: useTabBottomClearance()}}
         showsVerticalScrollIndicator={false}
         refreshing={refreshing}
         onRefresh={async () => {

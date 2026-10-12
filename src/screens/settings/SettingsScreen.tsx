@@ -30,9 +30,11 @@ import {
   requestNotificationsPermission,
 } from '../../services/localNotifications';
 import {useToastStore} from '../../stores/toastStore';
+import {authenticateBiometric, biometricsSupported} from '../../services/biometrics';
 import {APP_VERSION_LABEL} from '../../core/config';
 import type {ThemeMode} from '../../core/types';
 import type {ShopStackParamList} from '../../navigation/RootNavigator';
+import {useStackBottomClearance} from '../../core/layout';
 
 type Props = NativeStackScreenProps<ShopStackParamList, 'Settings'>;
 
@@ -102,9 +104,15 @@ export function SettingsScreen({navigation}: Props) {
   const [currentPw, setCurrentPw] = useState('');
   const [newPw, setNewPw] = useState('');
   const [savingPw, setSavingPw] = useState(false);
+  /* v2.1: الدخول بالبصمة */
+  const biometricLoginEnabled = useSettingsStore(s => s.biometricLoginEnabled);
+  const setBiometricLoginEnabled = useSettingsStore(s => s.setBiometricLoginEnabled);
+  const [bioSupported, setBioSupported] = useState(false);
+  const [bioBusy, setBioBusy] = useState(false);
 
   useEffect(() => {
     void areNotificationsEnabled().then(setOsPermission);
+    void biometricsSupported().then(setBioSupported);
   }, []);
 
   const onToggleNotifications = async (v: boolean) => {
@@ -149,7 +157,7 @@ export function SettingsScreen({navigation}: Props) {
         onBack={() => navigation.goBack()}
         big
       />
-      <ScrollView contentContainerStyle={{padding: spacing.lg, gap: spacing.xl, paddingBottom: spacing.xxxl}} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{padding: spacing.lg, gap: spacing.xl, paddingBottom: useStackBottomClearance()}} showsVerticalScrollIndicator={false}>
         {/* ─── المظهر ─── */}
         <View style={{gap: spacing.md}}>
           <GroupTitle icon="sun" title="المظهر" />
@@ -225,6 +233,35 @@ export function SettingsScreen({navigation}: Props) {
                   حسابك محمي بكلمة مرور
                 </Text>
               </View>
+              {/* v2.1: الدخول بالبصمة مباشرة عند فتح التطبيق */}
+              <SwitchRow
+                icon="shield"
+                label="الدخول بالبصمة"
+                description={
+                  bioSupported
+                    ? 'عند فتح التطبيق: بصمة واحدة تفتح جلستك المحفوظة بدل كلمة المرور'
+                    : 'الجهاز لا يدعم ذلك — فعّل قفل البصمة من إعدادات الجهاز أولاً'
+                }
+                value={biometricLoginEnabled && bioSupported}
+                onValueChange={v => {
+                  if (v) {
+                    // تأكيد فوري ببصمة واحدة قبل التفعيل
+                    setBioBusy(true);
+                    void authenticateBiometric('تأكيد تفعيل الدخول بالبصمة').then(ok => {
+                      setBioBusy(false);
+                      if (ok) {
+                        setBiometricLoginEnabled(true);
+                        toast('فُعّل الدخول بالبصمة — ستراها عند فتح التطبيق', 'success');
+                      } else {
+                        toast('أُلغيت البصمة — لم يُفعّل الخيار', 'info');
+                      }
+                    });
+                  } else {
+                    setBiometricLoginEnabled(false);
+                    toast('أُلغي الدخول بالبصمة', 'info');
+                  }
+                }}
+              />
               {showPwForm ? (
                 <>
                   <Field

@@ -18,11 +18,13 @@ import {
   Screen,
 } from '../../components/ui';
 import {formatMoney, formatQty, lineTotal} from '../../core/money';
+import {cartSavings, lineSavings} from '../../core/discount';
 import {useCartStore} from '../../stores/cartStore';
 import {useToastStore} from '../../stores/toastStore';
 import {StoreAvatar} from '../../components/StoreCard';
 import type {CartStoreEntry} from '../../core/types';
 import type {CartStackParamList} from '../../navigation/RootNavigator';
+import {useTabBottomClearance} from '../../core/layout';
 
 type Props = NativeStackScreenProps<CartStackParamList, 'Cart'>;
 
@@ -66,7 +68,7 @@ export function CartScreen({navigation}: Props) {
         <FlatList
           data={entries}
           keyExtractor={e => String(e.storeId)}
-          contentContainerStyle={{padding: spacing.lg, gap: spacing.lg, paddingBottom: 120}}
+          contentContainerStyle={{padding: spacing.lg, gap: spacing.lg, paddingBottom: useTabBottomClearance() + 40}}
           showsVerticalScrollIndicator={false}
           renderItem={({item: entry}) => (
             <StoreCart
@@ -150,7 +152,7 @@ function StoreCart({
       {/* رأس المجموعة */}
       <View style={cartStyles.groupHead}>
         <Pressable onPress={onOpenStore} style={cartStyles.storeRow} hitSlop={6}>
-          <StoreAvatar name={entry.storeName} size={40} />
+          <StoreAvatar name={entry.storeName} logoUrl={entry.storeLogoUrl} size={40} />
           <View style={{gap: 1, alignItems: 'flex-start'}}>
             <Text style={[type.bodyMedium, {color: palette.ink, fontFamily: fonts.bold}]} numberOfLines={1}>
               {entry.storeName}
@@ -183,12 +185,22 @@ function StoreCart({
               </View>
             ) : null}
             <Text style={[{fontSize: 11.5, color: palette.muted}]}>
+              {line.listPriceMinor != null && line.listPriceMinor > line.priceMinor ? (
+                <Text style={{textDecorationLine: 'line-through'}}>
+                  {formatMoney(line.listPriceMinor)}{' '}
+                </Text>
+              ) : null}
               {formatMoney(line.priceMinor)} × {formatQty(line.quantity, line.soldByWeight)}
               {line.soldByWeight ? ' كيلو' : line.unitLabel ? ` ${line.unitLabel}` : ''} ={' '}
               <Text style={{color: palette.brandDark, fontFamily: fonts.bold}}>
                 {formatMoney(lineTotal(line.priceMinor, line.quantity))}
               </Text>
             </Text>
+            {lineSavings(line) > 0 ? (
+              <Text style={{fontSize: 10, color: palette.success, fontFamily: fonts.medium}}>
+                وفّرت {formatMoney(lineSavings(line))} بخصم هذا المنتج
+              </Text>
+            ) : null}
           </View>
           <View style={{alignItems: 'center', gap: 6}}>
             <QtyStepper
@@ -208,6 +220,11 @@ function StoreCart({
       {/* تذييل المجموعة */}
       <View style={[cartStyles.groupFoot, {borderTopColor: palette.line}]}>
         <View style={{gap: 1, alignItems: 'flex-start'}}>
+          {cartSavings(entry.lines) > 0 ? (
+            <Text style={{fontSize: 10.5, color: palette.success, fontFamily: fonts.medium}}>
+              وفّرت {formatMoney(cartSavings(entry.lines))} من خصومات هذا المتجر
+            </Text>
+          ) : null}
           <Text style={[{fontSize: 11, color: palette.muted}]}>إجمالي المنتجات</Text>
           <Text style={[{fontSize: 17, color: palette.brandDark, fontFamily: fonts.bold}]}>
             {formatMoney(subtotal)}

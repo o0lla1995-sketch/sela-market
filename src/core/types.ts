@@ -20,6 +20,9 @@ export interface Store {
   /** v2.0: رسم التوصيل لمنطقة الاستعلام (?region=) — موجود فقط عند
    *  الفلترة بمنطقة (مقارنة أرخص توصيل لمنطقتك). */
   deliveryFeeMinor?: number;
+  /** v2.1 (خادم 4.5): رابط شعار المتجر المرفوع من تطبيق نقطة البيع
+   *  (مسار نسبي) — غائب بلا شعار. */
+  logo_url?: string | null;
 }
 
 /** منطقة توصيل مع رسمها (بالقروش — minor units). */
@@ -62,6 +65,10 @@ export interface Product {
   /** v1.2 (خادم 4.3): مجموعات خيارات الشراء (مقاس/لون…) —
    *  تُبنى من متغيرات الملابس في نقطة البيع. null = بلا خيارات. */
   options?: ProductOptionGroup[] | null;
+  /** v2.1 (خادم 4.5): خصم التاجر على المنتج (0–95) — غائب بلا خصم.
+   *  final_minor: السعر بعد الخصم كما يحسبه الخادم (مرجع التسعير). */
+  discount_pct?: number;
+  final_minor?: number;
 }
 
 /** منتج عابر للمتاجر (GET /api/market/products) — يضيف معلومات المتجر. */
@@ -128,6 +135,8 @@ export interface Order {
   note: string | null;
   delivery_fee_minor: number;
   items_total_minor: number;
+  /** v2.1 (خادم 4.5): وفورات المشتري من خصومات منتجات هذا الطلب. */
+  items_discount_minor?: number;
   total_minor: number;
   returned_minor: number;
   invoice_ref: string | null;
@@ -144,14 +153,16 @@ export interface Order {
   /** v2.0 (خادم 4.4): تقييم الطلب إن قُيّم — يعرض التطبيق زر
    *  «قيّم المتجر» للطلبات المسلّمة غير المقيّمة. */
   rating?: {stars: number; comment: string | null} | null;
-  store: {id: number; name: string; storeNumber?: string; store_number?: string} | null;
+  store: {id: number; name: string; storeNumber?: string; store_number?: string; logo_url?: string | null} | null;
 }
 
-/** لقطة متجر داخل السلة/المفضلة (تكفي للعرض والتنقل). */
+/** لقطة متجر داخل السلة/المفضلة (تكفي للعرض والتنقل).
+ *  v2.1: logoUrl يمرّر شعار المتجر الحقيقي حيثما توفر. */
 export interface StoreRef {
   id: number;
   name: string;
   storeNumber?: string;
+  logoUrl?: string | null;
 }
 
 /** سطر سلة — لقطة منتج لحظة الإضافة (السعر المرجعي هو الخادم عند الطلب).
@@ -163,7 +174,10 @@ export interface CartLine {
   key: string;
   productId: number;
   name: string;
+  /** v2.1: السعر بعد الخصم (ما يُدفع فعلاً). */
   priceMinor: number;
+  /** v2.1: السعر قبل الخصم — غائب بلا خصم (العرض المشطوب). */
+  listPriceMinor?: number;
   unitLabel: string | null;
   soldByWeight: boolean;
   stock: number;
@@ -213,6 +227,8 @@ export interface CartStoreEntry {
   storeId: number;
   storeName: string;
   storeNumber: string;
+  /** v2.1: شعار المتجر إن توفر عند الإضافة (لعرضه في السلة). */
+  storeLogoUrl?: string | null;
   lines: CartLine[];
   updatedAt: number;
 }

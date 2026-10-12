@@ -3,13 +3,14 @@
  * في القائمة، وبطاقة تفاصيل الطلب.
  */
 import React from 'react';
-import {Pressable, StyleSheet, Text, View} from 'react-native';
+import {Image, Pressable, StyleSheet, Text, View} from 'react-native';
 import {useTheme} from '../theme/ThemeProvider';
 import {radius, spacing, type, fonts, toneColors} from '../theme/tokens';
 import {Icon} from './Icon';
 import {Card} from './ui';
 import {formatDateTime, relativeTime} from '../core/time';
 import {formatMoney, formatQty} from '../core/money';
+import {absoluteUrl} from '../api/client';
 import {
   STATUS_META,
   TIMELINE_STEPS,
@@ -201,11 +202,19 @@ export function OrderListCard({
   return (
     <Card onPress={onPress} style={{gap: spacing.sm}}>
       <View style={listStyles.topRow}>
-        <View style={[listStyles.avatar, {backgroundColor: palette.brandSoft, borderColor: palette.brandBorder}]}>
-          <Text style={{fontSize: 16, color: palette.brandDark, fontFamily: fonts.black}}>
-            {(order.store?.name ?? 'م').trim().charAt(0)}
-          </Text>
-        </View>
+        {absoluteUrl(order.store?.logo_url ?? null) != null ? (
+          <Image
+            source={{uri: absoluteUrl(order.store?.logo_url ?? null) ?? ''}}
+            style={[listStyles.avatar, {backgroundColor: '#FFFFFF'}]}
+            resizeMode="cover"
+          />
+        ) : (
+          <View style={[listStyles.avatar, {backgroundColor: palette.brandSoft, borderColor: palette.brandBorder}]}>
+            <Text style={{fontSize: 16, color: palette.brandDark, fontFamily: fonts.black}}>
+              {(order.store?.name ?? 'م').trim().charAt(0)}
+            </Text>
+          </View>
+        )}
         <View style={{flex: 1, gap: 2, alignItems: 'flex-start'}}>
           <Text style={[type.smallMedium, {color: palette.muted, fontFamily: fonts.medium}]}>
             {order.order_number}
@@ -309,11 +318,15 @@ const listStyles = StyleSheet.create({
 
 export function OrderTotals({order}: {order: Order}) {
   const {palette} = useTheme();
-  const rows: {label: string; value: string; strong?: boolean}[] = [
+  const rows: {label: string; value: string; strong?: boolean; tone?: 'success'}[] = [
     {label: 'إجمالي المنتجات', value: formatMoney(order.items_total_minor)},
     {label: `التوصيل (${order.region_name ?? '—'})`, value: formatMoney(order.delivery_fee_minor)},
     {label: 'الإجمالي مع التوصيل', value: formatMoney(order.total_minor), strong: true},
   ];
+  // v2.1: وفورات خصومات المتجر على هذا الطلب (خادم 4.5)
+  if ((order.items_discount_minor ?? 0) > 0) {
+    rows.push({label: 'وفّرت من خصومات المتجر', value: `− ${formatMoney(order.items_discount_minor ?? 0)}`, tone: 'success'});
+  }
   if (order.returned_minor > 0) {
     rows.push({label: 'المُرجَع', value: `− ${formatMoney(order.returned_minor)}`});
   }
@@ -324,7 +337,7 @@ export function OrderTotals({order}: {order: Order}) {
           <Text
             style={[
               type.small,
-              {color: r.strong ? palette.ink : palette.muted},
+              {color: r.tone === 'success' ? palette.success : r.strong ? palette.ink : palette.muted},
               r.strong ? {fontFamily: fonts.bold} : null,
             ]}>
             {r.label}
@@ -332,7 +345,7 @@ export function OrderTotals({order}: {order: Order}) {
           <Text
             style={[
               {fontSize: 14, fontFamily: r.strong ? fonts.bold : fonts.medium},
-              {color: r.strong ? palette.brandDark : palette.inkSoft},
+              {color: r.tone === 'success' ? palette.success : r.strong ? palette.brandDark : palette.inkSoft},
             ]}>
             {r.value}
           </Text>

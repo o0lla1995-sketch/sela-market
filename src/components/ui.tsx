@@ -16,7 +16,7 @@ import {
   View,
   type ViewStyle,
 } from 'react-native';
-import {SafeAreaView} from 'react-native-safe-area-context';
+import {SafeAreaView, useSafeAreaInsets} from 'react-native-safe-area-context';
 import {useTheme} from '../theme/ThemeProvider';
 import {radius, shadowFor, spacing, type, fonts, type Palette} from '../theme/tokens';
 import {Icon, type IconName} from './Icon';
@@ -1000,18 +1000,26 @@ export function Toaster() {
   return (
     <View style={toastStyles.wrap} pointerEvents="box-none">
       {toasts.slice(-3).map(t => {
+        /* v2.1: نغمات التنبيه من هوية الثيم نفسها — البرتقالي العلامة
+         * بدقّة بدل الأزرق الافتراضي الذي كان يبدو غريباً عن الهوية. */
         const tone =
           t.tone === 'success' ? palette.success :
-          t.tone === 'danger' ? palette.danger : palette.info;
+          t.tone === 'danger' ? palette.danger : palette.brand;
         return (
           <Pressable
             key={t.id}
             onPress={() => dismiss(t.id)}
             style={[
               toastStyles.toast,
-              {backgroundColor: palette.ink, borderRightColor: tone},
+              {
+                backgroundColor: palette.surface,
+                borderColor: palette.line,
+                borderRightColor: tone,
+              },
+              shadowFor(palette.isDark),
             ]}>
-            <Text style={[type.smallMedium, {color: '#FFFFFF'}]}>{t.text}</Text>
+            <View style={[toastStyles.toneDot, {backgroundColor: tone}]} />
+            <Text style={[type.smallMedium, {color: palette.ink}]}>{t.text}</Text>
           </Pressable>
         );
       })}
@@ -1029,10 +1037,20 @@ const toastStyles = StyleSheet.create({
     zIndex: 999,
   },
   toast: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: spacing.sm,
     borderRadius: radius.md,
+    borderWidth: 1,
     borderRightWidth: 4,
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: spacing.md,
     paddingVertical: spacing.md,
+  },
+  toneDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 999,
+    flexShrink: 0,
   },
 });
 
@@ -1041,6 +1059,7 @@ const toastStyles = StyleSheet.create({
 /** حاوية مثبتة أسفل الشاشة فوق محتوى قابل للتمرير (أزرار الدفع). */
 export function BottomFixed({children}: {children: React.ReactNode}) {
   const {palette} = useTheme();
+  const insets = useSafeAreaInsets();
   return (
     <View
       style={[
@@ -1048,6 +1067,7 @@ export function BottomFixed({children}: {children: React.ReactNode}) {
         {
           backgroundColor: palette.surface,
           borderTopColor: palette.line,
+          paddingBottom: insets.bottom + 10,
         },
       ]}>
       {children}

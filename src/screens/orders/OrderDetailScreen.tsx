@@ -32,6 +32,7 @@ import {useCartStore} from '../../stores/cartStore';
 import {useToastStore} from '../../stores/toastStore';
 import {syncOrdersOnce} from '../../services/ordersSync';
 import type {OrdersStackParamList} from '../../navigation/RootNavigator';
+import {useStackBottomClearance} from '../../core/layout';
 
 type Props = NativeStackScreenProps<OrdersStackParamList, 'OrderDetail'>;
 
@@ -159,7 +160,7 @@ export function OrderDetailScreen({navigation, route}: Props) {
         subtitle={`طلب ${order.store?.name ?? ''}`}
         onBack={() => navigation.goBack()}
       />
-      <ScrollView contentContainerStyle={{padding: spacing.lg, gap: spacing.lg, paddingBottom: spacing.xxxl}} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{padding: spacing.lg, gap: spacing.lg, paddingBottom: useStackBottomClearance()}} showsVerticalScrollIndicator={false}>
         {/* حالة الطلب */}
         <Card style={{gap: spacing.md}}>
           <View style={detailStyles.statusRow}>

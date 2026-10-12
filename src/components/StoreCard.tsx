@@ -7,12 +7,13 @@
  *    لمنطقتك عند توفرها، وشارة «يخدم منطقتك».
  */
 import React from 'react';
-import {Pressable, StyleSheet, Text, View} from 'react-native';
+import {Image, Pressable, StyleSheet, Text, View} from 'react-native';
 import {useTheme} from '../theme/ThemeProvider';
 import {radius, shadowFor, spacing, type, fonts} from '../theme/tokens';
 import {Icon, type IconName} from './Icon';
 import {Stars} from './RatingSheet';
 import {formatMoney} from '../core/money';
+import {absoluteUrl} from '../api/client';
 import type {Store} from '../core/types';
 
 /** نوع المتجر — أيقونة دلالية لكل نشاط (مطاعم، ملابس، بقالة،
@@ -45,18 +46,41 @@ export function storeTypeInfo(
   return {icon: 'grid', label: c.length > 0 ? c : 'متجر'};
 }
 
-/** دائرة هوية المتجر — تُستخدم في البطاقات الدائرية وصفحة المتجر. */
+/** دائرة هوية المتجر — تُستخدم في البطاقات الدائرية وصفحة المتجر.
+ *  v2.1: تعرض شعار المتجر الحقيقي المرفوع من تطبيق نقطة البيع عند
+ *  توفره (logo_url من الخادم) — وإلا حرف المتجر كالحروف الأولى. */
 export function StoreAvatar({
   name,
   size = 46,
   circular = true,
+  logoUrl,
 }: {
   name: string;
   size?: number;
   circular?: boolean;
+  logoUrl?: string | null;
 }) {
   const {palette} = useTheme();
   const first = name.trim().charAt(0) || 'س';
+  const resolved = absoluteUrl(logoUrl ?? null);
+  if (resolved != null) {
+    return (
+      <Image
+        source={{uri: resolved}}
+        style={[
+          avatarStyles.wrap,
+          avatarStyles.logo,
+          {
+            width: size,
+            height: size,
+            borderRadius: circular ? size / 2 : size * 0.34,
+            borderColor: palette.brandBorder,
+          },
+        ]}
+        resizeMode="cover"
+      />
+    );
+  }
   return (
     <View
       style={[
@@ -85,6 +109,9 @@ const avatarStyles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 1,
   },
+  logo: {
+    backgroundColor: '#FFFFFF',
+  },
 });
 
 /* ═══════════════ البطاقة الدائرية المختصرة (الرئيسية) ═══════════════ */
@@ -110,7 +137,7 @@ export function CircleStoreCard({
       {/* حلقة الهوية حول الدائرة — لمسة علامة تجارية عالمية */}
       <View style={[circleStyles.ringWrap, {borderColor: palette.brandBorder}]}>
         <View style={[circleStyles.ringPad, {backgroundColor: palette.surface}]}>
-          <StoreAvatar name={store.name} size={64} />
+          <StoreAvatar name={store.name} logoUrl={store.logo_url} size={64} />
         </View>
         {/* شارة نوع النشاط أسفل الدائرة */}
         <View

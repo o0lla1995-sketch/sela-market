@@ -12,6 +12,7 @@ import {Icon} from './Icon';
 import {QtyStepper} from './ui';
 import {absoluteUrl} from '../api/client';
 import {formatMoney} from '../core/money';
+import {effectiveMinor, hasDiscount} from '../core/discount';
 import type {CrossProduct, Product, StoreRef} from '../core/types';
 import {useCartStore} from '../stores/cartStore';
 import {useWishlistStore} from '../stores/wishlistStore';
@@ -62,6 +63,9 @@ export function ProductCard({
   const displayName = storeName ?? (product as CrossProduct).store_name ?? '';
   const imageCount = product.images?.length ?? 0;
   const firstImage = absoluteUrl(product.images?.[0]);
+  // v2.1: خصم التاجر — السعر المعروض هو بعد الخصم، والأصلي مشطوب
+  const discounted = hasDiscount(product);
+  const finalPrice = effectiveMinor(product);
 
   const onAdd = () => {
     if (hasOptions) {
@@ -147,6 +151,14 @@ export function ProductCard({
         </Pressable>
 
         {/* شارات حالة على الصورة */}
+        {discounted ? (
+          <View style={[styles.discountBadge, {backgroundColor: palette.danger}]}>
+            <Icon name="tag" size={10} color="#FFFFFF" />
+            <Text style={styles.stockBadgeText}>
+              خصم {Math.round(product.discount_pct ?? 0)}%
+            </Text>
+          </View>
+        ) : null}
         {outOfStock ? (
           <View style={[styles.stockBadge, {backgroundColor: palette.danger}]}>
             <Text style={styles.stockBadgeText}>نفدت</Text>
@@ -183,9 +195,24 @@ export function ProductCard({
       {/* السعر + الإضافة/الكمية */}
       <View style={styles.bottomRow}>
         <View style={{gap: 0, alignItems: 'flex-start'}}>
-          <Text style={[styles.price, {color: palette.brandDark}]}>
-            {formatMoney(product.price_minor)}
-          </Text>
+          {discounted ? (
+            <>
+              <Text
+                style={[
+                  styles.priceStruck,
+                  {color: palette.muted, textDecorationLine: 'line-through'},
+                ]}>
+                {formatMoney(product.price_minor)}
+              </Text>
+              <Text style={[styles.price, {color: palette.brandDark}]}>
+                {formatMoney(finalPrice)}
+              </Text>
+            </>
+          ) : (
+            <Text style={[styles.price, {color: palette.brandDark}]}>
+              {formatMoney(product.price_minor)}
+            </Text>
+          )}
           {cartLine?.variant != null ? (
             <Text style={{fontSize: 9.5, color: palette.muted}} numberOfLines={1}>
               {cartLine.variant}
@@ -232,6 +259,11 @@ const styles = StyleSheet.create({
     padding: spacing.sm,
     gap: spacing.sm,
   },
+  priceStruck: {
+    fontSize: 11,
+    fontFamily: fonts.medium,
+    lineHeight: 14,
+  },
   photoWrap: {position: 'relative'},
   photo: {
     width: '100%',
@@ -269,6 +301,17 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
   },
   stockBadgeText: {fontSize: 10, color: '#FFFFFF', fontFamily: fonts.bold},
+  discountBadge: {
+    position: 'absolute',
+    bottom: 7,
+    left: 7,
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 3,
+    borderRadius: radius.pill,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
   optionsChip: {
     position: 'absolute',
     top: 7,

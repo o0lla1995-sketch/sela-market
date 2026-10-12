@@ -8,13 +8,13 @@ import com.facebook.react.uimanager.ReactShadowNode
 import com.facebook.react.uimanager.ViewManager
 
 /**
- * MarketPackage — الحزمة الأصلية الوحيدة لتطبيق سيلا ماركت:
- * وحدة الإشعارات المحلية (تحديثات حالة الطلبات).
+ * MarketPackage — الحزم الأصلية لتطبيق سيلا ماركت:
+ * إشعارات حالة الطلبات المحلية + الدخول بالبصمة (v2.1).
  */
 class MarketPackage : ReactPackage {
   override fun createNativeModules(
     reactContext: ReactApplicationContext
-  ): List<NativeModule> = listOf(NotificationsModule(reactContext))
+  ): List<NativeModule> = listOf(NotificationsModule(reactContext), BiometricModule(reactContext))
 
   override fun createViewManagers(
     reactContext: ReactApplicationContext

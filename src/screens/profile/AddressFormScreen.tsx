@@ -30,6 +30,7 @@ import {useAuthStore} from '../../stores/authStore';
 import {useLocationStore} from '../../stores/locationStore';
 import {useToastStore} from '../../stores/toastStore';
 import type {AccountStackParamList} from '../../navigation/RootNavigator';
+import {useStackBottomClearance} from '../../core/layout';
 
 type Props = NativeStackScreenProps<AccountStackParamList, 'AddressForm'>;
 
@@ -145,7 +146,7 @@ export function AddressFormScreen({navigation, route}: Props) {
         onBack={() => navigation.goBack()}
       />
       <ScrollView
-        contentContainerStyle={{padding: spacing.lg, gap: spacing.lg, paddingBottom: spacing.xxxl}}
+        contentContainerStyle={{padding: spacing.lg, gap: spacing.lg, paddingBottom: useStackBottomClearance()}}
         showsVerticalScrollIndicator={false}>
         {/* اللقب */}
         <View style={{gap: spacing.md}}>

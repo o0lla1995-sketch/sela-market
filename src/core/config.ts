@@ -4,8 +4,8 @@
 import {MMKV} from 'react-native-mmkv';
 
 /** إصدار التطبيق المعروض للمستخدم (يجب أن يطابق versionName في Gradle). */
-export const APP_VERSION = '2.0.0';
-export const APP_BUILD_CODE = 4;
+export const APP_VERSION = '2.1.0';
+export const APP_BUILD_CODE = 5;
 export const APP_VERSION_LABEL = `${APP_VERSION} (${APP_BUILD_CODE})`;
 
 /**
@@ -19,7 +19,7 @@ export const DEFAULT_SERVER_URL =
 export const API_TIMEOUT_MS = 20000;
 
 /** حجم صفحة المنتجات الافتراضي. */
-export const PRODUCTS_PAGE_SIZE = 30;
+export const PRODUCTS_PAGE_SIZE = 12;
 
 /** فاصل استطلاع الطلبات أثناء فتح التطبيق (ملي ثانية). */
 export const ORDERS_POLL_INTERVAL_MS = 45000;

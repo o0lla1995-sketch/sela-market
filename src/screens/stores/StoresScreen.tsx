@@ -17,6 +17,7 @@ import {ApiError} from '../../api/client';
 import type {Store} from '../../core/types';
 import {useLocationStore} from '../../stores/locationStore';
 import type {ShopStackParamList} from '../../navigation/RootNavigator';
+import {useTabBottomClearance} from '../../core/layout';
 
 type Props = NativeStackScreenProps<ShopStackParamList, 'Stores'>;
 
@@ -183,7 +184,7 @@ export function StoresScreen({navigation}: Props) {
         <FlatList
           data={filtered}
           keyExtractor={s => String(s.id)}
-          contentContainerStyle={{padding: spacing.lg, gap: spacing.md, paddingBottom: spacing.xxxl}}
+          contentContainerStyle={{padding: spacing.lg, gap: spacing.md, paddingBottom: useTabBottomClearance()}}
           showsVerticalScrollIndicator={false}
           ListEmptyComponent={
             regionMode && regionStores.length === 0 ? (

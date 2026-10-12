@@ -31,6 +31,8 @@ import {
 } from '../../components/ui';
 import {Icon} from '../../components/Icon';
 import {useAuthStore} from '../../stores/authStore';
+import {useSettingsStore} from '../../stores/settingsStore';
+import {authenticateBiometric} from '../../services/biometrics';
 import {useToastStore} from '../../stores/toastStore';
 import {passwordProblem} from '../../api/endpoints';
 import {cleanIdNumber, cleanPhone, validateIdNumber, validatePhone} from '../../core/validation';
@@ -45,6 +47,10 @@ export function LoginScreen({navigation, route}: Props) {
   const login = useAuthStore(s => s.login);
   const legacyLogin = useAuthStore(s => s.legacyLogin);
   const setPassword = useAuthStore(s => s.setPassword);
+  /* v2.1: الدخول بالبصمة — توفرها فقط عند جلسة محفوظة + الخيار مفعّل */
+  const savedSessionToken = useAuthStore(s => s.token);
+  const biometricLoginEnabled = useSettingsStore(s => s.biometricLoginEnabled);
+  const [bioBusy, setBioBusy] = useState(false);
   const resetPassword = useAuthStore(s => s.resetPassword);
   const busy = useAuthStore(s => s.busy);
   const error = useAuthStore(s => s.error);
@@ -220,6 +226,36 @@ export function LoginScreen({navigation, route}: Props) {
                 onPress={() => void submit()}
               />
 
+              {/* v2.1: الدخول بالبصمة — جلسة محفوظة + الخيار مفعّل */}
+              {savedSessionToken != null && biometricLoginEnabled ? (
+                <View style={{gap: 6, alignItems: 'center'}}>
+                  <View style={styles.dividerRow}>
+                    <View style={[styles.dividerLine, {backgroundColor: palette.line}]} />
+                    <Text style={{fontSize: 10.5, color: palette.muted}}>أو</Text>
+                    <View style={[styles.dividerLine, {backgroundColor: palette.line}]} />
+                  </View>
+                  <Button
+                    label="الدخول بالبصمة"
+                    variant="soft"
+                    icon="shield"
+                    disabled={bioBusy}
+                    onPress={() => {
+                      setBioBusy(true);
+                      void authenticateBiometric('افتح جلسة سيلا ماركت المحفوظة')
+                        .then(ok => {
+                          if (ok) {
+                            // الجلسة المحفوظة ما زالت حية — الدخول بها مباشرة
+                            navigation.replace('Main');
+                          } else {
+                            toast('أُلغي الدخول بالبصمة', 'info');
+                          }
+                        })
+                        .finally(() => setBioBusy(false));
+                    }}
+                  />
+                </View>
+              ) : null}
+
               {/* مسار الترحيل: حساب أنشئ قبل كلمات المرور */}
               <View
                 style={[
@@ -358,6 +394,16 @@ export function LoginScreen({navigation, route}: Props) {
 }
 
 const styles = StyleSheet.create({
+  dividerRow: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 8,
+    alignSelf: 'stretch',
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+  },
   legacyBox: {
     borderRadius: radius.lg,
     borderWidth: 1,

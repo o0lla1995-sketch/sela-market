@@ -39,6 +39,7 @@ import {StoreAvatar} from '../../components/StoreCard';
 import {absoluteUrl} from '../../api/client';
 import {getStoreProducts} from '../../api/endpoints';
 import {formatMoney} from '../../core/money';
+import {effectiveMinor, hasDiscount} from '../../core/discount';
 import {
   lineKeyOf,
   optionsComplete,
@@ -51,6 +52,7 @@ import {useInterestStore} from '../../stores/interestStore';
 import {useWishlistStore} from '../../stores/wishlistStore';
 import {useToastStore} from '../../stores/toastStore';
 import type {ShopStackParamList} from '../../navigation/RootNavigator';
+import {useStackBottomClearance} from '../../core/layout';
 
 type Props = NativeStackScreenProps<ShopStackParamList, 'Product'>;
 
@@ -156,7 +158,7 @@ export function ProductScreen({navigation, route}: Props) {
         subtitle={`من ${storeRef.name}`}
         onBack={() => navigation.goBack()}
       />
-      <ScrollView contentContainerStyle={{padding: spacing.lg, gap: spacing.lg, paddingBottom: spacing.xxxl}} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{padding: spacing.lg, gap: spacing.lg, paddingBottom: useStackBottomClearance()}} showsVerticalScrollIndicator={false}>
         {/* ─── معرض الصور ─── */}
         {images.length > 0 ? (
           <View>
@@ -223,9 +225,34 @@ export function ProductScreen({navigation, route}: Props) {
           <View style={priceStyles.row}>
             <View style={{gap: 2, flex: 1, alignItems: 'flex-start'}}>
               <Text style={[type.small, {color: palette.muted}]}>السعر</Text>
-              <Text style={[priceStyles.amount, {color: palette.brandDark}]}>
-                {formatMoney(product.price_minor)}
-              </Text>
+              {hasDiscount(product) ? (
+                <>
+                  <View style={{flexDirection: 'row-reverse', alignItems: 'center', gap: 8}}>
+                    <Text
+                      style={[
+                        type.small,
+                        {color: palette.muted, textDecorationLine: 'line-through'},
+                      ]}>
+                      {formatMoney(product.price_minor)}
+                    </Text>
+                    <View style={[priceStyles.pctChip, {backgroundColor: palette.danger}]}>
+                      <Text style={{fontSize: 10.5, color: '#FFFFFF', fontFamily: fonts.bold}}>
+                        خصم {Math.round(product.discount_pct ?? 0)}%
+                      </Text>
+                    </View>
+                  </View>
+                  <Text style={[priceStyles.amount, {color: palette.brandDark}]}>
+                    {formatMoney(effectiveMinor(product))}
+                  </Text>
+                  <Text style={{fontSize: 11, color: palette.success, fontFamily: fonts.medium}}>
+                    توفّر {formatMoney(Math.max(0, product.price_minor - effectiveMinor(product)))}
+                  </Text>
+                </>
+              ) : (
+                <Text style={[priceStyles.amount, {color: palette.brandDark}]}>
+                  {formatMoney(product.price_minor)}
+                </Text>
+              )}
             </View>
             <View
               style={[
@@ -380,7 +407,7 @@ export function ProductScreen({navigation, route}: Props) {
         <Pressable onPress={() => navigation.navigate('Store', {storeId: storeRef.id, storeName: storeRef.name})}>
           <Card style={{gap: spacing.md}}>
             <View style={priceStyles.row}>
-              <StoreAvatar name={storeRef.name} size={52} />
+              <StoreAvatar name={storeRef.name} logoUrl={storeRef.logoUrl} size={52} />
               <View style={{flex: 1, gap: 2, alignItems: 'flex-start'}}>
                 <Text style={[type.bodyMedium, {color: palette.ink, fontFamily: fonts.bold}]}>
                   {storeRef.name}
@@ -442,7 +469,7 @@ export function ProductScreen({navigation, route}: Props) {
               onDecrease={() => decrement(storeRef.id, activeLineKey)}
             />
             <Button
-              label={`في السلة — ${formatMoney(product.price_minor * cartQty)}`}
+              label={`في السلة — ${formatMoney(effectiveMinor(product) * cartQty)}`}
               variant="soft"
               style={{flex: 1}}
               onPress={() => navigation.getParent()?.navigate('Cart')}
@@ -549,6 +576,11 @@ const galleryStyles = StyleSheet.create({
 const priceStyles = StyleSheet.create({
   row: {flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.md},
   amount: {fontSize: 30, fontFamily: fonts.black},
+  pctChip: {
+    borderRadius: radius.pill,
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+  },
   bigIcon: {
     width: 76,
     height: 76,

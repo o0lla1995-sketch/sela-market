@@ -7,7 +7,7 @@
  * المشترين (خادم 4.4) — بأسلوب متاجر التجزئة العالمية.
  */
 import React, {useCallback, useEffect, useMemo, useState} from 'react';
-import {FlatList, I18nManager, Linking, Pressable, StyleSheet, Text, View} from 'react-native';
+import {FlatList, I18nManager, Linking, Pressable, ScrollView, StyleSheet, Text, View} from 'react-native';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 import {useTheme} from '../../theme/ThemeProvider';
 import {radius, shadowFor, spacing, type, fonts} from '../../theme/tokens';
@@ -24,11 +24,13 @@ import {
 import {ProductCard} from '../../components/ProductCard';
 import {StoreAvatar, storeTypeInfo} from '../../components/StoreCard';
 import {Stars} from '../../components/RatingSheet';
-import {getStoreDetail, getStoreProducts, getStoreRatings} from '../../api/endpoints';
+import {getStoreDetail, getStoreProducts, getStoreProductsAdaptive, getStoreRatings} from '../../api/endpoints';
 import {ApiError} from '../../api/client';
 import {PRODUCTS_PAGE_SIZE} from '../../core/config';
 import {formatMoney} from '../../core/money';
 import {relativeTime} from '../../core/time';
+import {hasDiscount, effectiveMinor} from '../../core/discount';
+import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import type {DeliveryRegion, Product, StoreDetail, StoreRatings} from '../../core/types';
 import type {ShopStackParamList} from '../../navigation/RootNavigator';
 
@@ -36,34 +38,52 @@ type Props = NativeStackScreenProps<ShopStackParamList, 'Store'>;
 
 export function StoreScreen({navigation, route}: Props) {
   const {palette} = useTheme();
+  const insets = useSafeAreaInsets();
   const {storeId, storeName} = route.params;
 
   const [detail, setDetail] = useState<StoreDetail | null>(null);
   const [ratings, setRatings] = useState<StoreRatings | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
+  const [offers, setOffers] = useState<Product[]>([]);
   const [query, setQuery] = useState('');
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /* v2.1: خطأ المنتجات لم يعد يُبتلع — كان يظهر «0+» بلا سبب. */
+  const [productsError, setProductsError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setError(null);
+    setProductsError(null);
     setLoading(true);
     try {
-      const [d, r] = await Promise.all([
+      const [d, r, o] = await Promise.all([
         getStoreDetail(storeId),
         getStoreRatings(storeId).catch(() => null),
+        // عروض المتجر (المخفضة فقط) — فشلها غير فادح
+        getStoreProducts(storeId, {offers: true, per: 10}).catch(() => [] as Product[]),
       ]);
       setDetail(d);
       setRatings(r);
-      const p = await getStoreProducts(storeId, {per: PRODUCTS_PAGE_SIZE});
-      setProducts(p);
-      setPage(1);
+      setOffers(o.filter(p => hasDiscount(p)));
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'تعذر تحميل المتجر');
     } finally {
       setLoading(false);
+    }
+    // المنتجات بجلب متدرج (سلم 12→6→3→1 عند تعثر الشبكة) — وخطأها
+    // يظهر داخل قسم المنتجات مع زر إعادة محاولة بدل عدّاد 0+ صامت.
+    try {
+      const p = await getStoreProductsAdaptive(storeId, PRODUCTS_PAGE_SIZE);
+      setProducts(p);
+      setPage(1);
+      setProductsError(null);
+    } catch (e) {
+      setProducts([]);
+      setProductsError(
+        e instanceof ApiError ? e.message : 'تعذر جلب منتجات المتجر',
+      );
     }
   }, [storeId]);
 
@@ -92,11 +112,31 @@ export function StoreScreen({navigation, route}: Props) {
     if (loadingMore || loading || query.trim().length > 0) {
       return;
     }
+    if (productsError != null) {
+      // الجلب الأول تعثر — زر «المزيد» يعيد المحاولة بدل التكرار الأعمى
+      try {
+        const p = await getStoreProductsAdaptive(storeId, PRODUCTS_PAGE_SIZE);
+        setProducts(p);
+        setPage(1);
+        setProductsError(null);
+      } catch {
+        /* صمت — زر إعادة المحاولة داخل القسم يكفي */
+      }
+      return;
+    }
+    if (products.length === 0) {
+      return;
+    }
     setLoadingMore(true);
     try {
-      const next = await getStoreProducts(storeId, {page: page + 1, per: PRODUCTS_PAGE_SIZE});
-      if (next.length > 0) {
-        setProducts(prev => [...prev, ...next.filter(n => !prev.some(p => p.id === n.id))]);
+      // v2.1: جلب شامل بجلب متدرج — يعيد القائمة الموسعة كاملة (idempotent)
+      // بدل حساب الإزاحات مع أحجام per متغيرة.
+      const next = await getStoreProductsAdaptive(
+        storeId,
+        products.length + PRODUCTS_PAGE_SIZE,
+      );
+      if (next.length > products.length) {
+        setProducts(next);
         setPage(p => p + 1);
       }
     } catch {
@@ -104,7 +144,7 @@ export function StoreScreen({navigation, route}: Props) {
     } finally {
       setLoadingMore(false);
     }
-  }, [loadingMore, loading, query, page, storeId]);
+  }, [loadingMore, loading, query, products, productsError, storeId]);
 
   const store = detail?.store;
   const regions: DeliveryRegion[] = detail?.deliveryRegions ?? [];
@@ -114,6 +154,7 @@ export function StoreScreen({navigation, route}: Props) {
       id: storeId,
       name: store?.name ?? storeName ?? 'المتجر',
       storeNumber: store?.store_number,
+      logoUrl: store?.logo_url ?? null,
     }),
     [storeId, store, storeName],
   );
@@ -129,7 +170,9 @@ export function StoreScreen({navigation, route}: Props) {
         keyExtractor={item => String(item.id)}
         numColumns={2}
         columnWrapperStyle={{gap: spacing.md, width: '100%'}}
-        contentContainerStyle={{paddingBottom: spacing.xxxl}}
+        contentContainerStyle={{
+          paddingBottom: Math.max(insets.bottom + 24, 96),
+        }}
         showsVerticalScrollIndicator={false}
         onEndReached={loadMore}
         onEndReachedThreshold={0.6}
@@ -148,7 +191,7 @@ export function StoreScreen({navigation, route}: Props) {
                   color={palette.ink}
                 />
               </Pressable>
-              <StoreAvatar name={store?.name ?? storeName ?? 'س'} size={86} />
+              <StoreAvatar name={store?.name ?? storeName ?? 'س'} logoUrl={store?.logo_url} size={86} />
               <Text style={[type.h1, {color: palette.ink, fontFamily: fonts.black}]}>
                 {store?.name ?? storeName ?? 'المتجر'}
               </Text>
@@ -239,7 +282,7 @@ export function StoreScreen({navigation, route}: Props) {
                 <View style={[statsStyles.row, {backgroundColor: palette.surface, borderColor: palette.line}, shadowFor(palette.isDark)]}>
                   <View style={statsStyles.cell}>
                     <Text style={[type.h2, {color: palette.brandDark}]}>
-                      {loading ? '…' : products.length + (loadingMore ? '+' : '')}
+                      {loading ? '…' : products.length}
                     </Text>
                     <Text style={{fontSize: 10.5, color: palette.muted}}>منتجاً</Text>
                   </View>
@@ -284,13 +327,71 @@ export function StoreScreen({navigation, route}: Props) {
                   </View>
                 ) : null}
 
+                {/* ─── عروض المتجر (v2.1 — تخفيضات التاجر من POS) ─── */}
+                {offers.length > 0 ? (
+                  <View style={{gap: spacing.sm}}>
+                    <SectionTitle title={`عروض المتجر (${offers.length})`} />
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={{gap: spacing.md, paddingBottom: 2}}>
+                      {offers.map(p => (
+                        <Pressable
+                          key={`offer-${p.id}`}
+                          onPress={() => navigation.navigate('Product', {product: p, storeRef})}
+                          style={({pressed}) => [
+                            offerStyles.card,
+                            {
+                              backgroundColor: palette.surface,
+                              borderColor: palette.brandBorder,
+                              opacity: pressed ? 0.9 : 1,
+                            },
+                            shadowFor(palette.isDark),
+                          ]}>
+                          <View style={[offerStyles.pct, {backgroundColor: palette.danger}]}>
+                            <Text style={{fontSize: 12, color: '#FFFFFF', fontFamily: fonts.black}}>
+                              {Math.round(p.discount_pct ?? 0)}%
+                            </Text>
+                          </View>
+                          <Text
+                            style={[type.smallMedium, {color: palette.ink, fontFamily: fonts.bold}]}
+                            numberOfLines={1}>
+                            {p.name}
+                          </Text>
+                          <View style={{flexDirection: 'row-reverse', alignItems: 'center', gap: 6}}>
+                            <Text style={{fontSize: 11, color: palette.muted, textDecorationLine: 'line-through'}}>
+                              {formatMoney(p.price_minor)}
+                            </Text>
+                            <Text style={{fontSize: 14, color: palette.brandDark, fontFamily: fonts.bold}}>
+                              {formatMoney(effectiveMinor(p))}
+                            </Text>
+                          </View>
+                          <Text style={{fontSize: 10, color: palette.success, fontFamily: fonts.medium}}>
+                            توفّر {formatMoney(Math.max(0, p.price_minor - effectiveMinor(p)))}
+                          </Text>
+                        </Pressable>
+                      ))}
+                    </ScrollView>
+                  </View>
+                ) : null}
+
                 {/* ─── بحث داخل المتجر ─── */}
                 <SearchBar
                   value={query}
                   onChangeText={setQuery}
                   placeholder={`ابحث داخل ${store?.name ?? 'المتجر'}…`}
                 />
-                <SectionTitle title={`المنتجات (${products.length}${loadingMore ? '+' : ''})`} />
+                <SectionTitle title={`المنتجات (${products.length})`} />
+
+                {productsError != null && query.trim().length === 0 ? (
+                  <ErrorState
+                    message={productsError}
+                    onRetry={() => {
+                      setProductsError(null);
+                      void load();
+                    }}
+                  />
+                ) : null}
 
                 {query.trim().length > 0 ? (
                   <Pressable onPress={() => setQuery('')} hitSlop={6}>
@@ -354,7 +455,7 @@ export function StoreScreen({navigation, route}: Props) {
           </View>
         }
         ListEmptyComponent={
-          !loading && error == null ? (
+          !loading && error == null && productsError == null ? (
             query.trim().length > 0 ? (
               <EmptyState
                 icon="search"
@@ -466,6 +567,26 @@ const regionStyles = StyleSheet.create({
     borderWidth: 1,
     paddingHorizontal: 12,
     paddingVertical: 7,
+  },
+});
+
+/* v2.1: بطاقة عرض داخل شريط «عروض المتجر» الأفقي */
+const offerStyles = StyleSheet.create({
+  card: {
+    width: 132,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    padding: spacing.md,
+    gap: 4,
+    alignItems: 'flex-start',
+  },
+  pct: {
+    position: 'absolute',
+    top: -10,
+    left: 10,
+    borderRadius: radius.pill,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
   },
 });
 

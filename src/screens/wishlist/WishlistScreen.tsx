@@ -15,6 +15,7 @@ import {useCartStore} from '../../stores/cartStore';
 import {useToastStore} from '../../stores/toastStore';
 import {StoreAvatar} from '../../components/StoreCard';
 import type {ShopStackParamList} from '../../navigation/RootNavigator';
+import {useStackBottomClearance} from '../../core/layout';
 
 type Props = NativeStackScreenProps<ShopStackParamList, 'Wishlist'>;
 
@@ -46,7 +47,7 @@ export function WishlistScreen({navigation}: Props) {
         <FlatList
           data={list}
           keyExtractor={entry => String(entry.product.id)}
-          contentContainerStyle={{padding: spacing.lg, gap: spacing.md, paddingBottom: spacing.xxxl}}
+          contentContainerStyle={{padding: spacing.lg, gap: spacing.md, paddingBottom: useStackBottomClearance()}}
           showsVerticalScrollIndicator={false}
           renderItem={({item}) => {
             const p = item.product;

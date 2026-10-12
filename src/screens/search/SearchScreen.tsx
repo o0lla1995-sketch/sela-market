@@ -40,6 +40,7 @@ import {PRODUCTS_PAGE_SIZE} from '../../core/config';
 import type {CategoryCount, CrossProduct, Store} from '../../core/types';
 import {useRecentsStore} from '../../stores/recentsStore';
 import type {ShopStackParamList} from '../../navigation/RootNavigator';
+import {useStackBottomClearance} from '../../core/layout';
 
 type Props = NativeStackScreenProps<ShopStackParamList, 'Search'>;
 
@@ -412,7 +413,7 @@ export function SearchScreen({navigation, route}: Props) {
           keyExtractor={item => `${item.store_id}:${item.id}`}
           numColumns={2}
           columnWrapperStyle={visible.length > 1 ? gridStyles.row : undefined}
-          contentContainerStyle={{padding: spacing.lg, gap: spacing.lg}}
+          contentContainerStyle={{padding: spacing.lg, gap: spacing.lg, paddingBottom: useStackBottomClearance()}}
           showsVerticalScrollIndicator={false}
           onEndReached={loadMore}
           onEndReachedThreshold={0.6}

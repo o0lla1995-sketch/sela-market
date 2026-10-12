@@ -13,6 +13,7 @@ import type {NavigatorScreenParams} from '@react-navigation/native';
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 
 import {useSettingsStore} from '../stores/settingsStore';
+import {useAuthStore} from '../stores/authStore';
 import {useCartStore} from '../stores/cartStore';
 import {useNotificationsStore} from '../stores/notificationsStore';
 import {useTheme} from '../theme/ThemeProvider';
@@ -24,6 +25,7 @@ import type {Address, Order, Product, StoreRef} from '../core/types';
 /* ─── الشاشات ─── */
 import {WelcomeScreen} from '../screens/onboarding/WelcomeScreen';
 import {LoginScreen} from '../screens/auth/LoginScreen';
+import {BiometricGateScreen} from '../screens/auth/BiometricGateScreen';
 import {RegisterScreen} from '../screens/auth/RegisterScreen';
 import {HomeScreen} from '../screens/home/HomeScreen';
 import {StoresScreen} from '../screens/stores/StoresScreen';
@@ -105,6 +107,7 @@ export type RootStackParamList = {
   Main: NavigatorScreenParams<MainTabParamList> | undefined;
   Login: {reason?: 'checkout' | 'orders' | 'profile'} | undefined;
   Register: {reason?: 'checkout' | 'orders' | 'profile'} | undefined;
+  BiometricGate: undefined;
 };
 
 const RootStack = createNativeStackNavigator<RootStackParamList>();
@@ -312,7 +315,12 @@ function MainTabs() {
 
 export function RootNavigator() {
   const onboarded = useSettingsStore(s => s.onboarded);
+  const biometricLoginEnabled = useSettingsStore(s => s.biometricLoginEnabled);
+  const sessionToken = useAuthStore(s => s.token);
   const {palette} = useTheme();
+
+  /* v2.1: بوابة البصمة — جلسة محفوظة + الخيار مفعّل ⇒ نبدأ عندها. */
+  const needsGate = onboarded && biometricLoginEnabled && sessionToken != null;
 
   return (
     <NavigationContainer
@@ -327,7 +335,9 @@ export function RootNavigator() {
           notification: palette.brand,
         },
       }}>
-      <RootStack.Navigator screenOptions={{headerShown: false}}>
+      <RootStack.Navigator
+        initialRouteName={needsGate ? 'BiometricGate' : 'Main'}
+        screenOptions={{headerShown: false}}>
         {!onboarded ? (
           <RootStack.Screen
             name="Welcome"
@@ -345,6 +355,11 @@ export function RootNavigator() {
           name="Register"
           component={RegisterScreen}
           options={{presentation: 'modal', animation: 'slide_from_bottom'}}
+        />
+        <RootStack.Screen
+          name="BiometricGate"
+          component={BiometricGateScreen}
+          options={{gestureEnabled: false, animation: 'fade'}}
         />
       </RootStack.Navigator>
     </NavigationContainer>
