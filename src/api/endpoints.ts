@@ -17,6 +17,30 @@ import type {
 
 /* ── عام: المتاجر والمنتجات ─────────────────────────────── */
 
+/**
+ * v2.3: إعدادات السوق العامة (لا تتطلب جلسة) — يقرأ منها التطبيق:
+ *  • forgotPassword: هل يظهر زر «نسيت كلمة المرور؟» في شاشة الدخول
+ *    (يتحكم به المالك من لوحة الإدارة؛ مغيّر افتراضياً).
+ *  • contactPhone: رقم تواصل الإدارة (يظهر عند تعطيل الاستعادة:
+ *    «تواصل مع الإدارة لاستعادة حسابك»).
+ */
+export interface MarketConfig {
+  forgotPassword: boolean;
+  contactPhone: string | null;
+}
+
+export async function getMarketConfig(): Promise<MarketConfig> {
+  const res = await apiRequest<{
+    ok: true;
+    forgotPassword: boolean;
+    contactPhone: string | null;
+  }>('/api/market/config');
+  return {
+    forgotPassword: res.forgotPassword === true,
+    contactPhone: res.contactPhone ?? null,
+  };
+}
+
 export interface StoresQuery {
   /** v2.0 (خادم 4.4): متاجر تخدم هذه المنطقة فقط (مرتبة برسم
    *  التوصيل لها تصاعدياً) مع deliveryFeeMinor لكل متجر. */
@@ -274,13 +298,35 @@ export async function setPassword(token: string, input: {
   });
 }
 
-/** استعادة كلمة المرور: رقم الهوية + الجوال المسجل. */
-export async function resetPassword(input: {
+/* ── v2.3: استعادة كلمة المرور برمز SMS (تحت إدارة المالك) ────
+ * ─────────────────────────────────────────────────────────────────
+ * الاستعادة القديمة (هوية + هاتف ⇒ تغيير فوري) كانت ثغرة: أي شخص
+ * يعرف رقم هوية الضحية وجوالها يسرق الحساب. البديل المُدار:
+ *  1) getMarketConfig يقرر التطبيق أولاً إن كان الزر يظهر أصلاً.
+ *  2) عند التفعيل: طلب رمز → يصل SMS للجوال المسجل فقط.
+ *  3) الرمز + كلمة المرور الجديدة → التحقق ثم التغيير وإبطال
+ *     كل الجلسات. لا دخول تلقائي بعدها — يسجل الدخول بكلمته
+ *     الجديدة (تحقق خطوة ثانية فعلية). */
+
+/** الخطوة 1: طلب رمز التحقق للجوال المسجل في الحساب. */
+export async function forgotRequestCode(input: {
   idNumber: string;
   phone: string;
+}): Promise<{ok: true; expiresInSeconds: number}> {
+  return apiRequest<{ok: true; expiresInSeconds: number}>(
+    '/api/market/auth/forgot/request',
+    {method: 'POST', body: input},
+  );
+}
+
+/** الخطوة 2: التحقق بالرمز وتعيين كلمة المرور الجديدة. */
+export async function forgotVerifyAndSetPassword(input: {
+  idNumber: string;
+  phone: string;
+  code: string;
   newPassword: string;
-}): Promise<AuthResponse> {
-  return apiRequest<AuthResponse>('/api/market/auth/reset', {
+}): Promise<{ok: true}> {
+  return apiRequest<{ok: true}>('/api/market/auth/forgot/verify', {
     method: 'POST',
     body: input,
   });

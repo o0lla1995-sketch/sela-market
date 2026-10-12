@@ -40,8 +40,11 @@ interface AuthState {
   legacyLogin: (idNumber: string, phone: string) => Promise<LoginOutcome>;
   /** تعيين كلمة المرور بعد الترحيل أو تغييرها من الإعدادات. */
   setPassword: (password: string, currentPassword?: string) => Promise<boolean>;
-  /** استعادة عند النسيان — تُبطِل كل الجلسات وتعيد جلسة جديدة. */
-  resetPassword: (idNumber: string, phone: string, newPassword: string)
+  /** v2.3: استعادة برمز SMS — طلب الرمز للجوال المسجل. */
+  forgotRequestCode: (idNumber: string, phone: string)
+    => Promise<{ok: true; expiresInSeconds: number} | {ok: false; error: string}>;
+  /** v2.3: التحقق بالرمز وتعيين الكلمة الجديدة (لا دخول تلقائي). */
+  forgotVerify: (idNumber: string, phone: string, code: string, newPassword: string)
     => Promise<boolean>;
   logout: () => void;
   deleteAccount: () => Promise<boolean>;
@@ -136,15 +139,23 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
   },
 
-  resetPassword: async (idNumber, phone, newPassword) => {
+  forgotRequestCode: async (idNumber, phone) => {
+    try {
+      const res = await api.forgotRequestCode({idNumber, phone});
+      return {ok: true, expiresInSeconds: res.expiresInSeconds};
+    } catch (e) {
+      return {ok: false, error: errorMessage(e, 'تعذر إرسال رمز التحقق')};
+    }
+  },
+
+  forgotVerify: async (idNumber, phone, code, newPassword) => {
     set({busy: true, error: null});
     try {
-      const res = await api.resetPassword({idNumber, phone, newPassword});
-      saveSession({token: res.token, user: res.user});
-      set({token: res.token, user: res.user, busy: false});
+      await api.forgotVerifyAndSetPassword({idNumber, phone, code, newPassword});
+      set({busy: false});
       return true;
     } catch (e) {
-      set({busy: false, error: errorMessage(e, 'تعذر استعادة كلمة المرور')});
+      set({busy: false, error: errorMessage(e, 'تعذر تعيين كلمة المرور الجديدة')});
       return false;
     }
   },

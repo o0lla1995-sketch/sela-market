@@ -5,7 +5,7 @@
  * «الدخول بالبصمة» من الإعدادات. بصمة واحدة تفتح التطبيق على جلسة
  * المستخدم — أو «استخدام كلمة المرور» يسقط إلى شاشة الدخول.
  */
-import React, {useCallback, useEffect, useState} from 'react';
+import React, {useCallback, useEffect, useRef, useState} from 'react';
 import {Pressable, StyleSheet, Text, View} from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
@@ -48,6 +48,24 @@ export function BiometricGateScreen({navigation}: Props) {
     }
   }, [busy, navigation, toast]);
 
+  /* v2.3: فتح تلقائي — نافذة البصمة تظهر فور فتح التطبيق بلا أي
+   * ضغط (طلب المستخدم الصريح: «لا تظهر مباشرة عند فتح التطبيق
+   * وهذا مزعج»). تأخير 450ms حتى تكتمل حركة الانتقال — نظام
+   * أندرويد يلغي نافذة البصمة إن أُطلقت أثناء الانتقال. */
+  const autoFired = useRef(false);
+  useEffect(() => {
+    if (autoFired.current) {
+      return;
+    }
+    autoFired.current = true;
+    const timer = setTimeout(() => {
+      void run();
+    }, 450);
+    return () => clearTimeout(timer);
+    // المرجع يمنع الإطلاق المزدوج؛ نعتمد أول نسخة من run فقط.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
     <SafeAreaView style={[gateStyles.wrap, {backgroundColor: palette.bg}]}>
       <View style={[gateStyles.card, {backgroundColor: palette.surface, borderColor: palette.line}]}>
@@ -67,7 +85,7 @@ export function BiometricGateScreen({navigation}: Props) {
           </Text>
         ) : null}
         <Button
-          label={busy ? 'جارٍ الفتح…' : 'فتح بالبصمة الآن'}
+          label={busy ? 'جارٍ الفتح…' : 'إعادة المحاولة بالبصمة'}
           icon="shield"
           onPress={run}
           disabled={busy}

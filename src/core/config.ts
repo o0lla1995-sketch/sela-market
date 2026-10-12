@@ -4,16 +4,26 @@
 import {MMKV} from 'react-native-mmkv';
 
 /** إصدار التطبيق المعروض للمستخدم (يجب أن يطابق versionName في Gradle). */
-export const APP_VERSION = '2.2.0';
-export const APP_BUILD_CODE = 6;
+export const APP_VERSION = '2.3.0';
+export const APP_BUILD_CODE = 7;
 export const APP_VERSION_LABEL = `${APP_VERSION} (${APP_BUILD_CODE})`;
 
 /**
- * الرابط الافتراضي لخادم سيلا — نفس خادم التراخيص ومنصة المتجر
- * (نشر Coolify واحد) الذي يتصل به تطبيق نقطة البيع بنجاح.
+ * v2.3 — أولوية HTTPS ثم احتياط HTTP (الإصلاح الجذري لاختفاء المنتجات):
+ * خمس جولات تجربة أثبتت أن بروكسيات مزودي الجوال في غزة تخزّن وتخرّب
+ * HTTP الصريح (304 بجسم فارغ ثم ردود مشوهة) — والتشفير وحده يمنعها
+ * نهائياً. الرسمي المعمّى أولاً، والاحتياطي الصريح يُستخدم فقط إن
+ * فشل الأول شبكياً (خادمه منزوع مؤقتاً مثلاً) ثم يعود تلقائياً.
  */
-export const DEFAULT_SERVER_URL =
+export const PRIMARY_SERVER_URL = 'https://market.pornxvideo.com';
+export const FALLBACK_SERVER_URL =
   'http://8jz9a3yyhn3eltmwqgnchn29.130.61.171.201.sslip.io';
+
+/** التوافقية مع ما سبق — الرسمي. */
+export const DEFAULT_SERVER_URL = PRIMARY_SERVER_URL;
+
+/** مفتاح MMKV لتذكر آخر نقطة ناجحة (sticky). */
+export const ENDPOINT_KEY = 'api:endpoint';
 
 /** مهلة كل نداء API قبل الإلغاء (ملي ثانية). */
 export const API_TIMEOUT_MS = 20000;

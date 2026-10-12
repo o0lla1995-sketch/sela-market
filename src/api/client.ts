@@ -1,31 +1,34 @@
 /**
  * client.ts — عميل HTTP لمنصة سيلا ماركت.
  * ─────────────────────────────────────────────────────────────────
- * • العنوان الأساسي: خادم سيلا الرسمي (نفس نشر Coolify الخاص
- *   بالتراخيص — تم التحقق من عمله من تطبيق نقطة البيع).
+ * • v2.3 — الإصلاح الجذري لاختفاء المنتجات (الجولة السادسة):
+ *   تشخيص خمس جولات سابقة عالج كلٌّ منها عرضاً (304 ثم ردود 200 مشوهة
+ *   على شبكة المستخدم) بينما السبب الفعلي واحد: التطبيق كان يتخاطب
+ *   مع الخادم عبر HTTP صريح، وبعض بروكسيات مزودي الجوال في غزة
+ *   تعترض النص الصريح وتخزّنه وتخرّبه — والتشفير (HTTPS) هو العلاج
+ *   الوحيد الذي يستحيل على أي وسيط عبثه.
+ *   البنية الجديدة:
+ *   1) نقطة رسمية معمّاة: https://market.pornxvideo.com (أساسية).
+ *   2) نقطة احتياطية صريحة (نشر sslip.io) تُستخدم تلقائياً فقط عند
+ *      فشل الأساسية فشلاً شبكياً، مع عودة تلقائية للأساسية.
+ *   3) sticky: آخر نقطة ناجحة تُستخدم أولاً في الجلسة نفسها لتقليل
+ *      زمن أول نداء، مع تجربة الأخرى فور أول فشل.
  * • رمز الجلسة في ترويسة x-market-token (نفس ترويسة الخادم).
  * • مهلة 20 ثانية عبر AbortController + رسالة عربية واضحة عند الفشل.
- * • Accept-Encoding: identity على كل النداءات — بوابة Coolify تضغط
- *   الردود الأكبر من كيلوبايت واحد (gzip) وبعض شبكات الجوال العربية
- *   تُفسد الردود المضغوطة على HTTP غير المعمّى فيصل المتاجر الصغيرة
- *   (بلا ضغط) وتفشل قوائم المنتجات (مضغوطة) — طلب بلا ضغط يلغي
- *   المشكلة من جذورها، والحمولات أصلاً صغيرة.
- * • v2.2 — مقاومة سلسلة 304 (السبب الجذري لاختفاء المنتجات):
- *   بعض بروكسيات مزودي الجوال على HTTP الصريح تخزن الرد ثم تحوّل
- *   الطلبات التالية لشرطية وتمرر 304 بجسم فارغ للتطبيق بدل دمجه.
- *   العلاج ثلاث طبقات:
- *   1) ترويسات طلب Cache-Control: no-cache, no-store + Pragma: no-cache
- *      — تمنع أي كاش في المسار من خدمة/تحويل الطلب شرطياً.
- *   2) عند وصول 304 رغم ذلك: إعادة فورية برابط فريد (كسر الكاش —
- *      _=millis) يجبر أي وسيط على جلب الرد الكامل من الأصل.
- *   3) الخادم منذ 4.7 لا يرسل ETag أصلاً — لا يمكن للوسيط إعادة التحقق.
- * • إعادة محاولة تلقائية (حتى 3 محاولات بتباعد متصاعد) للأخطاء
- *   الشبكية على القراءات (تلتقط عتبة الاتصال البارد الأولى بعد
- *   فتح التطبيق وضعف الشبكة اللحظي).
+ * • Accept-Encoding: identity — بعض شبكات الجوال تفسد الردود المضغوطة.
+ * • إعادة محاولة تلقائية (حتى 3 محاولات بتباعد متصاعد + تبديل نقطة
+ *   النهاية بين المحاولات) لأخطاء الشبكة على القراءات.
+ * • 304 من وسيط مكسور: إعادة فورية برابط فريد (كسر الكاش).
  * • أخطاء الخادم {ok:false, error:CODE} تُحوّل إلى ApiError برسالة
- *   عربية جاهزة للعرض مع الاحتفاظ بالرمز والحقول الإضافية (regions…).
+ *   عربية جاهزة للعرض مع الاحتفاظ بالرمز والحقول الإضافية.
  */
-import {API_TIMEOUT_MS, DEFAULT_SERVER_URL} from '../core/config';
+import {
+  API_TIMEOUT_MS,
+  ENDPOINT_KEY,
+  FALLBACK_SERVER_URL,
+  PRIMARY_SERVER_URL,
+  storage,
+} from '../core/config';
 
 export class ApiError extends Error {
   constructor(
@@ -39,9 +42,19 @@ export class ApiError extends Error {
   }
 }
 
-/** رسائل أخطاء الخادم بلغة المستخدم. */
+/** رسائل أخطاء إضافية لتدفق الاستعادة بالرمز (v2.3). */
 export function apiErrorText(code: string): string {
   switch (code) {
+    case 'FORGOT_DISABLED':
+      return 'استعادة كلمة المرور معطّلة — تواصل مع الإدارة';
+    case 'SMS_NOT_CONFIGURED':
+      return 'خدمة الرسائل غير مهيأة على الخادم — تواصل مع الإدارة';
+    case 'SMS_SEND_FAILED':
+      return 'تعذر إرسال رمز التحقق — حاول بعد قليل';
+    case 'BAD_CODE':
+      return 'رمز التحقق غير صحيح أو منتهي — اطلب رمزاً جديداً';
+    case 'TOO_MANY_CODES':
+      return 'طلبت رموزاً كثيرة — انتظر ساعة ثم أعد المحاولة';
     case 'BAD_ID_NUMBER':
       return 'رقم الهوية يجب أن يكون 9 أرقام';
     case 'BAD_NAME':
@@ -93,8 +106,40 @@ export function apiErrorText(code: string): string {
   }
 }
 
+/* ── v2.3: إدارة نقاط النهاية (أساسية HTTPS + احتياطية + sticky) ── */
+
+const ENDPOINTS = [PRIMARY_SERVER_URL, FALLBACK_SERVER_URL] as const;
+
+function normalizeUrl(url: string): string {
+  return url.replace(/\/+$/, '');
+}
+
+/** يقرأ آخر نقطة ناجحة (sticky) — تُفضَّل في الجلسة الحالية. */
+function loadPreferredIndex(): number {
+  try {
+    const saved = storage.getString(ENDPOINT_KEY);
+    if (saved != null) {
+      const idx = Number(saved);
+      if (idx >= 0 && idx < ENDPOINTS.length) {
+        return idx;
+      }
+    }
+  } catch {
+    /* تجاهل */
+  }
+  return 0;
+}
+
+function savePreferredIndex(idx: number): void {
+  try {
+    storage.set(ENDPOINT_KEY, String(idx));
+  } catch {
+    /* تجاهل */
+  }
+}
+
 export function currentBaseUrl(): string {
-  return DEFAULT_SERVER_URL.replace(/\/+$/, '');
+  return normalizeUrl(ENDPOINTS[loadPreferredIndex()]);
 }
 
 /** يحوّل مساراً نسبياً (صورة/رابط من الخادم) إلى رابط مطلق. */
@@ -121,11 +166,13 @@ interface RequestOptions {
 async function requestOnce<T>(
   path: string,
   options: RequestOptions,
+  endpointIndex: number,
   cacheBust = false,
 ): Promise<T> {
   const {method = 'GET', body, token, timeoutMs = API_TIMEOUT_MS} = options;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const base = normalizeUrl(ENDPOINTS[endpointIndex]);
   // كسر الكاش عند أي وسيط: رابط فريد لكل محاولة تعافٍ من 304 —
   // البروكسي لا يملك نسخة مخزنة لهذا الرابط أصلاً فيضطر لسؤال الأصل.
   const bust = cacheBust
@@ -133,7 +180,7 @@ async function requestOnce<T>(
     : '';
   let response: Response;
   try {
-    response = await fetch(`${currentBaseUrl()}${path}${bust}`, {
+    response = await fetch(`${base}${path}${bust}`, {
       method,
       headers: {
         'Content-Type': 'application/json',
@@ -163,7 +210,7 @@ async function requestOnce<T>(
   // إن تكرر فالخلل أعمق من الكاش ونخبر المستخدم بوضوح.
   if (response.status === 304) {
     if (!cacheBust) {
-      return requestOnce<T>(path, options, true);
+      return requestOnce<T>(path, options, endpointIndex, true);
     }
     throw new ApiError(
       'الشبكة تعيد ردوداً مكسورة (304) — جرّب تبديل الاتصال واي فاي/بيانات',
@@ -188,21 +235,28 @@ async function requestOnce<T>(
       data as Record<string, unknown>,
     );
   }
+  // نجاح عبر هذه النقطة — تثبيتها sticky للنداءات التالية.
+  savePreferredIndex(endpointIndex);
   return data as T;
 }
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const retryOnNetwork = options.retryOnNetwork ?? options.method !== 'POST';
-  const attempts = retryOnNetwork ? 3 : 1;
+  // المحاولات: sticky أولاً، ثم النقطة الأخرى، ثم sticky مجدداً بعد
+  // تباعد — يمتص فشل نقطة كاملة (نطاق محجوب مؤقتاً) وضعف الشبكة
+  // اللحظي وعتبة الاتصال البارد الأولى بعد فتح التطبيق.
+  const preferred = loadPreferredIndex();
+  const other = preferred === 0 ? 1 : 0;
+  const order = retryOnNetwork ? [preferred, other, preferred] : [preferred];
   let lastError: unknown;
-  for (let attempt = 0; attempt < attempts; attempt++) {
+  for (let attempt = 0; attempt < order.length; attempt++) {
     try {
-      return await requestOnce<T>(path, options);
+      return await requestOnce<T>(path, options, order[attempt]);
     } catch (e) {
       lastError = e;
       const retriable =
         e instanceof ApiError && (e.code === 'NETWORK' || e.code === 'TIMEOUT');
-      if (!retriable || attempt === attempts - 1) {
+      if (!retriable || attempt === order.length - 1) {
         throw e;
       }
       // تباعد متصاعد: 800ms ثم 2000ms — يمتص ضعف الشبكة اللحظي

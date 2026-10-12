@@ -4,9 +4,13 @@
  * السلة/طلباتي/حسابي) + شاشتا الدخول والتسجيل كنوافذ منبثقة من أي
  * مكان (بوابة إتمام الطلب للزوار).
  */
-import React from 'react';
-import {I18nManager, StyleSheet, View} from 'react-native';
-import {NavigationContainer, useNavigation} from '@react-navigation/native';
+import React, {useEffect} from 'react';
+import {AppState, I18nManager, StyleSheet, View} from 'react-native';
+import {
+  NavigationContainer,
+  useNavigation,
+  useNavigationContainerRef,
+} from '@react-navigation/native';
 import {createNativeStackNavigator} from '@react-navigation/native-stack';
 import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
 import type {NavigatorScreenParams} from '@react-navigation/native';
@@ -332,8 +336,41 @@ export function RootNavigator() {
       ? 'BiometricGate'
       : 'Main';
 
+  const navigationRef = useNavigationContainerRef();
+
+  /* v2.3: إعادة القفل بالبصمة عند كل عودة من الخلفية — أندرويد
+   * يبقي عملية التطبيق حية فلا يُعاد تقييم initialRouteName عند
+   * إعادة الفتح من المشغّل، فكانت البصمة لا تظهر «إلا بعد قتل
+   * التطبيق». الآن: دخول الخلفية ثم العودة ⇒ بوابة البصمة مجدداً
+   * (إن كانت الجلسة قائمة والخيار مفعلاً). القفل يُطبّق فقط بعد
+   * تواجد فعلي في الخلفية — لا عند ومضات انتقالية. */
+  useEffect(() => {
+    let wentBackground = false;
+    const sub = AppState.addEventListener('change', state => {
+      if (state === 'background') {
+        wentBackground = true;
+      } else if (state === 'active' && wentBackground) {
+        wentBackground = false;
+        const s = useSettingsStore.getState();
+        const token = useAuthStore.getState().token;
+        if (s.onboarded && s.biometricLoginEnabled && token != null) {
+          const root = navigationRef.current?.getRootState();
+          const topRoute = root?.routes[root.routes.length - 1]?.name;
+          if (topRoute !== 'BiometricGate') {
+            navigationRef.current?.reset({
+              index: 0,
+              routes: [{name: 'BiometricGate'}],
+            });
+          }
+        }
+      }
+    });
+    return () => sub.remove();
+  }, [navigationRef]);
+
   return (
     <NavigationContainer
+      ref={navigationRef}
       theme={{
         dark: palette.isDark,
         colors: {
