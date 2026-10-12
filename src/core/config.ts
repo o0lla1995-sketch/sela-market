@@ -4,8 +4,8 @@
 import {MMKV} from 'react-native-mmkv';
 
 /** إصدار التطبيق المعروض للمستخدم (يجب أن يطابق versionName في Gradle). */
-export const APP_VERSION = '2.3.0';
-export const APP_BUILD_CODE = 7;
+export const APP_VERSION = '2.4.0';
+export const APP_BUILD_CODE = 8;
 export const APP_VERSION_LABEL = `${APP_VERSION} (${APP_BUILD_CODE})`;
 
 /**
@@ -25,8 +25,10 @@ export const DEFAULT_SERVER_URL = PRIMARY_SERVER_URL;
 /** مفتاح MMKV لتذكر آخر نقطة ناجحة (sticky). */
 export const ENDPOINT_KEY = 'api:endpoint';
 
-/** مهلة كل نداء API قبل الإلغاء (ملي ثانية). */
-export const API_TIMEOUT_MS = 20000;
+/** مهلة كل نداء API قبل الإلغاء (ملي ثانية) — v2.4: خُفّضت من 20 إلى 12
+ * ثانية: الفشل يظهر للمستخدم خلال ثوانٍ مع إعادة محاولة فورية على
+ * النقطة الأخرى بدل انتظار طويل بلا فائدة على شبكة متعثرة. */
+export const API_TIMEOUT_MS = 12000;
 
 /** حجم صفحة المنتجات الافتراضي. */
 export const PRODUCTS_PAGE_SIZE = 12;

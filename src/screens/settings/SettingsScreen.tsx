@@ -321,6 +321,12 @@ export function SettingsScreen({navigation}: Props) {
               onPress={() => navigation.navigate('About')}
             />
             <LinkRow
+              icon="refresh"
+              label="تشخيص الشبكة"
+              description="اعرض كل طلبات التطبيق وافحص تحميل المنتجات"
+              onPress={() => navigation.navigate('NetworkDiagnostics')}
+            />
+            <LinkRow
               icon="shield"
               label="سياسة الخصوصية"
               description="ما نجمعه (لا شيء تقريباً) وكيف نحميه"

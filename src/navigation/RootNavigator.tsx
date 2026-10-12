@@ -51,6 +51,7 @@ import {SettingsScreen} from '../screens/settings/SettingsScreen';
 import {AboutScreen} from '../screens/settings/AboutScreen';
 import {PrivacyScreen} from '../screens/settings/PrivacyScreen';
 import {TermsScreen} from '../screens/settings/TermsScreen';
+import {NetworkDiagnosticsScreen} from '../screens/settings/NetworkDiagnosticsScreen';
 
 /* ─── الأنواع ─── */
 
@@ -67,6 +68,7 @@ export type ShopStackParamList = {
   About: undefined;
   Privacy: undefined;
   Terms: undefined;
+  NetworkDiagnostics: undefined;
   AddressBook: undefined;
   AddressForm: {address?: Address} | undefined;
 };
@@ -92,6 +94,7 @@ export type AccountStackParamList = {
   About: undefined;
   Privacy: undefined;
   Terms: undefined;
+  NetworkDiagnostics: undefined;
   Store: {storeId: number; storeName?: string};
   Product: {product: Product; storeRef: StoreRef; storeName?: string};
   AddressBook: undefined;
@@ -148,6 +151,7 @@ function ShopStackScreens({initial = 'Home'}: {initial?: 'Home' | 'Stores'}) {
       <ShopStack.Screen name="About" component={AboutScreen} />
       <ShopStack.Screen name="Privacy" component={PrivacyScreen} />
       <ShopStack.Screen name="Terms" component={TermsScreen} />
+      <ShopStack.Screen name="NetworkDiagnostics" component={NetworkDiagnosticsScreen} />
       <ShopStack.Screen name="AddressBook" component={AddressBookScreen} />
       <ShopStack.Screen name="AddressForm" component={AddressFormScreen} />
     </ShopStack.Navigator>
@@ -189,6 +193,7 @@ function AccountStackScreens() {
       <AccountStack.Screen name="About" component={AboutScreen} />
       <AccountStack.Screen name="Privacy" component={PrivacyScreen} />
       <AccountStack.Screen name="Terms" component={TermsScreen} />
+      <AccountStack.Screen name="NetworkDiagnostics" component={NetworkDiagnosticsScreen} />
       <AccountStack.Screen name="Store" component={StoreScreen} />
       <AccountStack.Screen name="Product" component={ProductScreen} />
       <AccountStack.Screen name="AddressBook" component={AddressBookScreen} />

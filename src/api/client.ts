@@ -1,24 +1,27 @@
 /**
  * client.ts — عميل HTTP لمنصة سيلا ماركت.
  * ─────────────────────────────────────────────────────────────────
- * • v2.3 — الإصلاح الجذري لاختفاء المنتجات (الجولة السادسة):
- *   تشخيص خمس جولات سابقة عالج كلٌّ منها عرضاً (304 ثم ردود 200 مشوهة
- *   على شبكة المستخدم) بينما السبب الفعلي واحد: التطبيق كان يتخاطب
- *   مع الخادم عبر HTTP صريح، وبعض بروكسيات مزودي الجوال في غزة
- *   تعترض النص الصريح وتخزّنه وتخرّبه — والتشفير (HTTPS) هو العلاج
- *   الوحيد الذي يستحيل على أي وسيط عبثه.
- *   البنية الجديدة:
- *   1) نقطة رسمية معمّاة: https://market.pornxvideo.com (أساسية).
- *   2) نقطة احتياطية صريحة (نشر sslip.io) تُستخدم تلقائياً فقط عند
- *      فشل الأساسية فشلاً شبكياً، مع عودة تلقائية للأساسية.
- *   3) sticky: آخر نقطة ناجحة تُستخدم أولاً في الجلسة نفسها لتقليل
- *      زمن أول نداء، مع تجربة الأخرى فور أول فشل.
+ * • v2.4 — الإصلاح الجذري السابع (النهائي) لاختفاء المنتجات:
+ *   القياسات الميدانية عبر سبع جولات أثبتت نمطاً واحداً ثابتاً على
+ *   شبكة الجوال في غزة: كل رد أصغر من ~450 بايت يصل سليماً، وكل رد
+ *   أكبر من ~1KB يُقتل في منتصف الطريق (إطار TCP واحد يعبر، المتعدد
+ *   يُسقط). ترويسة «Accept-Encoding: identity» التي أضيفت قديماً
+ *   لمحاربة بروكسي يفسد الردود المضغوطة على HTTP الصريح أصبحت الآن
+ *   هي المرض نفسه: تمنع ضغط gzip فتتضخم ردود المنتجات من 413 بايت
+ *   إلى 1182+ بايت — أي من فئة «تعمل» إلى فئة «تُقتل». مع HTTPS لا
+ *   يستطيع أي وسيط رؤية المحتوى أصلاً فضلاً عن إفساده، والضغط أصبح
+ *   آمناً ومطلوباً. OKHttp يضيف gzip ويفكّه تلقائياً عند حذف الترويسة.
+ *   التغييرات:
+ *   1) حذف identity → ضغط تلقائي → كل ردود المنتجات < 450 بايت.
+ *   2) كسر كاش غير مشروط لكل قراءة GET (عداد تصاعدي) — لو رجع
+ *      التطبيق للنقطة الاحتياطية HTTP الصريحة لا يملك بروكسي
+ *      المشغّل نسخة مخزنة لأي رابط أصلاً فيضطر لسؤال الأصل دائماً:
+ *      موت نهائي لسلسلة 304 وردود الكاش المكسورة.
+ *   3) مهلة 12 ثانية + تباعد أقصر — الفشل يظهر خلال ثوانٍ لا دقائق.
  * • رمز الجلسة في ترويسة x-market-token (نفس ترويسة الخادم).
- * • مهلة 20 ثانية عبر AbortController + رسالة عربية واضحة عند الفشل.
- * • Accept-Encoding: identity — بعض شبكات الجوال تفسد الردود المضغوطة.
- * • إعادة محاولة تلقائية (حتى 3 محاولات بتباعد متصاعد + تبديل نقطة
- *   النهاية بين المحاولات) لأخطاء الشبكة على القراءات.
- * • 304 من وسيط مكسور: إعادة فورية برابط فريد (كسر الكاش).
+ * • سجل حي لآخر 200 نداء يغذي شاشة تشخيص الشبكة في الإعدادات —
+ *   يرى المستخدم والمالك بأعينهم كل طلب يخرج من التطبيق وحجمه
+ *   وزمنه وحالته، بلا أدوات التقاط خارجية.
  * • أخطاء الخادم {ok:false, error:CODE} تُحوّل إلى ApiError برسالة
  *   عربية جاهزة للعرض مع الاحتفاظ بالرمز والحقول الإضافية.
  */
@@ -39,6 +42,70 @@ export class ApiError extends Error {
   ) {
     super(message);
     this.name = 'ApiError';
+  }
+}
+
+/* ══ v2.4: سجل النداءات الحي — شاشة التشخيص ══════════════════
+ * يسجَّل كل نداء يخرج من التطبيق (المسار، النقطة، الحالة، الحجم،
+ * الزمن) في حلقة آخر 200 نداء. الهدف: إن عادت أي مشكلة شبكة
+ * يفتح المستخدم «تشخيص الشبكة» من الإعدادات ويرى الحقيقة كاملة
+ * بعينه — أي طلب خرج، أي رد وصل، وبأي حجم — بلا برامج التقاط. */
+
+export interface ApiCallRecord {
+  at: number;
+  method: 'GET' | 'POST';
+  path: string;
+  /** 0 = لم يصل رد (شبكة) */
+  status: number;
+  /** حجم جسم الرد بالبايت (بعد فك الضغط حيث ينطبق). */
+  bytes: number;
+  ms: number;
+  /** أساسية HTTPS أم احتياطية؟ */
+  endpoint: 'primary' | 'fallback';
+  ok: boolean;
+  /** رمز الخطأ إن فشل. */
+  code?: string;
+}
+
+const CALL_LOG_MAX = 200;
+const callLog: ApiCallRecord[] = [];
+const callLogListeners = new Set<() => void>();
+
+function logCall(record: ApiCallRecord): void {
+  callLog.push(record);
+  if (callLog.length > CALL_LOG_MAX) {
+    callLog.splice(0, callLog.length - CALL_LOG_MAX);
+  }
+  for (const l of callLogListeners) {
+    try {
+      l();
+    } catch {
+      /* تجاهل */
+    }
+  }
+}
+
+/** لقطة السجل (الأحدث أخيراً). */
+export function getCallLog(): readonly ApiCallRecord[] {
+  return callLog;
+}
+
+/** الاشتراك في تحديثات السجل (لشاشة التشخيص). */
+export function subscribeCallLog(listener: () => void): () => void {
+  callLogListeners.add(listener);
+  return () => {
+    callLogListeners.delete(listener);
+  };
+}
+
+function clearCallLog(): void {
+  callLog.splice(0, callLog.length);
+  for (const l of callLogListeners) {
+    try {
+      l();
+    } catch {
+      /* تجاهل */
+    }
   }
 }
 
@@ -106,7 +173,7 @@ export function apiErrorText(code: string): string {
   }
 }
 
-/* ── v2.3: إدارة نقاط النهاية (أساسية HTTPS + احتياطية + sticky) ── */
+/* ── إدارة نقاط النهاية (أساسية HTTPS + احتياطية + sticky) ── */
 
 const ENDPOINTS = [PRIMARY_SERVER_URL, FALLBACK_SERVER_URL] as const;
 
@@ -158,37 +225,49 @@ interface RequestOptions {
   body?: unknown;
   token?: string | null;
   timeoutMs?: number;
-  /** إعادة المحاولة مرة واحدة على أخطاء الشبكة — افتراضياً نعم
+  /** إعادة المحاولة على أخطاء الشبكة — افتراضياً نعم
    *  للقراءات فقط (كتابات مثل إنشاء الطلب لا تُعاد تلقائياً). */
   retryOnNetwork?: boolean;
 }
+
+/* v2.4: عدّاد كسر الكاش — كل قراءة GET تحمل `_c=` فريداً متصاعداً.
+ * أي وسيط على الطريق (بروكسي مشغّل على HTTP الصريح) لن يجد أبداً
+ * نسخة مخزنة لنفس الرابط: كل طلب رابط جديد لم يُر من قبل، فلا كاش
+ * ولا 304 ولا ردود مكسورة من نسخة قديمة. يبدأ من قيمة عشوائية كي
+ * لا تتطابق العدادات بين الأجهزة بعد إعادة التشغيل. */
+let cacheBustCounter =
+  Date.now() % 1000000 + Math.floor(Math.random() * 1000);
 
 async function requestOnce<T>(
   path: string,
   options: RequestOptions,
   endpointIndex: number,
-  cacheBust = false,
 ): Promise<T> {
-  const {method = 'GET', body, token, timeoutMs = API_TIMEOUT_MS} = options;
+  const {
+    method = 'GET',
+    body,
+    token,
+    timeoutMs = API_TIMEOUT_MS,
+  } = options;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   const base = normalizeUrl(ENDPOINTS[endpointIndex]);
-  // كسر الكاش عند أي وسيط: رابط فريد لكل محاولة تعافٍ من 304 —
-  // البروكسي لا يملك نسخة مخزنة لهذا الرابط أصلاً فيضطر لسؤال الأصل.
-  const bust = cacheBust
-    ? `${path.includes('?') ? '&' : '?'}_=${Date.now()}`
+  // كسر كاش غير مشروط لكل قراءة — انظر التعليق على العدّاد أعلاه.
+  const bust = method === 'GET'
+    ? `${path.includes('?') ? '&' : '?'}_c=${cacheBustCounter++}`
     : '';
+  const startedAt = Date.now();
   let response: Response;
   try {
     response = await fetch(`${base}${path}${bust}`, {
       method,
       headers: {
         'Content-Type': 'application/json',
-        // بلا ضغط: يمنع بوابة Coolify من gzip الردود الكبيرة التي
-        // تفسدها بعض شبكات الجوال على HTTP الصريح.
-        'Accept-Encoding': 'identity',
-        // v2.2: لا كاش عند أي وسيط — لا يخزن الرد ولا يحوّل الطلب
-        // لشرطي (إعادة تحقق 304) مهما كانت بروكسيات الشبكة.
+        // v2.4: لا نرسل Accept-Encoding إطلاقاً — OKHttp يضيف gzip
+        // تلقائياً ويفكّه بشفافية. ردود المنتجات تنكمش من ~1182 بايت
+        // إلى ~413 بايت: فئة «إطار واحد يعبر شبكات الجوال» المثبتة
+        // ميدانياً. الإرسال اليدوي لidentity كان يضخّم الردود ثلاثة
+        // أضعاف فتقتلها الشبكة في منتصف الطريق.
         'Cache-Control': 'no-cache, no-store',
         Pragma: 'no-cache',
         ...(token ? {'x-market-token': token} : {}),
@@ -198,20 +277,59 @@ async function requestOnce<T>(
     });
   } catch (e) {
     clearTimeout(timer);
-    if ((e as {name?: string} | null)?.name === 'AbortError') {
-      throw new ApiError('استغرق الطلب وقتاً أطول من اللازم — حاول مجدداً', 'TIMEOUT', 0);
-    }
-    throw new ApiError('تعذر الاتصال — تحقق من اتصال الإنترنت', 'NETWORK', 0);
+    const code = (e as {name?: string} | null)?.name === 'AbortError'
+      ? 'TIMEOUT'
+      : 'NETWORK';
+    const message =
+      code === 'TIMEOUT'
+        ? 'استغرق الطلب وقتاً أطول من اللازم — حاول مجدداً'
+        : 'تعذر الاتصال — تحقق من اتصال الإنترنت';
+    logCall({
+      at: startedAt,
+      method,
+      path,
+      status: 0,
+      bytes: 0,
+      ms: Date.now() - startedAt,
+      endpoint: endpointIndex === 0 ? 'primary' : 'fallback',
+      ok: false,
+      code,
+    });
+    throw new ApiError(message, code, 0);
   }
   clearTimeout(timer);
 
-  // v2.2: 304 من وسيط مكسور (طلبنا لم يكن شرطياً أصلاً) — جسم فارغ
-  // لا يُحلّل. نعيد فوراً برابط فريد يجبر الرد الكامل من الأصل؛
-  // إن تكرر فالخلل أعمق من الكاش ونخبر المستخدم بوضوح.
+  let data: Record<string, unknown> = {};
+  let bodyBytes = 0;
+  try {
+    const text = await response.text();
+    bodyBytes = text.length;
+    data = JSON.parse(text) as Record<string, unknown>;
+  } catch {
+    /* رد بلا JSON (خادم بوابة/خطأ شبكة) */
+  }
+
+  const ok = response.ok && data.ok === true;
+  const errCode = !ok
+    ? typeof data.error === 'string'
+      ? data.error
+      : 'SERVER_ERROR'
+    : undefined;
+  logCall({
+    at: startedAt,
+    method,
+    path,
+    status: response.status,
+    bytes: bodyBytes,
+    ms: Date.now() - startedAt,
+    endpoint: endpointIndex === 0 ? 'primary' : 'fallback',
+    ok,
+    code: errCode,
+  });
+
+  // v2.2→v2.4: 304 لم يعد ممكناً أصلاً (روابط فريدة + no-store)،
+  // لكن إن تسلل من وسيط غريب نرمي خطأ واضحاً بدل تحليل جسم فارغ.
   if (response.status === 304) {
-    if (!cacheBust) {
-      return requestOnce<T>(path, options, endpointIndex, true);
-    }
     throw new ApiError(
       'الشبكة تعيد ردوداً مكسورة (304) — جرّب تبديل الاتصال واي فاي/بيانات',
       'BAD_GATEWAY_304',
@@ -219,18 +337,10 @@ async function requestOnce<T>(
     );
   }
 
-  let data: Record<string, unknown> = {};
-  try {
-    data = (await response.json()) as Record<string, unknown>;
-  } catch {
-    /* رد بلا JSON (خادم بوابة/خطأ شبكة) */
-  }
-
-  if (!response.ok || data.ok !== true) {
-    const code = typeof data.error === 'string' ? data.error : 'SERVER_ERROR';
+  if (!ok) {
     throw new ApiError(
-      apiErrorText(code),
-      code,
+      apiErrorText(errCode ?? 'SERVER_ERROR'),
+      errCode ?? 'SERVER_ERROR',
       response.status,
       data as Record<string, unknown>,
     );
@@ -240,11 +350,14 @@ async function requestOnce<T>(
   return data as T;
 }
 
-async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+async function request<T>(
+  path: string,
+  options: RequestOptions = {},
+): Promise<T> {
   const retryOnNetwork = options.retryOnNetwork ?? options.method !== 'POST';
-  // المحاولات: sticky أولاً، ثم النقطة الأخرى، ثم sticky مجدداً بعد
-  // تباعد — يمتص فشل نقطة كاملة (نطاق محجوب مؤقتاً) وضعف الشبكة
-  // اللحظي وعتبة الاتصال البارد الأولى بعد فتح التطبيق.
+  // المحاولات: sticky أولاً، ثم النقطة الأخرى، ثم sticky مجدداً —
+  // يمتص فشل نقطة كاملة وضعف الشبكة اللحظي وعتبة الاتصال البارد
+  // الأولى بعد فتح التطبيق.
   const preferred = loadPreferredIndex();
   const other = preferred === 0 ? 1 : 0;
   const order = retryOnNetwork ? [preferred, other, preferred] : [preferred];
@@ -259,12 +372,84 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
       if (!retriable || attempt === order.length - 1) {
         throw e;
       }
-      // تباعد متصاعد: 800ms ثم 2000ms — يمتص ضعف الشبكة اللحظي
-      // وعتبة الاتصال البارد الأولى بعد فتح التطبيق.
-      await new Promise(resolve => setTimeout(resolve, attempt === 0 ? 800 : 2000));
+      // v2.4: تباعد أقصر (400ms ثم 1000ms) — الكشف عن الفشل خلال
+      // ثوانٍ لا دقائق، والمحاولة البديلة فورية كي لا يملّ المستخدم.
+      await new Promise(resolve =>
+        setTimeout(resolve, attempt === 0 ? 400 : 1000),
+      );
     }
   }
   throw lastError;
 }
 
 export const apiRequest = request;
+
+/* ── v2.4: فحص الشبكة الذاتي — شاشة التشخيص ═════════════════
+ * يطلق السلسلة الحرجة كاملة (إعدادات → متاجر → منتجات متجر →
+ * منتجات عابرة) على النقطة الأساسية ثم الاحتياطية ويعيد تقريراً
+ * صريحاً بكل خطوة: الحالة والحجم والزمن. هكذا يرى المستخدم بعينه
+ * أن طلب المنتجات يخرج فعلاً وماذا يحدث له بالضبط على شبكته. */
+
+export interface ProbeStep {
+  label: string;
+  path: string;
+  status: number;
+  bytes: number;
+  ms: number;
+  ok: boolean;
+  detail: string;
+}
+
+export interface ProbeReport {
+  at: number;
+  /** النقطة التي نجحت أخيراً. */
+  endpoint: 'primary' | 'fallback' | null;
+  steps: ProbeStep[];
+}
+
+export async function runNetworkProbe(): Promise<ProbeReport> {
+  clearCallLog();
+  const steps: ProbeStep[] = [];
+  const probes: {label: string; path: string}[] = [
+    {label: 'الإعدادات العامة', path: '/api/market/config'},
+    {label: 'قائمة المتاجر', path: '/api/market/stores'},
+    {label: 'تفاصيل متجر (1)', path: '/api/market/stores/1'},
+    {label: 'منتجات المتجر', path: '/api/market/stores/1/products?per=12'},
+    {label: 'المنتجات العابرة', path: '/api/market/products?per=12'},
+  ];
+  let endpointUsed: ProbeReport['endpoint'] = null;
+  const before = getCallLog().length;
+  for (const p of probes) {
+    const t0 = Date.now();
+    try {
+      const res = await apiRequest<unknown>(p.path);
+      const rec = getCallLog()[getCallLog().length - 1];
+      steps.push({
+        label: p.label,
+        path: p.path,
+        status: rec?.status ?? 200,
+        bytes: rec?.bytes ?? 0,
+        ms: Date.now() - t0,
+        ok: true,
+        detail: 'وصل الرد سليماً',
+      });
+      endpointUsed = rec?.endpoint ?? endpointUsed;
+    } catch (e) {
+      const rec = getCallLog()[getCallLog().length - 1];
+      steps.push({
+        label: p.label,
+        path: p.path,
+        status: rec?.status ?? 0,
+        bytes: rec?.bytes ?? 0,
+        ms: Date.now() - t0,
+        ok: false,
+        detail:
+          e instanceof ApiError
+            ? `${e.code}: ${e.message}`
+            : 'خطأ غير معروف',
+      });
+    }
+  }
+  void before;
+  return {at: Date.now(), endpoint: endpointUsed, steps};
+}
