@@ -5,7 +5,6 @@ import android.app.Activity
 import android.app.KeyguardManager
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.hardware.fingerprint.FingerprintManager
 import android.os.Build
 import com.facebook.react.bridge.ActivityEventListener
@@ -66,11 +65,23 @@ class BiometricModule(reactContext: ReactApplicationContext) :
   @ReactMethod
   fun hasEnrolledFingerprint(promise: Promise) {
     try {
+      // أفضل جهد: بصمة مسجلة فعلاً عبر مدير البصمة (23–27 بلا
+      // اعتماديات، 28+ تحتاج USE_BIOMETIC وقد ترمي بلا وصول —
+      // نحتاط بمحاولة ثانية). الاسم الصحيح للدالة هو
+      // hasEnrolledFingerprints() — isFingerprintEnrolled غير موجودة
+      // أصلاً في android.hardware.fingerprint (سبب فشل بناء v2.1.0).
       val fm = fingerprintManager()
-      val hardware = fm != null &&
-        reactApplicationContext.packageManager
-          .hasSystemFeature(PackageManager.FEATURE_FINGERPRINT)
-      promise.resolve(hardware && fm?.isHardwareDetected == true && fm.isFingerprintEnrolled)
+      val biometric: Boolean = try {
+        @Suppress("DEPRECATION")
+        fm?.hasEnrolledFingerprints() == true
+      } catch (e: Exception) {
+        false
+      }
+      // جهاز عليه قفل آمن (بصمة أو نقشة أو رمز) يمكنه الدخول
+      // مباشرة من شاشة بيانات الاعتماد — البصمة تفتحها فوراً؛
+      // ومن لا بصمة له يستخدم قفله، فالزر يظهر متى أمكن الدخول.
+      val secure = keyguard?.isDeviceSecure == true
+      promise.resolve(biometric || secure)
     } catch (e: Exception) {
       promise.resolve(false)
     }

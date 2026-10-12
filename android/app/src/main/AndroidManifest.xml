@@ -11,6 +11,13 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <!-- إشعارات محلية لتغيّرات حالة الطلب (وقت التشغيل على 13+). -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- الدخول بالبصمة (v2.1): إذن عادي يُمنح تلقائياً عند التثبيت —
+         يلزم لقراءة حالة تسجيل البصمة عبر مدير البصمة على API 28+.
+         المصادقة نفسها شاشة قفل النظام، لا تحتاج أي إذن. -->
+    <uses-permission android:name="android.permission.USE_BIOMETIC" />
+    <!-- أجهزة Android 7–8 القديمة (23–27): إذن البصمة القديم
+         المكافئ — بلا وجوده يرفض مدير البصمة هناك. -->
+    <uses-permission android:name="android.permission.USE_FINGERPRINT" />
 
     <application
       android:name=".MainApplication"

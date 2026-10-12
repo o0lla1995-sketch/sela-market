@@ -62,11 +62,14 @@ class NotificationsModule(reactContext: ReactApplicationContext) :
     }
     nm.createNotificationChannel(orders)
     nm.createNotificationChannel(promos)
-    // v2.1: لون قناة الطلبات من هوية الثيم (برتقالي سيلا) — كان الرمادي
-    // الافتراضي يبدو خارج الهوية على شاشات بعض الأجهزة.
+    // v2.1: لون قناة الطلبات من هوية الثيم (برتقالي سيلا #F97316) —
+    // NotificationChannel لا تملك setColor أصلاً (سبب فشل بناء v2.1.0)؛
+    // لون القناة الوحيد المتاح هنا هو لون LED عبر setLightColor، ولون
+    // رأس الإشعار نفسه يُطبَّق لكل إشعار عبر Notification.Builder.setColor
+    // في show() بالأسفل — وهذا ما يرسم شريط التطبيق واسمه بلون الثيم.
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-      orders.setColor(ContextCompat.getColor(reactApplicationContext, R.color.accent))
       orders.setLightColor(ContextCompat.getColor(reactApplicationContext, R.color.accent))
+      promos.setLightColor(ContextCompat.getColor(reactApplicationContext, R.color.accent))
     }
   }
 
