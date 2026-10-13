@@ -1,15 +1,15 @@
 /**
- * ProductCard.tsx — بطاقة منتج (v1.1 — تصميم الصورة أولاً):
- * صورة المنتج تتصدر البطاقة (WebP خفيفة من الخادم مع بديل مرسوم)،
- * شارات الوحدة/المخزون على الصورة، قلب مفضلة، سعر بارز، وإضافة
- * فورية للسلة مع عدّاد مصغّر — بمعايير بطاقات المتاجر العالمية.
+ * ProductCard.tsx — بطاقة منتج (v2.8 — الجولة 59):
+ * البطاقة للتسوّق والاكتشاف فقط — الطلب يبدأ من صفحة المنتج
+ * (طلب التاجر بالنص: «لا أريد الطلب من زر إضافة في بطاقة المنتج»).
+ * كما أمازون ونون: لمسة البطاقة تفتح صفحة المنتج لاختيار الكمية/
+ * الوزن/المواصفة هناك. شارة «في السلة» تخبر المستخدم بما أضافه.
  */
 import React from 'react';
 import {Image, Pressable, StyleSheet, Text, View} from 'react-native';
 import {useTheme} from '../theme/ThemeProvider';
 import {radius, shadowFor, spacing, type, fonts} from '../theme/tokens';
 import {Icon} from './Icon';
-import {QtyStepper} from './ui';
 import {absoluteUrl} from '../api/client';
 import {formatMoney} from '../core/money';
 import {effectiveMinor, hasDiscount} from '../core/discount';
@@ -46,18 +46,19 @@ export function ProductCard({
   onPress: () => void;
 }) {
   const {palette} = useTheme();
-  const addProduct = useCartStore(s => s.addProduct);
-  const increment = useCartStore(s => s.increment);
-  const decrement = useCartStore(s => s.decrement);
-  const hasOptions = (product.options ?? []).length > 0;
-  const cartLine = useCartStore(
-    s => s.carts[String(storeRef.id)]?.lines.find(l => l.productId === product.id),
+  /* v2.8: لا إضافة سريعة من البطاقة — عدّاد السلة معلوماتي فقط
+   * (شارة «في السلة»)، والطلب كله من صفحة المنتج. */
+  const cartQtyForProduct = useCartStore(
+    s =>
+      (s.carts[String(storeRef.id)]?.lines ?? [])
+        .filter(l => l.productId === product.id)
+        .reduce((sum, l) => sum + l.quantity, 0),
   );
-  const cartQty = cartLine?.quantity ?? 0;
+  const hasOptions = (product.options ?? []).length > 0;
   const wishlisted = useWishlistStore(s => s.items[String(product.id)] != null);
   const toggleWishlist = useWishlistStore(s => s.toggle);
   const toast = useToastStore(s => s.show);
-  /* v2.6: الزائر يتصفح فقط — الإضافة/المفضلة تتطلب دخولاً. */
+  /* v2.6: الزائر يتصفح فقط — المفضلة تتطلب دخولاً. */
   const requireAuth = useRequireAuth();
 
   const soldByWeight = product.sold_by_weight === 1;
@@ -69,22 +70,7 @@ export function ProductCard({
   // v2.1: خصم التاجر — السعر المعروض هو بعد الخصم، والأصلي مشطوب
   const discounted = hasDiscount(product);
   const finalPrice = effectiveMinor(product);
-
-  const onAdd = () => {
-    if (hasOptions) {
-      // منتج بخيارات (مقاس/لون) — لا إضافة عمياء: يُفتح لاختيار
-      // المواصفة في صفحة المنتج.
-      onPress();
-      return;
-    }
-    if (outOfStock) {
-      toast('نفدت الكمية من المتجر حالياً', 'danger');
-      return;
-    }
-    addProduct(storeRef, product);
-    toast(`أُضيف «${product.name}» إلى سلة ${storeRef.name}`, 'success');
-  };
-  const onAddGated = () => requireAuth(onAdd);
+  const inCart = cartQtyForProduct > 0;
 
   return (
     <Pressable
@@ -175,6 +161,16 @@ export function ProductCard({
           </View>
         ) : null}
 
+        {/* شارة «في السلة» — معلوماتية، والتعديل من صفحة المنتج */}
+        {inCart ? (
+          <View style={[styles.cartBadge, {backgroundColor: palette.brand}]}>
+            <Icon name="cart" size={10} color="#FFFFFF" />
+            <Text style={{fontSize: 9.5, color: '#FFFFFF', fontFamily: fonts.bold}}>
+              في السلة
+            </Text>
+          </View>
+        ) : null}
+
         {/* عدّاد الصور */}
         {imageCount > 1 ? (
           <View style={[styles.countChip, {backgroundColor: palette.overlay}]}>
@@ -198,9 +194,9 @@ export function ProductCard({
         ) : null}
       </View>
 
-      {/* السعر + الإضافة/الكمية */}
+      {/* السعر — والإشارة إلى صفحة المنتج للاختيار */}
       <View style={styles.bottomRow}>
-        <View style={{gap: 0, alignItems: 'flex-start'}}>
+        <View style={{gap: 0, alignItems: 'flex-start', flex: 1}}>
           {discounted ? (
             <>
               <Text
@@ -219,39 +215,20 @@ export function ProductCard({
               {formatMoney(product.price_minor)}
             </Text>
           )}
-          {cartLine?.variant != null ? (
-            <Text style={{fontSize: 9.5, color: palette.muted}} numberOfLines={1}>
-              {cartLine.variant}
-            </Text>
-          ) : null}
         </View>
-        {cartQty > 0 && !hasOptions ? (
-          <QtyStepper
-            qty={cartQty}
-            soldByWeight={soldByWeight}
-            compact
-            onIncrease={() => cartLine && increment(storeRef.id, cartLine.key)}
-            onDecrease={() => cartLine && decrement(storeRef.id, cartLine.key)}
-          />
-        ) : (
-          <Pressable
-            onPress={onAddGated}
-            disabled={outOfStock}
-            style={({pressed}) => [
-              styles.addBtn,
-              {
-                backgroundColor: outOfStock ? palette.line : palette.brand,
-                opacity: pressed ? 0.85 : 1,
-              },
-            ]}>
-            <Icon
-              name={hasOptions ? 'sliders' : 'plus'}
-              size={hasOptions ? 15 : 17}
-              color="#FFFFFF"
-              strokeWidth={2.6}
-            />
-          </Pressable>
-        )}
+        {/* v2.8: زر الإضافة حُذف من البطاقة (طلب التاجر) — سهم صغير
+         * يوحى بأن اللمسة تفتح صفحة المنتج للاختيار والطلب. */}
+        <View style={styles.openHint}>
+          {hasOptions ? (
+            <View style={[styles.optionsHintChip, {backgroundColor: palette.brandSoft}]}>
+              <Icon name="sliders" size={11} color={palette.brandDark} />
+              <Text style={{fontSize: 9.5, color: palette.brandDark, fontFamily: fonts.bold}}>
+                خيارات
+              </Text>
+            </View>
+          ) : null}
+          <Icon name="chevronLeft" size={16} color={palette.muted} />
+        </View>
       </View>
     </Pressable>
   );
@@ -347,12 +324,30 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   price: {fontSize: 16.5, fontFamily: fonts.bold},
-  addBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
+  /* v2.8: إحالة بصرية صغيرة — لا زر إضافة في البطاقة. */
+  openHint: {
+    flexDirection: 'row-reverse',
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: 5,
+  },
+  optionsHintChip: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 3,
+    borderRadius: radius.pill,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+  },
+  cartBadge: {
+    position: 'absolute',
+    top: 7,
+    right: 64,
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 3,
+    borderRadius: radius.pill,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
   },
   photoIconWrap: {position: 'absolute', bottom: 8, left: 8},
 });

@@ -32,6 +32,9 @@ interface InterestState {
   topCategories: (limit?: number) => string[];
   /** إجمالي الوزن — لعرض «نسبة التخصيص» لاحقاً. */
   totalScore: () => number;
+  /** v2.8: خريطة التصنيف ← الوزن المتلاشي — تُغذي محرك التوصيات
+   * (منتجات مشابهة) في صفحة المنتج بأوزان اهتمام حقيقية. */
+  categoryWeights: () => Record<string, number>;
   clear: () => void;
 }
 
@@ -143,6 +146,18 @@ export const useInterestStore = create<InterestState>((set, get) => ({
       (sum, e) => sum + decayed(e, now),
       0,
     );
+  },
+
+  categoryWeights: () => {
+    const now = Date.now();
+    const out: Record<string, number> = {};
+    for (const e of Object.values(get().entries)) {
+      const w = decayed(e, now);
+      if (w > 0.05) {
+        out[e.category] = w;
+      }
+    }
+    return out;
   },
 
   clear: () => {

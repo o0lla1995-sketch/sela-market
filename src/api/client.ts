@@ -152,6 +152,12 @@ export function apiErrorText(code: string): string {
       return 'أحد المنتجات لم يعد متاحاً لدى المتجر';
     case 'BAD_QUANTITY':
       return 'كمية أحد المنتجات غير صالحة';
+    /* v2.8 (خادم 5.4): سقف المخزون يتكلم بوضوح — السلة تعرض اسم
+     * المنتج والمتاح الفعلي في صف التحذير فوق زر الإرسال. */
+    case 'INSUFFICIENT_STOCK':
+      return 'الكمية المطلوبة أكبر من المتاح في المتجر';
+    case 'PRODUCT_UNAVAILABLE':
+      return 'أحد منتجات السلة سُحب من المتجر مؤقتاً';
     case 'ORDER_NOT_FOUND':
       return 'الطلب غير موجود';
     case 'BAD_STATUS':

@@ -60,6 +60,7 @@ import {useToastStore} from '../../stores/toastStore';
 import {useRequireAuth, type ShopStackParamList} from '../../navigation/RootNavigator';
 import {useStackBottomClearance} from '../../core/layout';
 import {minQty, qtyStep} from '../../core/money';
+import {recommendSimilar, RECOMMEND_LIMIT} from '../../core/recommend';
 
 type Props = NativeStackScreenProps<ShopStackParamList, 'Product'>;
 
@@ -88,11 +89,16 @@ export function ProductScreen({navigation, route}: Props) {
 
   /* v2.6: الكمية تُختار قبل الإضافة (لا بعدها) — العدّاد يعمل
    * مباشرة على الشاشة والإجمالي يتحدث مع كل لمسة، كما في تطبيقات
-   * التسوق العالمية. الحد الأقصى من المخزون المعروض. */
+   * التسوق العالمية. v2.8 (الجولة 59): الحد الأقصى = المخزون
+   * المتاح نفسه — طلب التاجر: «لماذا يستطيع المستخدم طلب أكبر
+   * منها؟» — لا طلب أكبر من المتوفر، لا من العدّاد ولا من السلة. */
   const [qty, setQty] = useState(() => minQty(soldByWeight));
-  const maxQty = Number.isFinite(product.stock) && product.stock > 0
-    ? Math.max(minQty(soldByWeight), Math.floor(product.stock))
-    : 999;
+  const maxQty =
+    Number.isFinite(product.stock) && product.stock > 0
+      ? /* وزن كسري (٢٫٥ كيلو مثلاً) يبقى كسرياً — لا تقريب لأسفل
+         * يحرم المستخدم من نصف كيلو متاح فعلاً. */
+        Math.max(minQty(soldByWeight), Math.floor(product.stock * 1000) / 1000)
+      : 999;
   const stepQty = qtyStep(soldByWeight);
   const unitFinalPrice = effectiveMinor(product);
   const liveTotal = Math.round(unitFinalPrice * qty);
@@ -122,8 +128,13 @@ export function ProductScreen({navigation, route}: Props) {
   const [slide, setSlide] = useState(0);
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
 
-  // منتجات من نفس التصنيف داخل المتجر نفسه (اقتراح ذكي خفيف)
+  /* v2.8 (الجولة 59): توصيات ذكية احترافية — طلب التاجر بالنص
+   * «في صفحة المنتج يقترح على المستخدم منتجات أخرى مشابهة بشكل
+   * ذكي واحترافي». المحرك (core/recommend) يدمج: نفس التصنيف +
+   * التوفر + قرب السعر + الخصم النشط + أوزان اهتمام المستخدم +
+   * تشابه الاسم — كما أنظمة التوصيات العالمية. */
   const [similar, setSimilar] = useState<Product[]>([]);
+  const [similarReason, setSimilarReason] = useState<string | null>(null);
 
   // v2.0: مشاهدة المنتج ترفع وزن تصنيفه في «مقترحات لك» — إشارة
   // خفيفة (وزن 1) لا تُرسل لأي خادم (كل شيء محلي على الجهاز).
@@ -132,25 +143,35 @@ export function ProductScreen({navigation, route}: Props) {
   }, [product.id, product.category]);
   useEffect(() => {
     let alive = true;
-    if (product.category == null) {
-      return;
-    }
+    /* بلا تصنيف ولا مرشحين؟ المحرك ما زال يعمل بتشابه الاسم —
+     * نجهز المرشحين دائماً ونترك الترتيب للدرجات. */
     void getStoreProducts(storeRef.id, {per: 40})
       .then(list => {
         if (!alive) {
           return;
         }
-        setSimilar(
-          list
-            .filter(p => p.category === product.category && p.id !== product.id)
-            .slice(0, 6),
-        );
+        const weights = useInterestStore.getState().categoryWeights();
+        const picked = recommendSimilar(list, {current: product, categoryWeights: weights});
+        setSimilar(picked.slice(0, RECOMMEND_LIMIT));
+        /* سبب التوصية يُشرح للمستخدم كما تفعل المتاجر العالمية
+         * («من نفس التصنيف» / «عروض قد تعجبك» / «من متجر …»). */
+        const sameCat = picked.filter(p => p.category != null && p.category === product.category).length;
+        const discounted = picked.filter(p => (p.discount_pct ?? 0) > 0).length;
+        if (sameCat >= 3) {
+          setSimilarReason(`من نفس التصنيف — ${product.category}`);
+        } else if (discounted >= Math.ceil(picked.length / 2)) {
+          setSimilarReason('عروض قد تعجبك من نفس المتجر');
+        } else if (picked.length > 0) {
+          setSimilarReason(`المزيد من ${storeRef.name}`);
+        } else {
+          setSimilarReason(null);
+        }
       })
       .catch(() => undefined);
     return () => {
       alive = false;
     };
-  }, [product.category, product.id, storeRef.id]);
+  }, [product.id, product.category, storeRef.id, storeRef.name, product]);
 
   const onAdd = () => {
     if (outOfStock) {
@@ -418,10 +439,13 @@ export function ProductScreen({navigation, route}: Props) {
         {similar.length > 0 ? (
           <View style={{gap: spacing.md}}>
             <SectionTitle
-              title={`المزيد من ${product.category ?? 'التصنيف'}`}
-              actionLabel="كل التصنيف"
-              onAction={() =>
-                navigation.navigate('Category', {category: product.category ?? ''})
+              title="منتجات مشابهة قد تعجبك"
+              subtitle={similarReason ?? undefined}
+              actionLabel={product.category ? 'كل التصنيف' : undefined}
+              onAction={
+                product.category
+                  ? () => navigation.navigate('Category', {category: product.category!})
+                  : undefined
               }
             />
             <FlatList
@@ -459,6 +483,9 @@ export function ProductScreen({navigation, route}: Props) {
               <QtyStepper
                 qty={cartQty}
                 soldByWeight={soldByWeight}
+                /* v2.8: سقف المخزون يعمل هنا أيضاً — الزيادة تتوقف
+                 * عند المتاح ولا يتجاوزها أحد. */
+                max={maxQty}
                 onIncrease={() => increment(storeRef.id, activeLineKey)}
                 onDecrease={() => decrement(storeRef.id, activeLineKey)}
               />
@@ -481,6 +508,7 @@ export function ProductScreen({navigation, route}: Props) {
               <QtyStepper
                 qty={qty}
                 soldByWeight={soldByWeight}
+                max={maxQty}
                 onIncrease={() =>
                   setQty(q => Math.min(maxQty, Math.round((q + stepQty) * 1000) / 1000))
                 }
@@ -509,6 +537,9 @@ export function ProductScreen({navigation, route}: Props) {
             <Text style={[{fontSize: 11, color: palette.muted, textAlign: 'center'}]}>
               {formatMoney(unitFinalPrice)} × {formatQty(qty, soldByWeight)}
               {soldByWeight ? ' كيلو' : ' قطعة'} = {formatMoney(liveTotal)}
+              {maxQty < 999
+                ? ` · المتاح ${formatQty(maxQty, soldByWeight)}${soldByWeight ? ' كيلو' : ' قطعة'} فقط`
+                : ''}
             </Text>
           </View>
         )}

@@ -40,7 +40,6 @@ import {SearchScreen} from '../screens/search/SearchScreen';
 import {CategoryScreen} from '../screens/category/CategoryScreen';
 import {ProductScreen} from '../screens/product/ProductScreen';
 import {CartScreen} from '../screens/cart/CartScreen';
-import {CheckoutScreen} from '../screens/checkout/CheckoutScreen';
 import {OrderSuccessScreen} from '../screens/checkout/OrderSuccessScreen';
 import {OrdersScreen} from '../screens/orders/OrdersScreen';
 import {OrderDetailScreen} from '../screens/orders/OrderDetailScreen';
@@ -77,7 +76,9 @@ export type ShopStackParamList = {
 
 export type CartStackParamList = {
   Cart: undefined;
-  Checkout: {storeId: number};
+  /* v2.8 (الجولة 59): شاشة «إتمام الطلب» الوسيطة حُذفت من
+   * التدفق — السلة نفسها تكمل الطلب مباشرة (عنوان + توصيل + زر).
+   * الخطوات: صفحة المنتج (كمية/وزن/مواصفة) ← السلة ← تم. */
   OrderSuccess: {order: Order};
   AddressBook: undefined;
   AddressForm: {address?: Address} | undefined;
@@ -187,7 +188,6 @@ function CartStackScreens() {
   return (
     <CartStack.Navigator screenOptions={screenOptions}>
       <CartStack.Screen name="Cart" component={CartScreen} />
-      <CartStack.Screen name="Checkout" component={CheckoutScreen} />
       <CartStack.Screen
         name="OrderSuccess"
         component={OrderSuccessScreen}

@@ -182,7 +182,10 @@ export function Button({
     }
   }, [variant, palette]);
 
-  const height = small ? 38 : 50;
+  /* v2.8 (الجولة 59): 44/36 بدل 50/38 — طلب التاجر: الأزرار
+   * تأخذ مساحة كبيرة بلا داعٍ. أزرار المتاجر العالمية (أمازون/
+   * نون) 40–44px للفعل الأساسي — مساحة أكبر للمحتوى. */
+  const height = small ? 36 : 44;
   const opacity = disabled ? 0.45 : 1;
 
   return (
@@ -205,7 +208,7 @@ export function Button({
         <ActivityIndicator size="small" color={colors.fg} />
       ) : (
         <>
-          {icon ? <Icon name={icon} size={small ? 17 : 20} color={colors.fg} /> : null}
+          {icon ? <Icon name={icon} size={small ? 16 : 18} color={colors.fg} /> : null}
           <Text
             style={[
               small ? type.smallMedium : type.bodyMedium,
@@ -640,6 +643,7 @@ export function QtyStepper({
   onDecrease,
   onRemove,
   compact = false,
+  max,
 }: {
   qty: number;
   soldByWeight: boolean;
@@ -647,26 +651,42 @@ export function QtyStepper({
   onDecrease: () => void;
   onRemove?: () => void;
   compact?: boolean;
+  /** v2.8 (الجولة 59): الحد الأقصى المتاح (المخزون) — يوقف الزيادة
+   * عند الحد ويظهر «الحد الأقصى» بدل ترك المستخدم يطلب أكثر من
+   * المتوفر (طلب التاجر بالنص). undefined = بلا حد معلوم. */
+  max?: number;
 }) {
   const {palette} = useTheme();
   const unit = soldByWeight ? (qty < 1 ? 'نصف' : 'كيلو') : 'قطعة';
+  /* الحد يُطبّق فقط إن كان رقماً منطقياً أكبر من صفر. */
+  const cap = max != null && Number.isFinite(max) && max > 0 ? max : null;
+  const atMax = cap != null && qty >= cap - 0.0001;
   return (
     <View
       style={[
         stepperStyles.box,
-        {backgroundColor: palette.brandSoft, borderColor: palette.brandBorder},
+        {backgroundColor: palette.brandSoft, borderColor: atMax ? palette.warning : palette.brandBorder},
         compact && stepperStyles.compact,
       ]}>
-      <Pressable onPress={onIncrease} hitSlop={8} style={stepperStyles.btn}>
-        <Icon name="plus" size={compact ? 15 : 17} color={palette.brandDark} strokeWidth={2.4} />
+      <Pressable
+        onPress={atMax ? undefined : onIncrease}
+        hitSlop={8}
+        disabled={atMax}
+        style={stepperStyles.btn}>
+        <Icon
+          name="plus"
+          size={compact ? 15 : 17}
+          color={atMax ? palette.muted : palette.brandDark}
+          strokeWidth={2.4}
+        />
       </Pressable>
       <View style={stepperStyles.value}>
         <Text style={[type.smallMedium, {color: palette.brandDark, fontFamily: fonts.bold}]}>
           {soldByWeight ? (qty % 1 === 0 ? String(qty) : String(qty)) : String(qty)}
         </Text>
         {!compact ? (
-          <Text style={[{fontSize: 10, color: palette.brandDark, fontFamily: fonts.medium}]}>
-            {unit}
+          <Text style={[{fontSize: 10, color: atMax ? palette.warning : palette.brandDark, fontFamily: fonts.medium}]}>
+            {atMax ? 'الحد الأقصى' : unit}
           </Text>
         ) : null}
       </View>
@@ -959,17 +979,27 @@ function strengthColor(level: 0 | 1 | 2 | 3, palette: Palette): string {
 
 export function SectionTitle({
   title,
+  subtitle,
   actionLabel,
   onAction,
 }: {
   title: string;
+  /** v2.8: سطر تفسيري صغير تحت العنوان — سبب التوصية مثلاً. */
+  subtitle?: string;
   actionLabel?: string;
   onAction?: () => void;
 }) {
   const {palette} = useTheme();
   return (
     <View style={sectionStyles.row}>
-      <Text style={[type.h2, {color: palette.ink}]}>{title}</Text>
+      <View style={{gap: 1, flex: 1, alignItems: 'flex-start'}}>
+        <Text style={[type.h2, {color: palette.ink}]}>{title}</Text>
+        {subtitle ? (
+          <Text style={{fontSize: 10.5, color: palette.muted}} numberOfLines={1}>
+            {subtitle}
+          </Text>
+        ) : null}
+      </View>
       {actionLabel && onAction ? (
         <Pressable onPress={onAction} hitSlop={8}>
           <Text style={[type.smallMedium, {color: palette.brandDark}]}>{actionLabel}</Text>

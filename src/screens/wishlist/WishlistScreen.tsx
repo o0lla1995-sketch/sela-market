@@ -20,7 +20,6 @@ import {AppHeader, Button, Card, EmptyState, Screen} from '../../components/ui';
 import {formatMoney} from '../../core/money';
 import {getStoreProducts} from '../../api/endpoints';
 import {useWishlistStore} from '../../stores/wishlistStore';
-import {useCartStore} from '../../stores/cartStore';
 import {useToastStore} from '../../stores/toastStore';
 import {StoreAvatar} from '../../components/StoreCard';
 import type {ShopStackParamList} from '../../navigation/RootNavigator';
@@ -66,7 +65,6 @@ export function WishlistScreen({navigation}: Props) {
   const prune = useWishlistStore(s => s.prune);
   const markVerified = useWishlistStore(s => s.markVerified);
   const staleIds = useWishlistStore(s => s.staleIds);
-  const addProduct = useCartStore(s => s.addProduct);
   const toast = useToastStore(s => s.show);
   const [verifying, setVerifying] = useState(false);
   const verifyRan = useRef(false);
@@ -184,43 +182,24 @@ export function WishlistScreen({navigation}: Props) {
                     <Icon name="heartFilled" size={20} color={palette.danger} />
                   </Pressable>
                 </View>
-                <View style={{flexDirection: 'row-reverse', gap: spacing.md}}>
-                  <Button
-                    label={outOfStock ? 'نفدت الكمية' : 'إضافة للسلة'}
-                    small
-                    icon="cart"
-                    style={{flex: 1}}
-                    disabled={outOfStock}
-                    onPress={() => {
-                      if ((p.options ?? []).length > 0) {
-                        // منتج بخيارات — يُختار المقاس/اللون في صفحته.
-                        navigation.navigate('Product', {
-                          product: p,
-                          storeRef: {id: p.store_id, name: item.storeName},
-                        });
-                        toast('اختر المواصفة أولاً في صفحة المنتج', 'info');
-                        return;
-                      }
-                      addProduct(
-                        {id: p.store_id, name: item.storeName},
-                        p,
-                      );
-                      toast(`أُضيف «${p.name}» إلى سلة ${item.storeName}`, 'success');
-                    }}
-                  />
-                  <Button
-                    label="المنتج"
-                    variant="outline"
-                    small
-                    style={{flex: 1}}
-                    onPress={() =>
-                      navigation.navigate('Product', {
-                        product: p,
-                        storeRef: {id: p.store_id, name: item.storeName},
-                      })
+                <Button
+                  /* v2.8 (الجولة 59): لا إضافة عمياء من القوائم —
+                   * الكمية/الوزن/المواصفة تُختار في صفحة المنتج ثم
+                   * تُضاف (طلب التاجر: الطلب من صفحة المنتج فقط). */
+                  label={outOfStock ? 'نفدت الكمية — عرض المنتج' : 'اطلب من صفحة المنتج'}
+                  small
+                  icon={outOfStock ? 'search' : 'cart'}
+                  disabled={false}
+                  onPress={() => {
+                    if (!outOfStock && (p.options ?? []).length === 0) {
+                      toast('حدّد الكمية في صفحة المنتج ثم أضفها', 'info');
                     }
-                  />
-                </View>
+                    navigation.navigate('Product', {
+                      product: p,
+                      storeRef: {id: p.store_id, name: item.storeName},
+                    });
+                  }}
+                />
               </Card>
             );
           }}

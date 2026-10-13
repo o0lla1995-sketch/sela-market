@@ -108,23 +108,30 @@ describe('v2.7 — تنظيف المفضلة من المنتجات غير الم
     expect(screen).toMatch(/StoreAvatar[^]*size=\{38\}/);
   });
 
-  test('④ صفحة الطلب: فشل واضح + تحديث لحظي لقائمة الطلبات', () => {
-    const screen = read('src/screens/checkout/CheckoutScreen.tsx');
-    // صف التحذير فوق الزر.
-    expect(screen).toContain('lastSendError');
-    expect(screen).toContain('sendStyles.errorRow');
+  test('④ إتمام الطلب داخل السلة (v2.8): فشل واضح + تحديث لحظي', () => {
+    /* v2.8 (الجولة 59): شاشة «إتمام الطلب» الوسيطة حُذفت من التدفق —
+     * طلب التاجر بالنص: «أريده أبسط… إتمام الطلب مباشرة». نفس
+     * الضمانات انتقلت للسلة نفسها: صف تحذير صادق فوق الزر، تحديث
+     * لحظي لقائمة الطلبات، وإيديمبوتنسية تمنع التكرار. */
+    expect(() => read('src/screens/checkout/CheckoutScreen.tsx')).toThrow();
+    const cart = read('src/screens/cart/CartScreen.tsx');
+    // صف التحذير فوق الزر — لا نجاح زائف أبداً.
+    expect(cart).toContain('lastSendError');
+    expect(cart).toContain('errorRow');
     // تحديث قائمة الطلبات فور النجاح (كان ينتظر ٤٥ ثانية).
-    expect(screen).toContain('void syncOrdersOnce(true);');
+    expect(cart).toContain('void syncOrdersOnce(true);');
     // إعادة الضغط بلا خوف التكرار — نص يطمئن المستخدم.
-    expect(screen).toContain('لا تنشئ طلباً مكرراً');
+    expect(cart).toContain('لا تنشئ طلباً مكرراً');
+    // زر واحد مباشر: «إتمام الطلب — الإجمالي».
+    expect(cart).toContain('إتمام الطلب —');
   });
 
-  test('⑤ الإصدار: 2.7.0 (11)', () => {
+  test('⑤ الإصدار: 2.8.0 (12)', () => {
     const config = read('src/core/config.ts');
-    expect(config).toContain("APP_VERSION = '2.7.0'");
-    expect(config).toContain('APP_BUILD_CODE = 11');
+    expect(config).toContain("APP_VERSION = '2.8.0'");
+    expect(config).toContain('APP_BUILD_CODE = 12');
     const gradle = read('android/app/build.gradle');
-    expect(gradle).toContain('versionCode 11');
-    expect(gradle).toContain('versionName "2.7.0"');
+    expect(gradle).toContain('versionCode 12');
+    expect(gradle).toContain('versionName "2.8.0"');
   });
 });

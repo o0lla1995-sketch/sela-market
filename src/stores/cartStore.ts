@@ -35,6 +35,8 @@ interface CartState {
   clearAll: () => void;
   /** إعادة إضافة طلب سابق (إعادة الطلب بلمسة). */
   reAddLines: (store: StoreRef, lines: CartLine[]) => void;
+  /** v2.8: سقف الكمية لسطر (مخزون اللقطة) — يغذي العدّاد في السلة. */
+  stockCapFor: (storeId: number, lineKey: string) => number;
 
   lineCountFor: (storeId: number) => number;
   countFor: (storeId: number) => number;
@@ -139,6 +141,24 @@ function persist(carts: Record<string, CartStoreEntry>, lastActiveStoreId: numbe
   storage.set(KEY, JSON.stringify({carts, lastActiveStoreId}));
 }
 
+/* ══ v2.8 (الجولة 59): سقف المخزون ══════════════════════════════
+ * طلب التاجر بالنص: «بما أنه كمية المنتج معروفة وما هو متوفر
+ * * مثلا من مقاسات وغيره لماذا يستطيع المستخدم طلب أكبر منها؟»
+ * الآن: كل زيادة كمية (إضافة/عدّاد/تعيين) تتقيد بالمخزون المتاح
+ * في لقطة المزامنة — والخادم (5.4+) يحسم نهائياً عند الطلب
+ * (INSUFFICIENT_STOCK) فلا يمر طلب أكبر من المتاح مهما حدث. */
+function capAtStock(qty: number, stock: number | undefined | null): number {
+  if (stock == null || !Number.isFinite(stock) || stock <= 0) {
+    return 0;
+  }
+  return Math.min(qty, stock);
+}
+
+/** الكمية القصوى القابلة للطلب لسطر (مخزون محدود أو مفتوح). */
+function stockCapOf(stock: number | undefined | null): number {
+  return stock != null && Number.isFinite(stock) && stock > 0 ? stock : 0;
+}
+
 export const useCartStore = create<CartState>((set, get) => ({
   carts: initialPersisted.carts,
   lastActiveStoreId: initialPersisted.lastActiveStoreId,
@@ -169,13 +189,22 @@ export const useCartStore = create<CartState>((set, get) => ({
       finalPrice < product.price_minor ? product.price_minor : undefined;
     let lines: CartLine[];
     if (existing) {
+      /* v2.8: الزيادة تتقيد بالمخزون المتاح — لا طلب أكبر من
+       * المتوفر مهما كان مصدر الزيادة. */
+      const cap = Math.max(stockCapOf(product.stock), existing.quantity);
       lines = safeLines.map(l =>
         l.key === lineKey
-          ? {...l, quantity: Math.min(100000, l.quantity + addQty), stock: product.stock,
+          ? {...l, quantity: Math.min(cap, l.quantity + addQty), stock: product.stock,
              priceMinor: finalPrice, listPriceMinor: listPrice}
           : l,
       );
     } else {
+      /* v2.8: منتج نفد مخزونه لا يدخل السلة أصلاً — نفس منطق
+       * صفحة المنتج وبطاقته (نفدت الكمية). */
+      const capped = capAtStock(addQty, product.stock);
+      if (capped <= 0) {
+        return; // الواجهة تعرض «نفدت الكمية» — لا سلة فارغة.
+      }
       lines = [
         ...safeLines,
         {
@@ -187,7 +216,7 @@ export const useCartStore = create<CartState>((set, get) => ({
           unitLabel: product.unit_label,
           soldByWeight: product.sold_by_weight === 1,
           stock: product.stock,
-          quantity: addQty,
+          quantity: capped,
           variant,
           category: product.category ?? null,
         },
@@ -209,9 +238,13 @@ export const useCartStore = create<CartState>((set, get) => ({
       get().removeLine(storeId, lineKey);
       return;
     }
+    /* v2.8: التعيين اليدوي يتقيد بالمخزون أيضاً. */
+    const line = entry.lines.find(l => l.key === lineKey);
+    const cap = line != null ? stockCapOf(line.stock) : 0;
+    const effective = cap > 0 ? Math.min(qty, cap) : Math.min(qty, 100000);
     carts[key] = {
       ...entry,
-      lines: entry.lines.map(l => (l.key === lineKey ? {...l, quantity: Math.min(100000, qty)} : l)),
+      lines: entry.lines.map(l => (l.key === lineKey ? {...l, quantity: effective} : l)),
       updatedAt: Date.now(),
     };
     set({carts});
@@ -222,6 +255,11 @@ export const useCartStore = create<CartState>((set, get) => ({
     const entry = get().carts[String(storeId)];
     const line = entry?.lines.find(l => l.key === lineKey);
     if (line == null) {
+      return;
+    }
+    /* v2.8: زيادة العدّاد تتوقف عند حدود المخزون المتاح. */
+    const cap = stockCapOf(line.stock);
+    if (cap > 0 && line.quantity >= cap - 0.0001) {
       return;
     }
     get().setQty(storeId, lineKey, Math.round((line.quantity + qtyStep(line.soldByWeight)) * 1000) / 1000);
@@ -297,6 +335,8 @@ export const useCartStore = create<CartState>((set, get) => ({
   },
 
   lineCountFor: (storeId) => get().carts[String(storeId)]?.lines.length ?? 0,
+  stockCapFor: (storeId, lineKey) =>
+    stockCapOf(get().carts[String(storeId)]?.lines.find(l => l.key === lineKey)?.stock),
   countFor: (storeId) =>
     (get().carts[String(storeId)]?.lines ?? []).reduce((sum, l) => sum + l.quantity, 0),
   countAll: () =>
