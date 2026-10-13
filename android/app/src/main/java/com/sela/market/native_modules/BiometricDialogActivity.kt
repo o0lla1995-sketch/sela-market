@@ -1,6 +1,5 @@
 package com.sela.market.native_modules
 
-import android.content.DialogInterface
 import android.os.Build
 import android.os.Bundle
 import androidx.biometric.BiometricManager
@@ -66,13 +65,10 @@ class BiometricDialogActivity : FragmentActivity() {
       .setConfirmationRequired(false)
 
     if (authenticators == BiometricManager.Authenticators.BIOMETRIC_WEAK) {
-      // الوضع البصمي وحده يتطلب زر إلغاء؛ مع بيانات اعتماد الجهاز
-      // (API 30+) يرفض النظام الجمع بينهما. مُشيد SAM صريح لتفادي
-      // التباس التفرعين (نص CharSequence أو resId Int).
-      info.setNegativeButton(
-        "إلغاء",
-        DialogInterface.OnClickListener { _, _ -> },
-      )
+      // الوضع البصمي وحده يتطلب نص زر إلغاء (setNegativeButtonText —
+      // اسم الـ API في 1.1.0)؛ مع بيانات اعتماد الجهاز (API 30+)
+      // يرفض النظام الجمع بينهما.
+      info.setNegativeButtonText("إلغاء")
     }
 
     try {
