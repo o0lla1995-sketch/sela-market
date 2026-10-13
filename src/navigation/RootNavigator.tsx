@@ -229,7 +229,22 @@ function AccountStackScreens() {
 
 /* ─── شارات التبويبات (اشتراك تفاعلي داخل الأيقونة) ─── */
 
-function CartTabIcon({color}: {color: string}) {
+/* v3.1: غلاف أيقونة التبويب — كبسولة ناعمة بلون العلامة حول
+ * الأيقونة النشطة (نمط المتاجر العالمية) بدل تغيير اللون وحده. */
+function TabIconWrap({focused, children}: {focused: boolean; children: React.ReactNode}) {
+  const {palette} = useTheme();
+  return (
+    <View
+      style={[
+        tabIconStyles.iconWrap,
+        {backgroundColor: focused ? palette.brandSoft : 'transparent'},
+      ]}>
+      {children}
+    </View>
+  );
+}
+
+function CartTabIcon({color, focused}: {color: string; focused: boolean}) {
   const carts = useCartStore(s => s.carts);
   /* v2.6: تعقيم دفاعي — أي بنية تالفة (قرص قديم) لا تقتل التطبيق
    * عند الإقلاع (كانت حلقة الانهيار: e.lines.reduce على undefined). */
@@ -241,32 +256,42 @@ function CartTabIcon({color}: {color: string}) {
     0,
   );
   return (
-    <View style={tabIconStyles.wrap}>
-      <Icon name="cart" size={23} color={color} />
-      {count > 0 ? (
-        <View style={tabIconStyles.badgeSlot}>
-          <Badge count={Math.floor(count)} />
-        </View>
-      ) : null}
-    </View>
+    <TabIconWrap focused={focused}>
+      <View style={tabIconStyles.wrap}>
+        <Icon name="cart" size={23} color={color} />
+        {count > 0 ? (
+          <View style={tabIconStyles.badgeSlot}>
+            <Badge count={Math.floor(count)} />
+          </View>
+        ) : null}
+      </View>
+    </TabIconWrap>
   );
 }
 
-function OrdersTabIcon({color}: {color: string}) {
+function OrdersTabIcon({color, focused}: {color: string; focused: boolean}) {
   const unread = useNotificationsStore(s => s.unread);
   return (
-    <View style={tabIconStyles.wrap}>
-      <Icon name="receipt" size={23} color={color} />
-      {unread > 0 ? (
-        <View style={tabIconStyles.badgeSlot}>
-          <Badge count={unread} />
-        </View>
-      ) : null}
-    </View>
+    <TabIconWrap focused={focused}>
+      <View style={tabIconStyles.wrap}>
+        <Icon name="receipt" size={23} color={color} />
+        {unread > 0 ? (
+          <View style={tabIconStyles.badgeSlot}>
+            <Badge count={unread} />
+          </View>
+        ) : null}
+      </View>
+    </TabIconWrap>
   );
 }
 
 const tabIconStyles = StyleSheet.create({
+  iconWrap: {
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 4,
+    marginTop: 2,
+  },
   wrap: {width: 40, height: 26, alignItems: 'center', justifyContent: 'center'},
   badgeSlot: {position: 'absolute', top: -4, left: -2},
 });
@@ -311,7 +336,11 @@ function MainTabs() {
         component={ShopTab}
         options={{
           title: 'الرئيسية',
-          tabBarIcon: ({color}) => <Icon name="home" size={23} color={color} />,
+          tabBarIcon: ({color, focused}) => (
+            <TabIconWrap focused={focused}>
+              <Icon name="home" size={23} color={color} />
+            </TabIconWrap>
+          ),
         }}
       />
       <Tabs.Screen
@@ -319,7 +348,11 @@ function MainTabs() {
         component={StoresTab}
         options={{
           title: 'المتاجر',
-          tabBarIcon: ({color}) => <Icon name="store" size={23} color={color} />,
+          tabBarIcon: ({color, focused}) => (
+            <TabIconWrap focused={focused}>
+              <Icon name="store" size={23} color={color} />
+            </TabIconWrap>
+          ),
         }}
       />
       <Tabs.Screen
@@ -343,7 +376,11 @@ function MainTabs() {
         component={AccountStackScreens}
         options={{
           title: 'حسابي',
-          tabBarIcon: ({color}) => <Icon name="user" size={23} color={color} />,
+          tabBarIcon: ({color, focused}) => (
+            <TabIconWrap focused={focused}>
+              <Icon name="user" size={23} color={color} />
+            </TabIconWrap>
+          ),
         }}
       />
     </Tabs.Navigator>

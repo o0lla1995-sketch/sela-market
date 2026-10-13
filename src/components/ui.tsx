@@ -998,6 +998,9 @@ export function SectionTitle({
   const {palette} = useTheme();
   return (
     <View style={sectionStyles.row}>
+      {/* v3.1: شريط لوني صغير قبل العنوان — بصمة بصرية موحدة لكل
+       * أقسام التطبيق (نمط متاجر التجزئة العالمية). */}
+      <View style={[sectionStyles.accentBar, {backgroundColor: palette.brand}]} />
       <View style={{gap: 1, flex: 1, alignItems: 'flex-start'}}>
         <Text style={[type.h2, {color: palette.ink}]}>{title}</Text>
         {subtitle ? (
@@ -1021,6 +1024,12 @@ const sectionStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: spacing.md,
+  },
+  accentBar: {
+    width: 4,
+    height: 20,
+    borderRadius: 999,
+    marginLeft: 0,
   },
 });
 

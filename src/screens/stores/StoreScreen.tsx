@@ -189,6 +189,8 @@ export function StoreScreen({navigation, route}: Props) {
     [storeId, store, storeName],
   );
 
+  /* v3.1: خلفية التروسة — برتقالي العلامة في الفاتح، وأعمق في الداكن. */
+  const heroBg = palette.isDark ? '#C2410C' : '#EA580C';
   const reviewsWithText = (ratings?.reviews ?? []).filter(
     r => r.comment != null && r.comment.length > 0,
   );
@@ -208,66 +210,64 @@ export function StoreScreen({navigation, route}: Props) {
         onEndReachedThreshold={0.6}
         ListHeaderComponent={
           <View>
-            {/* ─── الترويسة البطولية ─── */}
-            <View style={[heroStyles.wrap, {backgroundColor: palette.brandSoft}]}>
-              <View style={[heroStyles.ring, {borderColor: palette.brandBorder}]} />
+            {/* ─── الترويسة البطولية — v3.1: مدمجة بلون العلامة ───
+             * كانت الترويسة فاتحة مزدحمة (تقييم في صندوق + شرح + شارات
+             * + شريط إحصاءات مكرر) — طلب التاجر: «صفحة التاجر مقرفة
+             * ومتداخلة ومتزاحمة خصوصاً عند وجود تقييمات». الآن: ترويسة
+             * واحدة ملوّنة، التقييم سطر واحد، والإحصاءات حُذفت (مكررة
+             * في عناوين الأقسام). */}
+            <View
+              style={[
+                heroStyles.wrap,
+                {backgroundColor: heroBg, paddingTop: spacing.xl},
+              ]}>
+              <View style={heroStyles.ring} />
               <Pressable
                 onPress={() => navigation.goBack()}
                 hitSlop={10}
-                style={[heroStyles.backBtn, {backgroundColor: palette.surface}]}>
+                style={heroStyles.backBtn}>
                 <Icon
                   name={I18nManager.isRTL ? 'back' : 'forward'}
                   size={20}
-                  color={palette.ink}
+                  color="#FFFFFF"
                 />
               </Pressable>
-              <StoreAvatar name={store?.name ?? storeName ?? 'س'} logoUrl={store?.logo_url} size={86} />
-              <Text style={[type.h1, {color: palette.ink, fontFamily: fonts.black}]}>
+              <StoreAvatar name={store?.name ?? storeName ?? 'س'} logoUrl={store?.logo_url} size={84} />
+              <Text style={[type.h1, {color: '#FFFFFF', fontFamily: fonts.black}]}>
                 {store?.name ?? storeName ?? 'المتجر'}
               </Text>
+              {/* شارات مدمجة في سطر واحد شفاف فوق اللون */}
               <View style={heroStyles.badgesRow}>
-                <View style={[heroStyles.badge, {backgroundColor: palette.surface}]}>
-                  <Icon name={typeInfo.icon} size={12} color={palette.brandDark} />
-                  <Text style={{fontSize: 11.5, color: palette.brandDark, fontFamily: fonts.bold}}>
-                    {typeInfo.label}
-                  </Text>
+                <View style={heroStyles.badgeOnBrand}>
+                  <Icon name={typeInfo.icon} size={11} color="#FFFFFF" />
+                  <Text style={heroStyles.badgeOnBrandText}>{typeInfo.label}</Text>
                 </View>
                 {store?.region ? (
-                  <View style={[heroStyles.badge, {backgroundColor: palette.surface}]}>
-                    <Icon name="pin" size={12} color={palette.muted} />
-                    <Text style={{fontSize: 11.5, color: palette.inkSoft}} numberOfLines={1}>
+                  <View style={heroStyles.badgeOnBrand}>
+                    <Icon name="pin" size={11} color="#FFFFFF" />
+                    <Text style={heroStyles.badgeOnBrandText} numberOfLines={1}>
                       {store.region}
                     </Text>
                   </View>
                 ) : null}
                 {store?.store_number ? (
-                  <View style={[heroStyles.badge, {backgroundColor: palette.surface}]}>
-                    <Icon name="checkCircle" size={12} color={palette.success} />
-                    <Text style={{fontSize: 11.5, color: palette.inkSoft}}>
-                      موثّق · {store.store_number}
-                    </Text>
+                  <View style={heroStyles.badgeOnBrand}>
+                    <Icon name="checkCircle" size={11} color="#FFFFFF" />
+                    <Text style={heroStyles.badgeOnBrandText}>موثّق</Text>
                   </View>
                 ) : null}
               </View>
-              {/* التقييم */}
+              {/* التقييم — سطر واحد مدمج بدل صندوق كامل */}
               {store?.rating != null && store.rating > 0 ? (
-                <View style={[heroStyles.ratingBox, {backgroundColor: palette.surface}]}>
-                  <Stars rating={store.rating} size={16} />
-                  <Text style={{fontSize: 12, color: palette.muted}}>
-                    {store.rating} من 5 · {store.ratingCount} تقييماً من مشترين حقيقيين
+                <View style={heroStyles.ratingRow}>
+                  <Stars rating={store.rating} size={14} />
+                  <Text style={heroStyles.ratingRowText}>
+                    {store.rating} ({store.ratingCount} تقييماً)
                   </Text>
                 </View>
               ) : (
-                <Text style={{fontSize: 11.5, color: palette.muted}}>
-                  متجر جديد على المول — كن أول من يقيّمه بعد أول طلب
-                </Text>
+                <Text style={heroStyles.ratingRowText}>متجر جديد على المول</Text>
               )}
-              {store?.description ? (
-                <Text
-                  style={[type.small, {color: palette.inkSoft, textAlign: 'center', lineHeight: 21}]}>
-                  {store.description}
-                </Text>
-              ) : null}
             </View>
 
             {loading && detail == null ? (
@@ -308,35 +308,18 @@ export function StoreScreen({navigation, route}: Props) {
                   </View>
                 ) : null}
 
-                {/* ─── شريط الإحصاءات ─── */}
-                <View style={[statsStyles.row, {backgroundColor: palette.surface, borderColor: palette.line}, shadowFor(palette.isDark)]}>
-                  <View style={statsStyles.cell}>
-                    <Text style={[type.h2, {color: palette.brandDark}]}>
-                      {loading ? '…' : products.length}
-                    </Text>
-                    <Text style={{fontSize: 10.5, color: palette.muted}}>منتجاً</Text>
-                  </View>
-                  <View style={[statsStyles.divider, {backgroundColor: palette.line}]} />
-                  <View style={statsStyles.cell}>
-                    <Text style={[type.h2, {color: palette.brandDark}]}>{regions.length}</Text>
-                    <Text style={{fontSize: 10.5, color: palette.muted}}>مناطق توصيل</Text>
-                  </View>
-                  <View style={[statsStyles.divider, {backgroundColor: palette.line}]} />
-                  <View style={statsStyles.cell}>
-                    <Text style={[type.h2, {color: palette.brandDark}]}>
-                      {store?.rating != null && store.rating > 0 ? store.rating : 'جديد'}
-                    </Text>
-                    <Text style={{fontSize: 10.5, color: palette.muted}}>
-                      {store?.rating != null && store.rating > 0 ? `من 5 (${store.ratingCount})` : 'تقييم'}
-                    </Text>
-                  </View>
-                </View>
+                {/* v3.1: شريط الإحصاءات حُذف — كان تكراراً بصرياً (عدد
+                 * المنتجات في عنوان القسم، التقييم في الترويسة، عدد
+                 * المناطق في قسمها) يزحم أعلى الصفحة بلا معلومة جديدة. */}
 
-                {/* ─── مناطق التوصيل ─── */}
+                {/* ─── مناطق التوصيل — سطر أفقي واحد مدمج ─── */}
                 {regions.length > 0 ? (
                   <View style={{gap: spacing.sm}}>
-                    <SectionTitle title="مناطق التوصيل وأسعارها" />
-                    <View style={{flexDirection: 'row-reverse', flexWrap: 'wrap', gap: spacing.sm}}>
+                    <SectionTitle title={`التوصيل إلى ${regions.length} مناطق`} />
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={{gap: spacing.sm, paddingVertical: 2}}>
                       {regions.map(r => (
                         <View
                           key={r.name}
@@ -344,16 +327,16 @@ export function StoreScreen({navigation, route}: Props) {
                             regionStyles.chip,
                             {backgroundColor: palette.surfaceAlt, borderColor: palette.line},
                           ]}>
-                          <Icon name="truck" size={14} color={palette.brandDark} />
-                          <Text style={[{fontSize: 12.5, color: palette.ink, fontFamily: fonts.medium}]}>
+                          <Icon name="truck" size={13} color={palette.brandDark} />
+                          <Text style={[{fontSize: 12, color: palette.ink, fontFamily: fonts.medium}]}>
                             {r.name}
                           </Text>
-                          <Text style={[{fontSize: 12.5, color: palette.brandDark, fontFamily: fonts.bold}]}>
+                          <Text style={[{fontSize: 12, color: palette.brandDark, fontFamily: fonts.bold}]}>
                             {formatMoney(r.fee_minor)}
                           </Text>
                         </View>
                       ))}
-                    </View>
+                    </ScrollView>
                   </View>
                 ) : null}
 
@@ -430,56 +413,6 @@ export function StoreScreen({navigation, route}: Props) {
                     </Text>
                   </Pressable>
                 ) : null}
-
-                {/* ─── مراجعات المتجر ─── */}
-                {ratings != null && ratings.ratingCount > 0 ? (
-                  <View style={{gap: spacing.md, marginTop: spacing.sm}}>
-                    <SectionTitle title={`آراء المشترين (${ratings.ratingCount})`} />
-                    <View
-                      style={[
-                        reviewStyles.summary,
-                        {backgroundColor: palette.surface, borderColor: palette.line},
-                        shadowFor(palette.isDark),
-                      ]}>
-                      <Stars rating={ratings.rating} count={ratings.ratingCount} size={17} />
-                      <Text style={[type.small, {color: palette.muted, textAlign: 'center'}]}>
-                        متوسط تقييم المتجر من طلبات مكتملة — التقييم بعد استلام
-                        الطلب فقط لضمان آراء حقيقية
-                      </Text>
-                    </View>
-                    {reviewsWithText.slice(0, 5).map((r, i) => (
-                      <View
-                        key={i}
-                        style={[
-                          reviewStyles.card,
-                          {backgroundColor: palette.surface, borderColor: palette.line},
-                        ]}>
-                        <View style={{flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between'}}>
-                          <View style={{gap: 3}}>
-                            <Text style={{fontSize: 12.5, color: palette.ink, fontFamily: fonts.bold}}>
-                              {r.userName}
-                            </Text>
-                            <View style={{flexDirection: 'row-reverse', alignItems: 'center', gap: 4}}>
-                              <Stars rating={r.stars} size={12} compact />
-                              <Text style={{fontSize: 10.5, color: palette.muted}}>
-                                · {relativeTime(r.createdAt)}
-                              </Text>
-                            </View>
-                          </View>
-                          <View style={[reviewStyles.verifiedChip, {backgroundColor: palette.successSoft}]}>
-                            <Icon name="checkCircle" size={10} color={palette.success} />
-                            <Text style={{fontSize: 9.5, color: palette.success, fontFamily: fonts.bold}}>
-                              شراء موثّق
-                            </Text>
-                          </View>
-                        </View>
-                        <Text style={[type.small, {color: palette.inkSoft, lineHeight: 20}]}>
-                          {r.comment}
-                        </Text>
-                      </View>
-                    ))}
-                  </View>
-                ) : null}
               </View>
             )}
           </View>
@@ -504,15 +437,64 @@ export function StoreScreen({navigation, route}: Props) {
           ) : null
         }
         ListFooterComponent={
-          loadingMore ? (
-            <View style={{paddingVertical: spacing.lg}}>
-              <Loader label="نجلب المزيد…" />
-            </View>
-          ) : /* v3.0: تذييل نهاية القائمة بدل لا شيء — إشعار واضح أن
-           * الكتالوج انتهى (لا لودر يدور بلا نهاية). */
-          !loading && !productsError && products.length >= PRODUCTS_PAGE_SIZE && exhausted ? (
-            <EndOfList label={`وصلت إلى كل منتجات ${store?.name ?? 'المتجر'}`} />
-          ) : null
+          <View>
+            {loadingMore ? (
+              <View style={{paddingVertical: spacing.lg}}>
+                <Loader label="نجلب المزيد…" />
+              </View>
+            ) : /* v3.0: تذييل نهاية القائمة — إشعار واضح أن الكتالوج
+             * انتهى (لا لودر يدور بلا نهاية). */
+            !loading && !productsError && products.length >= PRODUCTS_PAGE_SIZE && exhausted ? (
+              <EndOfList label={`وصلت إلى كل منتجات ${store?.name ?? 'المتجر'}`} />
+            ) : null}
+
+            {/* ─── مراجعات المتجر — v3.1: انتقلت إلى أسفل المنتجات ───
+             * كانت تُحقن بين عنوان «المنتجات» وشبكة المنتجات فتبدو
+             * الصفحة «متداخلة ومتزاحمة خصوصاً عند وجود تقييمات».
+             * الآن: المنتجات أولاً كأي متجر عالمي، والآراء أسفلها
+             * ببطاقات مدمجة (سطر تعريف + سطر تعليق) بلا شرح مطوّل. */}
+            {ratings != null && ratings.ratingCount > 0 && products.length > 0 ? (
+              <View style={{padding: spacing.lg, gap: spacing.md, paddingTop: spacing.xl}}>
+                <SectionTitle title={`آراء المشترين (${ratings.ratingCount})`} />
+                <View
+                  style={[
+                    reviewStyles.summary,
+                    {backgroundColor: palette.surface, borderColor: palette.line},
+                  ]}>
+                  <Stars rating={ratings.rating} count={ratings.ratingCount} size={15} />
+                </View>
+                {reviewsWithText.slice(0, 5).map((r, i) => (
+                  <View
+                    key={i}
+                    style={[
+                      reviewStyles.card,
+                      {backgroundColor: palette.surface, borderColor: palette.line},
+                    ]}>
+                    <View style={{flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.sm}}>
+                      <Text style={{fontSize: 12.5, color: palette.ink, fontFamily: fonts.bold, flex: 1}} numberOfLines={1}>
+                        {r.userName}
+                      </Text>
+                      <View style={[reviewStyles.verifiedChip, {backgroundColor: palette.successSoft}]}>
+                        <Icon name="checkCircle" size={10} color={palette.success} />
+                        <Text style={{fontSize: 9.5, color: palette.success, fontFamily: fonts.bold}}>
+                          شراء موثّق
+                        </Text>
+                      </View>
+                    </View>
+                    <View style={{flexDirection: 'row-reverse', alignItems: 'center', gap: 4}}>
+                      <Stars rating={r.stars} size={11} compact />
+                      <Text style={{fontSize: 10.5, color: palette.muted}}>
+                        · {relativeTime(r.createdAt)}
+                      </Text>
+                    </View>
+                    <Text style={[type.small, {color: palette.inkSoft, lineHeight: 19}]}>
+                      {r.comment}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            ) : null}
+          </View>
         }
         renderItem={({item}) => (
           <ProductCard
@@ -537,6 +519,7 @@ const heroStyles = StyleSheet.create({
     borderBottomRightRadius: radius.xl,
     borderBottomLeftRadius: radius.xl,
   },
+  /* v3.1: حلقة زخرفية بيضاء شفافة فوق لون العلامة. */
   ring: {
     position: 'absolute',
     top: -40,
@@ -545,7 +528,7 @@ const heroStyles = StyleSheet.create({
     height: 160,
     borderRadius: 999,
     borderWidth: 26,
-    opacity: 0.5,
+    borderColor: 'rgba(255,255,255,0.18)',
   },
   backBtn: {
     position: 'absolute',
@@ -556,6 +539,7 @@ const heroStyles = StyleSheet.create({
     borderRadius: 999,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.22)',
   },
   badgesRow: {
     flexDirection: 'row-reverse',
@@ -563,33 +547,30 @@ const heroStyles = StyleSheet.create({
     justifyContent: 'center',
     gap: 6,
   },
-  badge: {
+  badgeOnBrand: {
     flexDirection: 'row-reverse',
     alignItems: 'center',
     gap: 4,
     borderRadius: radius.pill,
+    backgroundColor: 'rgba(255,255,255,0.2)',
     paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingVertical: 4,
   },
-  ratingBox: {
-    alignItems: 'center',
-    gap: 3,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
+  badgeOnBrandText: {
+    fontSize: 11,
+    color: '#FFFFFF',
+    fontFamily: fonts.bold,
   },
-});
-
-const statsStyles = StyleSheet.create({
-  row: {
+  ratingRow: {
     flexDirection: 'row-reverse',
     alignItems: 'center',
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    paddingVertical: spacing.md,
+    gap: 6,
   },
-  cell: {flex: 1, alignItems: 'center', gap: 1},
-  divider: {width: 1, height: 34},
+  ratingRowText: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.9)',
+    fontFamily: fonts.medium,
+  },
 });
 
 const regionStyles = StyleSheet.create({

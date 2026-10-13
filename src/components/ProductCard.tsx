@@ -6,7 +6,7 @@
  * الوزن/المواصفة هناك. شارة «في السلة» تخبر المستخدم بما أضافه.
  */
 import React from 'react';
-import {Image, Pressable, StyleSheet, Text, View} from 'react-native';
+import {Image, Pressable, StyleSheet, Text, useWindowDimensions, View} from 'react-native';
 import {useTheme} from '../theme/ThemeProvider';
 import {radius, shadowFor, spacing, type, fonts} from '../theme/tokens';
 import {Icon} from './Icon';
@@ -20,10 +20,10 @@ import {useToastStore} from '../stores/toastStore';
 import {useRequireAuth} from '../navigation/RootNavigator';
 
 /** بديل مرسوم عند غياب الصورة — سهم أول الاسم داخل إطار ناعم. */
-function PhotoPlaceholder({name, tint, border, inkColor}: {name: string; tint: string; border: string; inkColor: string}) {
+function PhotoPlaceholder({name, tint, border, inkColor, width}: {name: string; tint: string; border: string; inkColor: string; width: number}) {
   const initial = name.trim().charAt(0) || '؟';
   return (
-    <View style={[styles.photo, {backgroundColor: tint, borderColor: border}]}>
+    <View style={[styles.photo, {backgroundColor: tint, borderColor: border, width}]}>
       <Text style={{fontSize: 40, fontFamily: fonts.black, color: inkColor, opacity: 0.35}}>
         {initial}
       </Text>
@@ -39,13 +39,26 @@ export function ProductCard({
   storeName,
   storeRef,
   onPress,
+  photoWidth: photoWidthProp,
 }: {
   product: CrossProduct | Product;
   storeName?: string;
   storeRef: StoreRef;
   onPress: () => void;
+  /** عرض الصورة للأشرطة ذات العرض الثابت (المشابهة/المقترحات). */
+  photoWidth?: number;
 }) {
   const {palette} = useTheme();
+  /* v3.1 (الجولة 61): أبعاد رقمية دقيقة + resizeMethod="resize" —
+   * الشكوى: «يظهر نتيجة البحث ثم يحدث خلل في التطبيق فيغلق مباشرة».
+   * الجذر: عرض الصورة % (غير رقمي) يمنع Fresco من أخذ عيّنة مصغرة
+   * فيفك ترميز صور الـ800px كاملة (‎2.5MB لكل صورة) — شبكة من ٢٤
+   * بطاقة تستهلك 60MB+ ذاكرة فيقتل أندرويد التطبيق (OOM). الأبعاد
+   * الرقمية + resize تُنزل كل صورة إلى حجم البطاقة الفعلي (~95KB). */
+  const {width: screenWidth} = useWindowDimensions();
+  const photoWidth =
+    photoWidthProp ??
+    Math.floor((screenWidth - spacing.lg * 2 - spacing.md) / 2 - spacing.sm * 2);
   /* v2.8: لا إضافة سريعة من البطاقة — عدّاد السلة معلوماتي فقط
    * (شارة «في السلة»)، والطلب كله من صفحة المنتج. */
   const cartQtyForProduct = useCartStore(
@@ -89,8 +102,9 @@ export function ProductCard({
         {firstImage != null ? (
           <Image
             source={{uri: firstImage}}
-            style={styles.photo}
+            style={[styles.photo, {width: photoWidth}]}
             resizeMode="cover"
+            resizeMethod="resize"
             progressiveRenderingEnabled
           />
         ) : (
@@ -99,6 +113,7 @@ export function ProductCard({
             tint={palette.brandSoft}
             border={palette.brandBorder}
             inkColor={palette.brandDark}
+            width={photoWidth}
           />
         )}
 

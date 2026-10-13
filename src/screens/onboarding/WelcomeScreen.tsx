@@ -349,8 +349,10 @@ export function WelcomeScreen({navigation}: Props) {
             الدخول كزائر والتجول في المول
           </Text>
         </Pressable>
+        {/* v3.1: ملاحظة الزائر اختُصرت لسطر واحد — الشكوى: «الكثير من
+         * الكلام والملاحظات غير المهمة». */}
         <Text style={[{fontSize: 10.5, color: palette.muted, textAlign: 'center'}]}>
-          الزائر يتصفح ويجمع سلته بحرية — إتمام الطلب يطلب تسجيلاً بسيطاً برقم الهوية
+          إتمام الطلب يتطلب تسجيلاً بسيطاً برقم الهوية
         </Text>
       </Animated.View>
     </View>

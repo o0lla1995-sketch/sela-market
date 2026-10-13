@@ -83,16 +83,18 @@ describe('v2.7 — تنظيف المفضلة من المنتجات غير الم
     expect(items['21'].verifiedAt).toBeUndefined();
   });
 
-  test('② شاشة المفضلة: تحقق عند الفتح — نداء لكل متهر لا لكل منتج، وفشل الجلب لا يحذف', () => {
+  test('② شاشة المفضلة: تحقق عند الفتح — نداء واحد لكل شيء، وفشل الجلب لا يحذف', () => {
     const screen = read('src/screens/wishlist/WishlistScreen.tsx');
-    // التجميع حسب المتجر + نداء واحد لكل متجر مختلف.
-    expect(screen).toContain('const byStore = new Map<number, number[]>()');
-    expect(screen).toMatch(/getStoreProducts\(storeId, \{per: VERIFY_PAGE_PER, page\}\)/);
-    // فشل جلب متجر ≠ حذف منتجاته.
-    expect(screen).toContain('if (available == null) {');
-    expect(screen).toMatch(/continue; \/\/ فشل جلب — لا نحذف \(انقطاع ≠ حذف\)\./);
+    /* v3.1 (الجولة 61): التحقق تطوّر من «نداء لكل متجر مع صفحات
+     * كاملة وانتظار ٢٤ ساعة» إلى نداء واحد بكل المعرفات فور الفتح
+     * (خادم 5.6 /products/availability) — أسرع وأرخص وأدق. الحرس
+     * هنا يطابق السلوك الجديد. */
+    expect(screen).toContain('checkProductsAvailability');
+    expect(screen).toContain('VERIFY_THROTTLE_MS');
+    // فشل النداء (شبكة) ≠ حذف منتجات.
+    expect(screen).toMatch(/\/\* شبكة — لا نحذف شيئاً/);
     // إشعار لطيف عند التنظيف.
-    expect(screen).toContain('نُظّفت مفضلتك');
+    expect(screen).toContain('أُزيل');
   });
 
   test('③ صفحة المنتج: كثافة v2.7 + إصلاح الهامش السفلي', () => {
@@ -131,10 +133,10 @@ describe('v2.7 — تنظيف المفضلة من المنتجات غير الم
 
   test('⑤ الإصدار: محدّث في الجولة 60 (3.0.0)', () => {
     const config = read('src/core/config.ts');
-    expect(config).toContain("APP_VERSION = '3.0.1'");
+    expect(config).toContain("APP_VERSION = '3.1.0'");
     expect(config).toContain('APP_BUILD_CODE = 14');
     const gradle = read('android/app/build.gradle');
-    expect(gradle).toContain('versionCode 14');
-    expect(gradle).toContain('versionName "3.0.1"');
+    expect(gradle).toContain('versionCode 15');
+    expect(gradle).toContain('versionName "3.1.0"');
   });
 });

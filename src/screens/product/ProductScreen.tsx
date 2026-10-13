@@ -223,6 +223,7 @@ export function ProductScreen({navigation, route}: Props) {
                     source={{uri}}
                     style={{width: screenWidth - spacing.md * 2, height: galleryHeight}}
                     resizeMode="cover"
+                    resizeMethod="resize"
                     progressiveRenderingEnabled
                   />
                 </Pressable>
@@ -501,6 +502,7 @@ export function ProductScreen({navigation, route}: Props) {
                     product={item}
                     storeName={storeRef.name}
                     storeRef={storeRef}
+                    photoWidth={134}
                     onPress={() =>
                       navigation.push('Product', {product: item, storeRef})
                     }
@@ -599,6 +601,7 @@ export function ProductScreen({navigation, route}: Props) {
                   source={{uri: item}}
                   style={{width: screenWidth, height: '100%'}}
                   resizeMode="contain"
+                  resizeMethod="resize"
                 />
               )}
             />

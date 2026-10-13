@@ -95,7 +95,17 @@ export function RegisterScreen({navigation}: Props) {
     if (ok) {
       primeAndStart();
       toast(`أهلاً ${name.trim().split(' ')[0]} في سيلا ماركت`, 'success');
-      if (navigation.canGoBack()) {
+      /* v3.1 (الجولة 61): نفس إصلاح شاشة الدخول — التسجيل من شاشة
+       * الترحيب لم يكن يغادر الترحيب (أُزيلت من المكدس لحظة
+       * setOnboarded) — قفزة نظيفة إلى الرئيسية بدل goBack لعوز. */
+      const state = navigation.getState();
+      const below =
+        state != null && state.routes.length >= 2
+          ? state.routes[state.routes.length - 2]?.name
+          : null;
+      if (!navigation.canGoBack() || below === 'Welcome') {
+        navigation.reset({index: 0, routes: [{name: 'Main'}]});
+      } else {
         navigation.goBack();
       }
     }

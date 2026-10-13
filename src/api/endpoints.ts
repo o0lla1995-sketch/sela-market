@@ -233,6 +233,24 @@ export async function getCategories(): Promise<CategoryCount[]> {
   return res.categories;
 }
 
+/* ── v3.1 (الجولة 61): فحص توفر منتجات بالمعرف — تنظيف المفضلة ──
+ * طلب التاجر بالنص: «كما يختفي المنتج عند إلغاء تفعيله وظهوره في
+ * المتجر أن يختفي من قائمة المفضلة ولا يبقى محفوظاً». نداء واحد
+ * (≤60 معرفاً) يعيد المتاح فقط — نستبدل به مروحة كتالوج كل متجر
+ * التي كانت تنتظر ٢٤ ساعة قبل التنظيف. */
+export async function checkProductsAvailability(
+  ids: number[],
+): Promise<number[]> {
+  if (ids.length === 0) {
+    return [];
+  }
+  const capped = ids.slice(0, 60);
+  const res = await apiRequest<{ok: true; available: number[]}>(
+    `/api/market/products/availability?ids=${capped.join(',')}`,
+  );
+  return res.available;
+}
+
 /* ── v3.0 (الجولة 60): تغذية الرئيسية المجمعة — طلب واحد ────
  * بدل 3 نداءات متوازية (متاجر + تصنيفات + أحدث المنتجات) + نداء
  * رابع لمتاجر المنطقة: نداء واحد يعيدها كلها (خادم 5.5) — قطع

@@ -234,7 +234,9 @@ export function HomeScreen({navigation}: Props) {
   }, []);
 
   const firstEverLoad = loading && products.length === 0 && stores.length === 0;
-  const regionTitle = myRegion ?? 'منطقتك';
+  /* v3.1: خلفية التروسة — برتقالي العلامة في الفاتح، ودرجة أعمق
+   * في الداكن لتبقى القراءة البيضاء مريحة (تباين 5:1). */
+  const heroBg = palette.isDark ? '#C2410C' : '#EA580C';
 
   return (
     <Screen>
@@ -255,16 +257,18 @@ export function HomeScreen({navigation}: Props) {
         onEndReachedThreshold={0.6}
         ListHeaderComponent={
           <View style={{paddingBottom: spacing.lg}}>
-            {/* ─── التروسة البطلة ─── */}
+            {/* ─── التروسة البطولية — v3.1: بلون العلامة الصريح ─── */}
             <View
               style={[
                 heroStyles.wrap,
-                {backgroundColor: palette.surface, paddingTop: insets.top + spacing.md},
+                {backgroundColor: heroBg, paddingTop: spacing.md},
               ]}>
               <View style={heroStyles.topRow}>
                 <View style={heroStyles.greetingCol}>
-                  <Text style={[type.small, {color: palette.muted}]}>{greeting()}</Text>
-                  <Text style={[type.h2, {color: palette.ink, fontFamily: fonts.black}]}>
+                  <Text style={[type.small, {color: 'rgba(255,255,255,0.85)'}]}>
+                    {greeting()}
+                  </Text>
+                  <Text style={[type.h2, {color: '#FFFFFF', fontFamily: fonts.black}]}>
                     {user != null ? user.name.split(' ')[0] : 'متسوّق سيلا'}
                   </Text>
                 </View>
@@ -272,14 +276,14 @@ export function HomeScreen({navigation}: Props) {
                   <Pressable
                     onPress={() => navigation.navigate('Wishlist')}
                     hitSlop={8}
-                    style={[heroStyles.iconBtn, {backgroundColor: palette.surfaceAlt}]}>
-                    <Icon name="heart" size={19} color={palette.inkSoft} />
+                    style={heroStyles.iconBtnOnBrand}>
+                    <Icon name="heart" size={19} color="#FFFFFF" />
                   </Pressable>
                   <Pressable
                     onPress={() => navigation.navigate('Notifications')}
                     hitSlop={8}
-                    style={[heroStyles.iconBtn, {backgroundColor: palette.surfaceAlt}]}>
-                    <Icon name="bell" size={19} color={palette.inkSoft} />
+                    style={heroStyles.iconBtnOnBrand}>
+                    <Icon name="bell" size={19} color="#FFFFFF" />
                     {unread > 0 ? (
                       <View style={heroStyles.badgeSlot}>
                         <Badge count={unread} />
@@ -289,16 +293,44 @@ export function HomeScreen({navigation}: Props) {
                 </View>
               </View>
 
-              {/* مدخل البحث */}
+              {/* v3.1: شريط المنطقة داخل التروسة — كان رقاقة صغيرة
+               * تلتصق بحافة الشاشة فتبدو مخفية؛ الآن بعرض كامل بنمط
+               * طلبات/أمازون: دبوس + اسم المنطقة + سهم، دائماً ظاهر. */}
+              <Pressable
+                onPress={openRegionPicker}
+                style={({pressed}) => [
+                  heroStyles.regionBar,
+                  {opacity: pressed ? 0.85 : 1},
+                ]}>
+                <Icon name="pin" size={16} color="#FFFFFF" />
+                <View style={{flex: 1, alignItems: 'flex-start'}}>
+                  <Text
+                    style={{
+                      fontSize: 10,
+                      color: 'rgba(255,255,255,0.8)',
+                      fontFamily: fonts.medium,
+                    }}>
+                    التوصيل إلى
+                  </Text>
+                  <Text
+                    style={{
+                      fontSize: 13.5,
+                      color: '#FFFFFF',
+                      fontFamily: fonts.bold,
+                    }}
+                    numberOfLines={1}>
+                    {myRegion ?? 'حدّد منطقتك'}
+                  </Text>
+                </View>
+                <Icon name="chevronDown" size={16} color="#FFFFFF" />
+              </Pressable>
+
+              {/* مدخل البحث — أبيض فوق لون العلامة */}
               <Pressable
                 onPress={() => navigation.navigate('Search')}
                 style={({pressed}) => [
                   heroStyles.searchEntry,
-                  {
-                    backgroundColor: palette.bg,
-                    borderColor: palette.line,
-                    opacity: pressed ? 0.8 : 1,
-                  },
+                  {opacity: pressed ? 0.85 : 1},
                 ]}>
                 <Icon name="search" size={19} color={palette.muted} />
                 <Text style={[type.body, {color: palette.muted, flex: 1, textAlign: 'right'}]}>
@@ -335,23 +367,10 @@ export function HomeScreen({navigation}: Props) {
               </View>
             ) : (
               <View style={{paddingHorizontal: spacing.lg, gap: spacing.xl, paddingTop: spacing.lg}}>
-                {/* ─── متاجر تخدم منطقتك ─── */}
+                {/* ─── متاجر تخدم منطقتك ─── v3.1: الاختيار صار من
+                 * شريط التروسة أعلاه — هنا العرض فقط، بلا رقاقة
+                 * جانبية كانت تختفي بحافة الشاشة وبلا شرح مطوّل. */}
                 <View style={{gap: spacing.md}}>
-                  <View style={{flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between'}}>
-                    <SectionTitle title={`متاجر تخدم ${regionTitle}`} />
-                    <Pressable onPress={openRegionPicker} hitSlop={6}>
-                      <View
-                        style={[
-                          regionStyles.changeChip,
-                          {backgroundColor: palette.surfaceAlt, borderColor: palette.line},
-                        ]}>
-                        <Icon name="pin" size={12} color={palette.brandDark} />
-                        <Text style={{fontSize: 11.5, color: palette.brandDark, fontFamily: fonts.bold}}>
-                          {myRegion != null ? 'تغيير' : 'حدّد منطقتك'}
-                        </Text>
-                      </View>
-                    </Pressable>
-                  </View>
                   {myRegion == null ? (
                     <Pressable
                       onPress={openRegionPicker}
@@ -364,37 +383,35 @@ export function HomeScreen({navigation}: Props) {
                         },
                       ]}>
                       <View style={[regionStyles.pinCircle, {backgroundColor: palette.brand}]}>
-                        <Icon name="pin" size={20} color="#FFFFFF" />
+                        <Icon name="pin" size={18} color="#FFFFFF" />
                       </View>
-                      <View style={{flex: 1, gap: 2}}>
-                        <Text style={[type.smallMedium, {color: palette.ink, fontFamily: fonts.bold}]}>
-                          حدّد منطقتك لمتابعة أذكى
-                        </Text>
-                        <Text style={{fontSize: 11.5, color: palette.muted, lineHeight: 17}}>
-                          نعرض لك المتاجر التي توصّل إليك، ونرتبها برسم التوصيل الأرخص أولاً
-                        </Text>
-                      </View>
+                      <Text style={{flex: 1, fontSize: 12.5, color: palette.ink, fontFamily: fonts.medium}}>
+                        حدّد منطقتك لتظهر المتاجر التي توصّل إليك
+                      </Text>
                       <Icon name="forward" size={16} color={palette.brandDark} />
                     </Pressable>
                   ) : regionStores.length > 0 ? (
-                    <FlatList
-                      horizontal
-                      data={regionStores.slice(0, 10)}
-                      keyExtractor={s => `r${s.id}`}
-                      showsHorizontalScrollIndicator={false}
-                      contentContainerStyle={{gap: spacing.md, paddingVertical: 2}}
-                      renderItem={({item}) => (
-                        <CircleStoreCard
-                          store={item}
-                          onPress={() =>
-                            navigation.navigate('Store', {storeId: item.id, storeName: item.name})
-                          }
-                        />
-                      )}
-                    />
+                    <>
+                      <SectionTitle title={`متاجر تخدم ${myRegion}`} />
+                      <FlatList
+                        horizontal
+                        data={regionStores.slice(0, 10)}
+                        keyExtractor={s => `r${s.id}`}
+                        showsHorizontalScrollIndicator={false}
+                        contentContainerStyle={{gap: spacing.md, paddingVertical: 2}}
+                        renderItem={({item}) => (
+                          <CircleStoreCard
+                            store={item}
+                            onPress={() =>
+                              navigation.navigate('Store', {storeId: item.id, storeName: item.name})
+                            }
+                          />
+                        )}
+                      />
+                    </>
                   ) : (
                     <Text style={[type.tiny, {color: palette.muted}]}>
-                      لا متاجر تخدم «{myRegion}» حالياً — جرّب منطقة أخرى أو تصفح كل المتاجر
+                      لا متاجر تخدم «{myRegion}» حالياً — غيّر المنطقة من أعلى الصفحة
                     </Text>
                   )}
                 </View>
@@ -413,6 +430,7 @@ export function HomeScreen({navigation}: Props) {
                         <View style={recStyles.card}>
                           <ProductCard
                             product={item}
+                            photoWidth={160}
                             storeRef={{
                               id: item.store_id,
                               name: item.store_name,
@@ -504,9 +522,6 @@ export function HomeScreen({navigation}: Props) {
                     actionLabel="عرض الكل"
                     onAction={() => navigation.navigate('Search')}
                   />
-                  <Text style={[{fontSize: 11.5, color: palette.muted}]}>
-                    منتجات من كل متاجر سيلا — محدّثة لحظة مزامنة التاجر
-                  </Text>
                   {firstEverLoad ? (
                     <View style={{marginTop: spacing.md}}>
                       <ProductGridSkeleton count={6} />
@@ -668,21 +683,35 @@ const heroStyles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   greetingCol: {gap: 1, alignItems: 'flex-start'},
-  iconBtn: {
+  /* v3.1: أزرار فوق لون العلامة — أبيض شفاف بنمط التروسات الملونة. */
+  iconBtnOnBrand: {
     width: 42,
     height: 42,
     borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.22)',
   },
   badgeSlot: {position: 'absolute', top: -5, left: -5},
+  /* v3.1: شريط المنطقة — بعرض كامل داخل التروسة، دائماً ظاهر. */
+  regionBar: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: spacing.sm,
+    borderRadius: radius.md,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.28)',
+    paddingHorizontal: spacing.md,
+    paddingVertical: 8,
+  },
   searchEntry: {
     flexDirection: 'row-reverse',
     alignItems: 'center',
     gap: spacing.sm,
     height: 52,
     borderRadius: radius.pill,
-    borderWidth: 1,
+    backgroundColor: '#FFFFFF',
     paddingHorizontal: spacing.lg,
   },
   searchChip: {
@@ -730,15 +759,6 @@ const catStyles = StyleSheet.create({
 });
 
 const regionStyles = StyleSheet.create({
-  changeChip: {
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    gap: 4,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-  },
   emptyCard: {
     flexDirection: 'row-reverse',
     alignItems: 'center',
@@ -748,8 +768,8 @@ const regionStyles = StyleSheet.create({
     padding: spacing.md,
   },
   pinCircle: {
-    width: 44,
-    height: 44,
+    width: 40,
+    height: 40,
     borderRadius: 999,
     alignItems: 'center',
     justifyContent: 'center',

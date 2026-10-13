@@ -84,10 +84,23 @@ export function LoginScreen({navigation, route}: Props) {
 
   const idError = touched ? validateIdNumber(idNumber) : null;
 
+  /* v3.1 (الجولة 61): نهاية دخول ذكية — الشكوى الحرفية: «عند تسجيل
+   * الدخول في شاشة الترحيب أبقى عالقاً في الصفحة كما هي». الجذر:
+   * نافذة الدخول تُغلق بـ goBack لكن ما تحتها كان شاشة الترحيب التي
+   * أُزيلت من المكدس لحظة setOnboarded() — فلا عودة إلى شيء. الآن:
+   * إذا كان ما تحت النافذة هو الترحيب أو لا يوجد شيء تحتها، قفزة
+   * نظيفة إلى الرئيسية (reset) بدل العودة للوراء. */
   const finishLogin = (message?: string) => {
     primeAndStart();
     toast(message ?? 'أهلاً بعودتك', 'success');
-    if (navigation.canGoBack()) {
+    const state = navigation.getState();
+    const below =
+      state != null && state.routes.length >= 2
+        ? state.routes[state.routes.length - 2]?.name
+        : null;
+    if (!navigation.canGoBack() || below === 'Welcome') {
+      navigation.reset({index: 0, routes: [{name: 'Main'}]});
+    } else {
       navigation.goBack();
     }
   };
@@ -243,7 +256,7 @@ export function LoginScreen({navigation, route}: Props) {
                         .then(ok => {
                           if (ok) {
                             // الجلسة المحفوظة ما زالت حية — الدخول بها مباشرة
-                            navigation.replace('Main');
+                            finishLogin('فتحت جلستك بالبصمة');
                           } else {
                             toast('أُلغي الدخول بالبصمة', 'info');
                           }

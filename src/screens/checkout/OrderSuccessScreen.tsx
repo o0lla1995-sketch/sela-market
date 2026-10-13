@@ -61,8 +61,12 @@ export function OrderSuccessScreen({navigation, route}: Props) {
             label="تتبّع الطلب"
             icon="receipt"
             onPress={() => {
-              /* استبدال كل مكدس السلة بطلباتي مع تفاصيل الطلب */
-              navigation.getParent()?.navigate('Orders', {
+              /* v3.1 (الجولة 61): السلة كانت تُستبدل بهذه الشاشة، فتبقى
+               * «نجاح عالق» أعلى تبويب السلة كلما عاد إليه المستخدم.
+               * الآن: يُعاد مكدس السلة إلى السلة نفسها ثم ننتقل للتتبع. */
+              const parent = navigation.getParent();
+              navigation.reset({index: 0, routes: [{name: 'Cart'}]});
+              parent?.navigate('Orders', {
                 screen: 'OrderDetail',
                 params: {orderId: order.id, order},
               });
@@ -72,7 +76,11 @@ export function OrderSuccessScreen({navigation, route}: Props) {
             label="مواصلة التسوق"
             variant="outline"
             icon="store"
-            onPress={() => navigation.getParent()?.navigate('Shop')}
+            onPress={() => {
+              const parent = navigation.getParent();
+              navigation.reset({index: 0, routes: [{name: 'Cart'}]});
+              parent?.navigate('Shop');
+            }}
           />
         </View>
       </View>

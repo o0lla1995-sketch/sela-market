@@ -113,10 +113,10 @@ describe('الجولة 60 — v3.0.0: إعادة البناء الهيكلي', (
 
   test('⑤ الإصدار: 3.0.0 (13)', () => {
     const config = read('src/core/config.ts');
-    expect(config).toContain("APP_VERSION = '3.0.1'");
+    expect(config).toContain("APP_VERSION = '3.1.0'");
     expect(config).toContain('APP_BUILD_CODE = 14');
     const gradle = read('android/app/build.gradle');
-    expect(gradle).toContain('versionCode 14');
-    expect(gradle).toContain('versionName "3.0.1"');
+    expect(gradle).toContain('versionCode 15');
+    expect(gradle).toContain('versionName "3.1.0"');
   });
 });
