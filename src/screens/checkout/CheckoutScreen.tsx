@@ -4,12 +4,12 @@
  * وملخص المبالغ. الزائر يُحوَّل لشاشة الدخول عند الضغط على الطلب.
  * الأسعار النهائية يحسبها الخادم من كتالوج المتجر نفسه.
  */
-import React, {useCallback, useEffect, useMemo, useState} from 'react';
+import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {Pressable, ScrollView, StyleSheet, Text, View} from 'react-native';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 import {useTheme} from '../../theme/ThemeProvider';
 import {radius, spacing, type, fonts} from '../../theme/tokens';
-import {Icon} from '../../components/Icon';
+import {Icon, type IconName} from '../../components/Icon';
 import {
   AppHeader,
   BottomFixed,
@@ -19,9 +19,8 @@ import {
   Field,
   Loader,
   Screen,
-  SectionTitle,
 } from '../../components/ui';
-import {getStoreDetail, placeOrder} from '../../api/endpoints';
+import {getStoreDetail, placeOrder, newOrderRequestId} from '../../api/endpoints';
 import {ApiError} from '../../api/client';
 import {formatMoney, formatQty, lineTotal} from '../../core/money';
 import {cartSavings, lineSavings} from '../../core/discount';
@@ -39,8 +38,51 @@ import {useStackBottomClearance} from '../../core/layout';
 
 type Props = NativeStackScreenProps<CartStackParamList, 'Checkout'>;
 
+/* v2.6: ترويسة خطوة مرقّمة — تحل محل SectionTitle العادية لتمليك
+ * المستخدم تقدّمه: أين هو، ماذا بقي، وما اكتمل. */
+function StepHeader({
+  n,
+  title,
+  icon,
+  done,
+}: {
+  n: string;
+  title: string;
+  icon: IconName;
+  done: boolean;
+}) {
+  const {palette} = useTheme();
+  return (
+    <View style={stepStyles.row}>
+      <View
+        style={[
+          stepStyles.circle,
+          {backgroundColor: done ? palette.success : palette.brand},
+        ]}>
+        {done ? (
+          <Icon name="check" size={14} color="#FFFFFF" strokeWidth={3} />
+        ) : (
+          <Icon name={icon} size={14} color="#FFFFFF" />
+        )}
+      </View>
+      <Text style={[type.h3, {color: palette.ink, flex: 1}]}>
+        {n}. {title}
+      </Text>
+      {done ? (
+        <Text style={{fontSize: 11, color: palette.success, fontFamily: fonts.bold}}>
+          مكتمل
+        </Text>
+      ) : null}
+    </View>
+  );
+}
+
 export function CheckoutScreen({navigation, route}: Props) {
   const {palette} = useTheme();
+  /* v2.6: هوك الإخلاء مرفوع لقمة المكون — استدعاؤه داخل
+   * فروع JSX شرطية كان يغيّر عدد الـ hooks بين الرندرات ويحطم
+   * الشاشة (Rendered more hooks). */
+  const stackClearance = useStackBottomClearance();
   const {storeId} = route.params;
   const rootNav = useRootNav();
 
@@ -64,6 +106,23 @@ export function CheckoutScreen({navigation, route}: Props) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [placing, setPlacing] = useState(false);
+
+  /* v2.6: مفتاح إيديمبوتنسية الطلب — يُولّد مرة ويُعاد استخدامه في
+   * كل محاولة (نفس الضغطة أو ضغطات متتالية بعد فشل شبكة) حتى ينجح
+   * الطلب؛ بعدها يُولّد مفتاح جديد لأي طلب تالٍ. الخادم يرد نفس
+   * الطلب لنفس المفتاح — لا طلبات مكررة لدى التاجر مهما تعثرت
+   * الشبكة. */
+  const orderRequestIdRef = useRef<string>(newOrderRequestId());
+
+  /* v2.6: الزائر لا يصل شاشة الدفع أصلاً — بوابة الدخول عند الدخول.
+   * (كان الزائر يملأ كل شيء ثم يفاجأ بجدار الدخول عند الإرسال). */
+  useEffect(() => {
+    if (useAuthStore.getState().token == null) {
+      rootNav.navigate('Login', {reason: 'checkout'});
+    }
+    // مرة واحدة عند الدخول — لا عند كل رندر.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const load = useCallback(async () => {
     setError(null);
@@ -170,7 +229,10 @@ export function CheckoutScreen({navigation, route}: Props) {
         regionName,
         address: address.trim(),
         note: note.trim() || undefined,
+        clientRequestId: orderRequestIdRef.current,
       });
+      // نجح — مفتاح جديد لأي طلب تالٍ.
+      orderRequestIdRef.current = newOrderRequestId();
       clearStore(storeId);
       addAddress(address.trim());
       rememberRegion(storeId, regionName);
@@ -199,10 +261,15 @@ export function CheckoutScreen({navigation, route}: Props) {
         subtitle={storeName}
         onBack={() => navigation.goBack()}
       />
-      <ScrollView contentContainerStyle={{padding: spacing.lg, gap: spacing.lg, paddingBottom: useStackBottomClearance() + 130}} showsVerticalScrollIndicator={false}>
-        {/* منطقة التوصيل */}
+      <ScrollView contentContainerStyle={{padding: spacing.lg, gap: spacing.lg, paddingBottom: stackClearance + 130}} showsVerticalScrollIndicator={false}>
+        {/* ١. منطقة التوصيل */}
         <View style={{gap: spacing.md}}>
-          <SectionTitle title="منطقة التوصيل" />
+          <StepHeader
+            n="١"
+            title="منطقة التوصيل"
+            icon="truck"
+            done={regionName != null}
+          />
           {regions.length === 0 ? (
             <Card>
               <Text style={[type.small, {color: palette.danger}]}>
@@ -258,9 +325,14 @@ export function CheckoutScreen({navigation, route}: Props) {
           )}
         </View>
 
-        {/* العنوان */}
+        {/* ٢. عنوان التسليم */}
         <View style={{gap: spacing.md}}>
-          <SectionTitle title="عنوان التسليم" />
+          <StepHeader
+            n="٢"
+            title="عنوان التسليم"
+            icon="pin"
+            done={validateAddress(address) == null}
+          />
           {/* عناوين الحساب المحفوظة على الخادم — لمسة واحدة تعبّئ كل شيء */}
           {token != null && serverAddresses.length > 0 ? (
             <View style={{gap: spacing.sm}}>
@@ -364,9 +436,14 @@ export function CheckoutScreen({navigation, route}: Props) {
           />
         </View>
 
-        {/* الملخص */}
+        {/* ٣. ملخص الطلب وإرساله */}
         <View style={{gap: spacing.md}}>
-          <SectionTitle title="ملخص الطلب" />
+          <StepHeader
+            n="٣"
+            title="ملخص الطلب"
+            icon="receipt"
+            done={regionName != null && validateAddress(address) == null}
+          />
           <Card style={{gap: spacing.sm}}>
             {entry.lines.map(l => (
               <View key={l.key} style={regionStyles.summaryRow}>
@@ -445,15 +522,34 @@ export function CheckoutScreen({navigation, route}: Props) {
           loading={placing}
           disabled={regions.length === 0}
         />
-        {token == null ? (
+        {regions.length > 0 && regionName != null && validateAddress(address) == null ? (
           <Text style={[{fontSize: 11, color: palette.muted, textAlign: 'center', marginTop: 8}]}>
-            زائر؟ سيُطلب منك تسجيل دخول سريع برقم الهوية والجوال لإتمام الطلب
+            الدفع نقداً عند الاستلام — يتولى المتجر مراجعة طلبك فور وصوله
           </Text>
-        ) : null}
+        ) : (
+          <Text style={[{fontSize: 11, color: palette.warning, textAlign: 'center', marginTop: 8}]}>
+            أكمل الخطوتين ١ و٢ أعلاه لتفعيل زر الإرسال
+          </Text>
+        )}
       </BottomFixed>
     </Screen>
   );
 }
+
+const stepStyles = StyleSheet.create({
+  row: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  circle: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+});
 
 const addrStyles = StyleSheet.create({
   row: {

@@ -38,6 +38,10 @@ type Props = NativeStackScreenProps<OrdersStackParamList, 'OrderDetail'>;
 
 export function OrderDetailScreen({navigation, route}: Props) {
   const {palette} = useTheme();
+  /* v2.6: هوك الإخلاء مرفوع لقمة المكون — استدعاؤه داخل
+   * فروع JSX شرطية كان يغيّر عدد الـ hooks بين الرندرات ويحطم
+   * الشاشة (Rendered more hooks). */
+  const stackClearance = useStackBottomClearance();
   const {orderId, order: initialOrder} = route.params;
 
   const token = useAuthStore(s => s.token);
@@ -160,7 +164,7 @@ export function OrderDetailScreen({navigation, route}: Props) {
         subtitle={`طلب ${order.store?.name ?? ''}`}
         onBack={() => navigation.goBack()}
       />
-      <ScrollView contentContainerStyle={{padding: spacing.lg, gap: spacing.lg, paddingBottom: useStackBottomClearance()}} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{padding: spacing.lg, gap: spacing.lg, paddingBottom: stackClearance}} showsVerticalScrollIndicator={false}>
         {/* حالة الطلب */}
         <Card style={{gap: spacing.md}}>
           <View style={detailStyles.statusRow}>

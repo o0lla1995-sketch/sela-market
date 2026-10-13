@@ -26,6 +26,10 @@ type Props = NativeStackScreenProps<AccountStackParamList, 'Profile'>;
 
 export function ProfileScreen({navigation}: Props) {
   const {palette} = useTheme();
+  /* v2.6: هوك الإخلاء مرفوع لقمة المكون — استدعاؤه داخل
+   * فروع JSX شرطية كان يغيّر عدد الـ hooks بين الرندرات ويحطم
+   * الشاشة (Rendered more hooks). */
+  const tabClearance = useTabBottomClearance();
   const user = useAuthStore(s => s.user);
   const token = useAuthStore(s => s.token);
   const logout = useAuthStore(s => s.logout);
@@ -85,7 +89,7 @@ export function ProfileScreen({navigation}: Props) {
     <Screen>
       <AppHeader title="حسابي" big />
 
-      <ScrollView contentContainerStyle={{padding: spacing.lg, gap: spacing.lg, paddingBottom: useTabBottomClearance()}} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{padding: spacing.lg, gap: spacing.lg, paddingBottom: tabClearance}} showsVerticalScrollIndicator={false}>
         {/* بطاقة المستخدم */}
         {token != null && user != null ? (
           <Card style={{gap: spacing.md}}>

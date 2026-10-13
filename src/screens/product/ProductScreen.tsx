@@ -38,7 +38,7 @@ import {ProductCard} from '../../components/ProductCard';
 import {StoreAvatar} from '../../components/StoreCard';
 import {absoluteUrl} from '../../api/client';
 import {getStoreProducts} from '../../api/endpoints';
-import {formatMoney} from '../../core/money';
+import {formatMoney, formatQty} from '../../core/money';
 import {effectiveMinor, hasDiscount} from '../../core/discount';
 import {
   lineKeyOf,
@@ -51,13 +51,18 @@ import {useCartStore} from '../../stores/cartStore';
 import {useInterestStore} from '../../stores/interestStore';
 import {useWishlistStore} from '../../stores/wishlistStore';
 import {useToastStore} from '../../stores/toastStore';
-import type {ShopStackParamList} from '../../navigation/RootNavigator';
+import {useRequireAuth, type ShopStackParamList} from '../../navigation/RootNavigator';
 import {useStackBottomClearance} from '../../core/layout';
+import {minQty, qtyStep} from '../../core/money';
 
 type Props = NativeStackScreenProps<ShopStackParamList, 'Product'>;
 
 export function ProductScreen({navigation, route}: Props) {
   const {palette} = useTheme();
+  /* v2.6: هوك الإخلاء مرفوع لقمة المكون — استدعاؤه داخل
+   * فروع JSX شرطية كان يغيّر عدد الـ hooks بين الرندرات ويحطم
+   * الشاشة (Rendered more hooks). */
+  const stackClearance = useStackBottomClearance();
   const {width: screenWidth} = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const {product, storeRef} = route.params;
@@ -66,6 +71,7 @@ export function ProductScreen({navigation, route}: Props) {
   const increment = useCartStore(s => s.increment);
   const decrement = useCartStore(s => s.decrement);
   const toast = useToastStore(s => s.show);
+  const requireAuth = useRequireAuth();
   const wishlisted = useWishlistStore(s => s.items[String(product.id)] != null);
   const toggleWishlist = useWishlistStore(s => s.toggle);
 
@@ -73,6 +79,17 @@ export function ProductScreen({navigation, route}: Props) {
   const outOfStock = product.stock <= 0;
   const lowStock = !outOfStock && product.stock <= 5;
   const optionGroups: ProductOptionGroup[] = product.options ?? [];
+
+  /* v2.6: الكمية تُختار قبل الإضافة (لا بعدها) — العدّاد يعمل
+   * مباشرة على الشاشة والإجمالي يتحدث مع كل لمسة، كما في تطبيقات
+   * التسوق العالمية. الحد الأقصى من المخزون المعروض. */
+  const [qty, setQty] = useState(() => minQty(soldByWeight));
+  const maxQty = Number.isFinite(product.stock) && product.stock > 0
+    ? Math.max(minQty(soldByWeight), Math.floor(product.stock))
+    : 999;
+  const stepQty = qtyStep(soldByWeight);
+  const unitFinalPrice = effectiveMinor(product);
+  const liveTotal = Math.round(unitFinalPrice * qty);
 
   /** اختيار المستخدم لكل مجموعة خيارات (اسم المجموعة → القيمة). */
   const [selection, setSelection] = useState<Record<string, string>>({});
@@ -138,16 +155,19 @@ export function ProductScreen({navigation, route}: Props) {
       toast(`اختر ${optionGroups.find(g => selection[g.name] == null)!.name} أولاً`, 'danger');
       return;
     }
-    addProduct(storeRef, product, variantText);
-    toast(`أُضيف «${product.name}» إلى سلة ${storeRef.name}`, 'success');
+    /* v2.6: الزائر لا يضيف للسلة — بوابة الدخول أولاً. */
+    requireAuth(() => {
+      addProduct(storeRef, product, variantText, qty);
+      toast(`أُضيف «${product.name}» (${formatQty(qty, soldByWeight)}) إلى سلة ${storeRef.name}`, 'success');
+    });
   };
 
-  /** وحدة البيع المعروضة بلا لبس. */
-  const unitText = soldByWeight
-    ? `بالكيلو — يُطلب بأنصاف الكيلو (٠٫٥ كجم وأكثر)`
-    : product.unit_label
-      ? `الوحدة: ${product.unit_label}`
-      : 'يُباع بالقطعة';
+  const onWishlist = () => {
+    requireAuth(() => {
+      const added = toggleWishlist(product, storeRef.name);
+      toast(added ? 'حُفظ في المفضلة' : 'أُزيل من المفضلة', 'info');
+    });
+  };
 
   const galleryHeight = screenWidth * 0.86;
 
@@ -158,7 +178,7 @@ export function ProductScreen({navigation, route}: Props) {
         subtitle={`من ${storeRef.name}`}
         onBack={() => navigation.goBack()}
       />
-      <ScrollView contentContainerStyle={{padding: spacing.lg, gap: spacing.lg, paddingBottom: useStackBottomClearance()}} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{padding: spacing.lg, gap: spacing.lg, paddingBottom: stackClearance}} showsVerticalScrollIndicator={false}>
         {/* ─── معرض الصور ─── */}
         {images.length > 0 ? (
           <View>
@@ -266,10 +286,7 @@ export function ProductScreen({navigation, route}: Props) {
               />
             </View>
             <Pressable
-              onPress={() => {
-                const added = toggleWishlist(product, storeRef.name);
-                toast(added ? 'حُفظ في المفضلة' : 'أُزيل من المفضلة', 'info');
-              }}
+              onPress={onWishlist}
               hitSlop={10}
               style={[priceStyles.wishBtn, {backgroundColor: palette.surfaceAlt}]}>
               <Icon
@@ -280,44 +297,41 @@ export function ProductScreen({navigation, route}: Props) {
             </Pressable>
           </View>
 
-          {/* وحدة البيع — شفافية كاملة قبل الشراء */}
-          <View
-            style={[
-              priceStyles.unitRow,
-              {backgroundColor: palette.infoSoft, borderColor: palette.info},
-            ]}>
-            <Icon name={soldByWeight ? 'scale' : 'box'} size={16} color={palette.info} />
-            <Text style={[{fontSize: 12.5, color: palette.info, fontFamily: fonts.medium, flex: 1}]}>
-              {unitText}
-            </Text>
-          </View>
-
-          {/* حالة المخزون */}
-          <View
-            style={[
-              priceStyles.stockRow,
-              outOfStock
-                ? {backgroundColor: palette.dangerSoft, borderColor: palette.danger}
-                : lowStock
-                  ? {backgroundColor: palette.warningSoft, borderColor: palette.warning}
-                  : {backgroundColor: palette.successSoft, borderColor: palette.success},
-            ]}>
-            <Icon
-              name={outOfStock ? 'xCircle' : lowStock ? 'warning' : 'checkCircle'}
-              size={16}
-              color={outOfStock ? palette.danger : lowStock ? palette.warning : palette.success}
-            />
-            <Text
+          {/* وحدة البيع + حالة المخزون — رقائق معلوماتية أنيقة بدل
+           * الصناديق الملوّنة الكبيرة (شكوى: الصفحة كانت مزدحمة). */}
+          <View style={priceStyles.chipsRow}>
+            <View style={[priceStyles.infoChip, {backgroundColor: palette.surfaceAlt, borderColor: palette.line}]}>
+              <Icon name={soldByWeight ? 'scale' : 'box'} size={13} color={palette.brandDark} />
+              <Text style={{fontSize: 11.5, color: palette.inkSoft, fontFamily: fonts.medium}}>
+                {soldByWeight ? 'بالكيلو — بأنصاف الكيلو' : product.unit_label ? `الوحدة: ${product.unit_label}` : 'يُباع بالقطعة'}
+              </Text>
+            </View>
+            <View
               style={[
-                {fontSize: 12.5, fontFamily: fonts.medium, flex: 1},
-                {color: outOfStock ? palette.danger : lowStock ? palette.warning : palette.success},
+                priceStyles.infoChip,
+                {
+                  backgroundColor: outOfStock ? palette.dangerSoft : lowStock ? palette.warningSoft : palette.successSoft,
+                  borderColor: outOfStock ? palette.danger : lowStock ? palette.warning : palette.success,
+                },
               ]}>
-              {outOfStock
-                ? 'نفدت الكمية حالياً — جرّب متجراً آخر أو عد لاحقاً'
-                : lowStock
-                  ? `بقي القليل (${product.stock}${soldByWeight ? ' كيلو' : ' قطعة'} تقريباً)`
-                  : `متوفر (${Math.floor(product.stock)}${soldByWeight ? ' كيلو' : ' قطعة'} تقريباً)`}
-            </Text>
+              <Icon
+                name={outOfStock ? 'xCircle' : lowStock ? 'warning' : 'checkCircle'}
+                size={13}
+                color={outOfStock ? palette.danger : lowStock ? palette.warning : palette.success}
+              />
+              <Text
+                style={{
+                  fontSize: 11.5,
+                  fontFamily: fonts.medium,
+                  color: outOfStock ? palette.danger : lowStock ? palette.warning : palette.success,
+                }}>
+                {outOfStock
+                  ? 'نفدت الكمية'
+                  : lowStock
+                    ? `بقي القليل (${Math.floor(product.stock)}${soldByWeight ? ' كيلو' : ' قطعة'})`
+                    : `متوفر (${Math.floor(product.stock)}${soldByWeight ? ' كيلو' : ' قطعة'})`}
+              </Text>
+            </View>
           </View>
 
           {/* التصنيف */}
@@ -458,42 +472,68 @@ export function ProductScreen({navigation, route}: Props) {
         ) : null}
       </ScrollView>
 
-      {/* شريط الإضافة السفلي — إجمالي حيّ + خيارات قبل الإضافة */}
+      {/* ─── شريط الشراء السفلي — الكمية + الإجمالي الحي قبل الإضافة ───
+       * v2.6: العدّاد انتقل من «بعد الإضافة» إلى الشاشة نفسها:
+       * المستخدم يرى الكمية والإجمالي يتحدثان لحظياً ثم يضيف —
+       * لا إضافة عمياء ثم تعديل. */}
       <BottomFixed>
         {cartQty > 0 ? (
-          <View style={bottomStyles.row}>
-            <QtyStepper
-              qty={cartQty}
-              soldByWeight={soldByWeight}
-              onIncrease={() => increment(storeRef.id, activeLineKey)}
-              onDecrease={() => decrement(storeRef.id, activeLineKey)}
-            />
-            <Button
-              label={`في السلة — ${formatMoney(effectiveMinor(product) * cartQty)}`}
-              variant="soft"
-              style={{flex: 1}}
-              onPress={() => navigation.getParent()?.navigate('Cart')}
-            />
-          </View>
-        ) : (
-          <View style={{gap: 6}}>
-            <Button
-              label={
-                outOfStock
-                  ? 'غير متوفر حالياً'
-                  : !complete
-                    ? 'اختر المواصفات أولاً'
-                    : 'إضافة إلى السلة'
-              }
-              icon={complete ? 'cart' : 'sliders'}
-              onPress={onAdd}
-              disabled={outOfStock}
-            />
+          <View style={{gap: 8}}>
+            <View style={bottomStyles.row}>
+              <QtyStepper
+                qty={cartQty}
+                soldByWeight={soldByWeight}
+                onIncrease={() => increment(storeRef.id, activeLineKey)}
+                onDecrease={() => decrement(storeRef.id, activeLineKey)}
+              />
+              <Button
+                label={`في السلة — ${formatMoney(effectiveMinor(product) * cartQty)}`}
+                variant="soft"
+                style={{flex: 1}}
+                onPress={() => navigation.getParent()?.navigate('Cart')}
+              />
+            </View>
             {otherVariantCount > 0 ? (
               <Text style={[{fontSize: 11, color: palette.muted, textAlign: 'center'}]}>
                 لديك {otherVariantCount} مواصفة أخرى من هذا المنتج في السلة
               </Text>
             ) : null}
+          </View>
+        ) : (
+          <View style={{gap: 8}}>
+            <View style={bottomStyles.row}>
+              <QtyStepper
+                qty={qty}
+                soldByWeight={soldByWeight}
+                onIncrease={() =>
+                  setQty(q => Math.min(maxQty, Math.round((q + stepQty) * 1000) / 1000))
+                }
+                onDecrease={() =>
+                  setQty(q =>
+                    q - stepQty < minQty(soldByWeight)
+                      ? minQty(soldByWeight)
+                      : Math.round((q - stepQty) * 1000) / 1000,
+                  )
+                }
+              />
+              <Button
+                label={
+                  outOfStock
+                    ? 'غير متوفر حالياً'
+                    : !complete
+                      ? 'اختر المواصفات أولاً'
+                      : `أضف للسلة — ${formatMoney(liveTotal)}`
+                }
+                icon={complete && !outOfStock ? 'cart' : 'sliders'}
+                style={{flex: 1}}
+                onPress={onAdd}
+                disabled={outOfStock}
+              />
+            </View>
+            <Text style={[{fontSize: 11, color: palette.muted, textAlign: 'center'}]}>
+              {formatMoney(unitFinalPrice)} × {formatQty(qty, soldByWeight)}
+              {soldByWeight ? ' كيلو' : ' قطعة'} = {formatMoney(liveTotal)}
+            </Text>
           </View>
         )}
       </BottomFixed>
@@ -596,23 +636,20 @@ const priceStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  unitRow: {
+  /* v2.6: رقائق معلوماتية مدمجة بدل الصناديق الملوّنة الكبيرة */
+  chipsRow: {
     flexDirection: 'row-reverse',
-    alignItems: 'center',
-    gap: 8,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 10,
+    flexWrap: 'wrap',
+    gap: spacing.sm,
   },
-  stockRow: {
+  infoChip: {
     flexDirection: 'row-reverse',
     alignItems: 'center',
-    gap: 8,
-    borderRadius: radius.md,
+    gap: 6,
+    borderRadius: radius.pill,
     borderWidth: 1,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 10,
+    paddingHorizontal: 11,
+    paddingVertical: 7,
   },
 });
 

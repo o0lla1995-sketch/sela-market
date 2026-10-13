@@ -83,6 +83,10 @@ function activeFilterCount(f: Filters): number {
 
 export function SearchScreen({navigation, route}: Props) {
   const {palette} = useTheme();
+  /* v2.6: هوك الإخلاء مرفوع لقمة المكون — استدعاؤه داخل
+   * فروع JSX شرطية كان يغيّر عدد الـ hooks بين الرندرات ويحطم
+   * الشاشة (Rendered more hooks). */
+  const stackClearance = useStackBottomClearance();
   const insets = useSafeAreaInsets();
   const initialQuery = route.params?.initialQuery ?? '';
   const [query, setQuery] = useState(initialQuery);
@@ -413,7 +417,7 @@ export function SearchScreen({navigation, route}: Props) {
           keyExtractor={item => `${item.store_id}:${item.id}`}
           numColumns={2}
           columnWrapperStyle={visible.length > 1 ? gridStyles.row : undefined}
-          contentContainerStyle={{padding: spacing.lg, gap: spacing.lg, paddingBottom: useStackBottomClearance()}}
+          contentContainerStyle={{padding: spacing.lg, gap: spacing.lg, paddingBottom: stackClearance}}
           showsVerticalScrollIndicator={false}
           onEndReached={loadMore}
           onEndReachedThreshold={0.6}

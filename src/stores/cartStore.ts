@@ -43,52 +43,105 @@ interface CartState {
   entryFor: (storeId: number) => CartStoreEntry | null;
 }
 
-function loadCarts(): Record<string, CartStoreEntry> {
+/** v2.6: تحقق صلاحية سطر سلة — كل ما يُقرأ من القرص يمر من هنا. */
+function isCartLine(l: unknown): l is CartLine {
+  return (
+    l != null &&
+    typeof l === 'object' &&
+    typeof (l as CartLine).key === 'string' &&
+    typeof (l as CartLine).productId === 'number' &&
+    typeof (l as CartLine).name === 'string' &&
+    typeof (l as CartLine).priceMinor === 'number' &&
+    typeof (l as CartLine).quantity === 'number' &&
+    Number.isFinite((l as CartLine).quantity)
+  );
+}
+
+/** v2.6: تحقق صلاحية سلة متجر. */
+function isCartEntry(e: unknown): e is CartStoreEntry {
+  return (
+    e != null &&
+    typeof e === 'object' &&
+    typeof (e as CartStoreEntry).storeId === 'number' &&
+    Array.isArray((e as CartStoreEntry).lines) &&
+    (e as CartStoreEntry).lines.every(isCartLine)
+  );
+}
+
+/* ══ v2.6: إصلاح الجذري لحلقة الانهيار ════════════════════════════
+ * العطب القديم: persist كان يكتب الغلاف {carts, lastActiveStoreId}
+ * بينما loadCarts كانت تقرأه كأنه سجل المتاجر مباشرة — بعد أي
+ * إعادة تشغيل تصبح البنية {carts:…, lastActiveStoreId:…} هي «السلة»
+ * نفسها، فتنفجر CartTabIcon بـ e.lines.reduce على undefined عند كل
+ * إقلاع: التطبيق «يغلق ولا يفتح». الآن: القراءة تفتح الغلاف الصحيح
+ * (أو الشكل القديم المباشر)، وكل سلة وكل سطر يُتحقق منه قبل
+ * القبول — أي بيانات تالفة تُهمَل صامتة بدل قتل التطبيق. */
+interface PersistedCartPayload {
+  carts?: unknown;
+  lastActiveStoreId?: unknown;
+}
+
+function sanitizeCartsRecord(raw: unknown): Record<string, CartStoreEntry> {
+  if (raw == null || typeof raw !== 'object' || Array.isArray(raw)) {
+    return {};
+  }
+  const out: Record<string, CartStoreEntry> = {};
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    if (isCartEntry(v)) {
+      out[String(v.storeId)] = {
+        ...v,
+        storeNumber: typeof v.storeNumber === 'string' ? v.storeNumber : '',
+        storeName: typeof v.storeName === 'string' && v.storeName.length > 0 ? v.storeName : `متجر ${v.storeId}`,
+        updatedAt: Number.isFinite(v.updatedAt) ? v.updatedAt : Date.now(),
+      };
+    }
+  }
+  return out;
+}
+
+function loadPersistedCarts(): {
+  carts: Record<string, CartStoreEntry>;
+  lastActiveStoreId: number | null;
+} {
   try {
     const raw = storage.getString(KEY);
-    if (raw != null) {
-      const parsed = JSON.parse(raw) as Record<string, CartStoreEntry>;
-      if (parsed && typeof parsed === 'object') {
-        // v1.2: أسطر v1 القديمة (بلا key/variant) تُرقّى في المكان.
-        for (const entry of Object.values(parsed)) {
-          if (!Array.isArray(entry.lines)) {
-            continue;
-          }
-          entry.lines = entry.lines.map(l => ({
-            ...l,
-            key: l.key ?? lineKeyOf(l.productId, null),
-            variant: l.variant ?? null,
-          }));
-        }
-        return parsed;
-      }
+    if (raw == null) {
+      return {carts: {}, lastActiveStoreId: null};
     }
+    const parsed = JSON.parse(raw) as unknown;
+    if (parsed == null || typeof parsed !== 'object') {
+      return {carts: {}, lastActiveStoreId: null};
+    }
+    const payload = parsed as PersistedCartPayload;
+    // الشكل الحالي: {carts: {...}, lastActiveStoreId} — فتح الغلاف.
+    if (payload.carts != null && typeof payload.carts === 'object' && !Array.isArray(payload.carts)) {
+      const last = payload.lastActiveStoreId;
+      return {
+        carts: sanitizeCartsRecord(payload.carts),
+        lastActiveStoreId: typeof last === 'number' && Number.isFinite(last) ? last : null,
+      };
+    }
+    // شكل قديم/تالف: سجل مباشر — نتحقق منه سلة سلة.
+    const direct = sanitizeCartsRecord(parsed);
+    return {
+      carts: direct,
+      lastActiveStoreId: null,
+    };
   } catch {
-    /* تجاهل */
+    /* تخزين تالف → سلة فارغة، لا انهيار إطلاقاً */
   }
-  return {};
+  return {carts: {}, lastActiveStoreId: null};
 }
+
+const initialPersisted = loadPersistedCarts();
 
 function persist(carts: Record<string, CartStoreEntry>, lastActiveStoreId: number | null): void {
   storage.set(KEY, JSON.stringify({carts, lastActiveStoreId}));
 }
 
-const initialRaw = loadCarts();
-const initialLast = (() => {
-  try {
-    const raw = storage.getString(KEY);
-    if (raw != null) {
-      return (JSON.parse(raw) as {lastActiveStoreId?: number}).lastActiveStoreId ?? null;
-    }
-  } catch {
-    /* تجاهل */
-  }
-  return null;
-})();
-
 export const useCartStore = create<CartState>((set, get) => ({
-  carts: initialRaw,
-  lastActiveStoreId: initialLast,
+  carts: initialPersisted.carts,
+  lastActiveStoreId: initialPersisted.lastActiveStoreId,
 
   addProduct: (store, product, variant = null, qty) => {
     const key = String(store.id);
@@ -101,10 +154,14 @@ export const useCartStore = create<CartState>((set, get) => ({
       lines: [],
       updatedAt: Date.now(),
     };
+    // v2.6: تعقيم دفاعي — أي سلة تالفة من قرص قديم تُبنى من جديد.
+    const safeLines: CartLine[] = Array.isArray(entry.lines)
+      ? entry.lines.filter(isCartLine)
+      : [];
     const step = qtyStep(product.sold_by_weight === 1);
     const addQty = qty ?? step;
     const lineKey = lineKeyOf(product.id, variant);
-    const existing = entry.lines.find(l => l.key === lineKey);
+    const existing = safeLines.find(l => l.key === lineKey);
     // v2.1: السعر المدفوع = بعد خصم التاجر؛ listPriceMinor يحفظ
     // السعر قبل الخصم للعرض المشطوب في السلة والدفع.
     const finalPrice = effectiveMinor(product);
@@ -112,7 +169,7 @@ export const useCartStore = create<CartState>((set, get) => ({
       finalPrice < product.price_minor ? product.price_minor : undefined;
     let lines: CartLine[];
     if (existing) {
-      lines = entry.lines.map(l =>
+      lines = safeLines.map(l =>
         l.key === lineKey
           ? {...l, quantity: Math.min(100000, l.quantity + addQty), stock: product.stock,
              priceMinor: finalPrice, listPriceMinor: listPrice}
@@ -120,7 +177,7 @@ export const useCartStore = create<CartState>((set, get) => ({
       );
     } else {
       lines = [
-        ...entry.lines,
+        ...safeLines,
         {
           key: lineKey,
           productId: product.id,
@@ -224,7 +281,7 @@ export const useCartStore = create<CartState>((set, get) => ({
       lines: [],
       updatedAt: Date.now(),
     };
-    const merged = [...entry.lines];
+    const merged: CartLine[] = Array.isArray(entry.lines) ? [...entry.lines.filter(isCartLine)] : [];
     for (const line of lines) {
       const lineKey = line.key ?? lineKeyOf(line.productId, line.variant ?? null);
       const existing = merged.find(l => l.key === lineKey);
@@ -244,7 +301,10 @@ export const useCartStore = create<CartState>((set, get) => ({
     (get().carts[String(storeId)]?.lines ?? []).reduce((sum, l) => sum + l.quantity, 0),
   countAll: () =>
     Object.values(get().carts).reduce(
-      (sum, e) => sum + e.lines.reduce((s, l) => s + l.quantity, 0),
+      (sum, e) =>
+        Array.isArray(e?.lines)
+          ? sum + e.lines.reduce((s, l) => s + (Number.isFinite(l?.quantity) ? l.quantity : 0), 0)
+          : sum,
       0,
     ),
   subtotalFor: (storeId) =>

@@ -17,6 +17,7 @@ import type {CrossProduct, Product, StoreRef} from '../core/types';
 import {useCartStore} from '../stores/cartStore';
 import {useWishlistStore} from '../stores/wishlistStore';
 import {useToastStore} from '../stores/toastStore';
+import {useRequireAuth} from '../navigation/RootNavigator';
 
 /** بديل مرسوم عند غياب الصورة — سهم أول الاسم داخل إطار ناعم. */
 function PhotoPlaceholder({name, tint, border, inkColor}: {name: string; tint: string; border: string; inkColor: string}) {
@@ -56,6 +57,8 @@ export function ProductCard({
   const wishlisted = useWishlistStore(s => s.items[String(product.id)] != null);
   const toggleWishlist = useWishlistStore(s => s.toggle);
   const toast = useToastStore(s => s.show);
+  /* v2.6: الزائر يتصفح فقط — الإضافة/المفضلة تتطلب دخولاً. */
+  const requireAuth = useRequireAuth();
 
   const soldByWeight = product.sold_by_weight === 1;
   const outOfStock = product.stock <= 0;
@@ -81,6 +84,7 @@ export function ProductCard({
     addProduct(storeRef, product);
     toast(`أُضيف «${product.name}» إلى سلة ${storeRef.name}`, 'success');
   };
+  const onAddGated = () => requireAuth(onAdd);
 
   return (
     <Pressable
@@ -137,10 +141,12 @@ export function ProductCard({
 
         {/* قلب المفضلة */}
         <Pressable
-          onPress={() => {
-            const added = toggleWishlist(product, displayName);
-            toast(added ? 'أُضيف إلى المفضلة' : 'أُزيل من المفضلة', 'info');
-          }}
+          onPress={() =>
+            requireAuth(() => {
+              const added = toggleWishlist(product, displayName);
+              toast(added ? 'أُضيف إلى المفضلة' : 'أُزيل من المفضلة', 'info');
+            })
+          }
           hitSlop={10}
           style={[styles.heartBtn, {backgroundColor: palette.surface}]}>
           <Icon
@@ -229,7 +235,7 @@ export function ProductCard({
           />
         ) : (
           <Pressable
-            onPress={onAdd}
+            onPress={onAddGated}
             disabled={outOfStock}
             style={({pressed}) => [
               styles.addBtn,

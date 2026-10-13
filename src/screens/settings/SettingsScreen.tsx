@@ -90,6 +90,10 @@ function LinkRow({
 
 export function SettingsScreen({navigation}: Props) {
   const {palette, mode, setMode} = useTheme();
+  /* v2.6: هوك الإخلاء مرفوع لقمة المكون — استدعاؤه داخل
+   * فروع JSX شرطية كان يغيّر عدد الـ hooks بين الرندرات ويحطم
+   * الشاشة (Rendered more hooks). */
+  const stackClearance = useStackBottomClearance();
   const notificationsEnabled = useSettingsStore(s => s.notificationsEnabled);
   const setNotificationsEnabled = useSettingsStore(s => s.setNotificationsEnabled);
   const user = useAuthStore(s => s.user);
@@ -157,7 +161,7 @@ export function SettingsScreen({navigation}: Props) {
         onBack={() => navigation.goBack()}
         big
       />
-      <ScrollView contentContainerStyle={{padding: spacing.lg, gap: spacing.xl, paddingBottom: useStackBottomClearance()}} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{padding: spacing.lg, gap: spacing.xl, paddingBottom: stackClearance}} showsVerticalScrollIndicator={false}>
         {/* ─── المظهر ─── */}
         <View style={{gap: spacing.md}}>
           <GroupTitle icon="sun" title="المظهر" />

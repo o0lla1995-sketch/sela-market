@@ -24,6 +24,10 @@ type Props = NativeStackScreenProps<ShopStackParamList, 'Stores'>;
 
 export function StoresScreen({navigation}: Props) {
   const {palette} = useTheme();
+  /* v2.6: هوك الإخلاء مرفوع لقمة المكون — استدعاؤه داخل
+   * فروع JSX شرطية كان يغيّر عدد الـ hooks بين الرندرات ويحطم
+   * الشاشة (Rendered more hooks). */
+  const tabClearance = useTabBottomClearance();
   const myRegion = useLocationStore(s => s.myRegion);
   const [stores, setStores] = useState<Store[]>([]);
   const [regions, setRegions] = useState<string[]>([]);
@@ -219,7 +223,7 @@ export function StoresScreen({navigation}: Props) {
         <FlatList
           data={filtered}
           keyExtractor={s => String(s.id)}
-          contentContainerStyle={{padding: spacing.lg, gap: spacing.md, paddingBottom: useTabBottomClearance()}}
+          contentContainerStyle={{padding: spacing.lg, gap: spacing.md, paddingBottom: tabClearance}}
           showsVerticalScrollIndicator={false}
           ListEmptyComponent={
             selectedRegion != null && regionStores.length === 0 ? (

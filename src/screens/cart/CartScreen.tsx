@@ -30,6 +30,10 @@ type Props = NativeStackScreenProps<CartStackParamList, 'Cart'>;
 
 export function CartScreen({navigation}: Props) {
   const {palette} = useTheme();
+  /* v2.6: هوك الإخلاء مرفوع لقمة المكون — استدعاؤه داخل
+   * فروع JSX شرطية كان يغيّر عدد الـ hooks بين الرندرات ويحطم
+   * الشاشة (Rendered more hooks). */
+  const tabClearance = useTabBottomClearance();
   const carts = useCartStore(s => s.carts);
   const clearStore = useCartStore(s => s.clearStore);
   const clearAll = useCartStore(s => s.clearAll);
@@ -68,7 +72,7 @@ export function CartScreen({navigation}: Props) {
         <FlatList
           data={entries}
           keyExtractor={e => String(e.storeId)}
-          contentContainerStyle={{padding: spacing.lg, gap: spacing.lg, paddingBottom: useTabBottomClearance() + 40}}
+          contentContainerStyle={{padding: spacing.lg, gap: spacing.lg, paddingBottom: tabClearance + 40}}
           showsVerticalScrollIndicator={false}
           renderItem={({item: entry}) => (
             <StoreCart

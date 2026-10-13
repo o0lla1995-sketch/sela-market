@@ -80,6 +80,10 @@ function crossOf(p: Product, store: Store): CrossProduct {
 
 export function HomeScreen({navigation}: Props) {
   const {palette} = useTheme();
+  /* v2.6: هوك الإخلاء مرفوع لقمة المكون — استدعاؤه داخل
+   * فروع JSX شرطية كان يغيّر عدد الـ hooks بين الرندرات ويحطم
+   * الشاشة (Rendered more hooks). */
+  const tabClearance = useTabBottomClearance();
   const insets = useSafeAreaInsets();
   const user = useAuthStore(s => s.user);
   const unread = useNotificationsStore(s => s.unread);
@@ -290,7 +294,7 @@ export function HomeScreen({navigation}: Props) {
         keyExtractor={item => `${item.store_id}:${item.id}`}
         numColumns={2}
         columnWrapperStyle={gridStyles.row}
-        contentContainerStyle={{paddingBottom: useTabBottomClearance()}}
+        contentContainerStyle={{paddingBottom: tabClearance}}
         showsVerticalScrollIndicator={false}
         refreshing={refreshing}
         onRefresh={async () => {
@@ -524,33 +528,11 @@ export function HomeScreen({navigation}: Props) {
                   </View>
                 ) : null}
 
-                {/* ─── متاجر المول (بطاقات دائرية مختصرة) ─── */}
-                {firstEverLoad ? (
-                  <RowSkeleton />
-                ) : stores.length > 0 ? (
-                  <View style={{gap: spacing.md}}>
-                    <SectionTitle
-                      title="متاجر المول"
-                      actionLabel="الكل"
-                      onAction={() => navigation.navigate('Stores')}
-                    />
-                    <FlatList
-                      horizontal
-                      data={stores.slice(0, 12)}
-                      keyExtractor={s => String(s.id)}
-                      showsHorizontalScrollIndicator={false}
-                      contentContainerStyle={{gap: spacing.md, paddingVertical: 2}}
-                      renderItem={({item}) => (
-                        <CircleStoreCard
-                          store={item}
-                          onPress={() =>
-                            navigation.navigate('Store', {storeId: item.id, storeName: item.name})
-                          }
-                        />
-                      )}
-                    />
-                  </View>
-                ) : null}
+                {/* v2.6: قُسم «متاجر المول» محذوف بطلب صريح من
+                 * المستخدم — كان تكراراً بصرياً لقسم «متاجر تخدم
+                 * منطقتك» أعلاه (القسمان يعرضان المتاجر أنفسها
+                 * ببطاقات دائرية متطابقة فوق بعضهما). قائمة المتاجر
+                 * الكاملة تبقى متاحة من تبويب «المتاجر» السفلي. */}
 
                 {/* ─── أحدث المنتجات ─── */}
                 <View style={{gap: spacing.xs}}>

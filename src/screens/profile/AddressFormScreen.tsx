@@ -38,6 +38,10 @@ const LABEL_PRESETS = ['المنزل', 'العمل', 'منزل الأهل', 'أ�
 
 export function AddressFormScreen({navigation, route}: Props) {
   const {palette} = useTheme();
+  /* v2.6: هوك الإخلاء مرفوع لقمة المكون — استدعاؤه داخل
+   * فروع JSX شرطية كان يغيّر عدد الـ hooks بين الرندرات ويحطم
+   * الشاشة (Rendered more hooks). */
+  const stackClearance = useStackBottomClearance();
   const editing = route.params?.address;
   const token = useAuthStore(s => s.token);
   const addresses = useLocationStore(s => s.addresses);
@@ -146,7 +150,7 @@ export function AddressFormScreen({navigation, route}: Props) {
         onBack={() => navigation.goBack()}
       />
       <ScrollView
-        contentContainerStyle={{padding: spacing.lg, gap: spacing.lg, paddingBottom: useStackBottomClearance()}}
+        contentContainerStyle={{padding: spacing.lg, gap: spacing.lg, paddingBottom: stackClearance}}
         showsVerticalScrollIndicator={false}>
         {/* اللقب */}
         <View style={{gap: spacing.md}}>

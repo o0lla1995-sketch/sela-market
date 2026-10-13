@@ -40,6 +40,10 @@ const FILTERS: {value: Filter; label: string}[] = [
 
 export function OrdersScreen({navigation}: Props) {
   const {palette} = useTheme();
+  /* v2.6: هوك الإخلاء مرفوع لقمة المكون — استدعاؤه داخل
+   * فروع JSX شرطية كان يغيّر عدد الـ hooks بين الرندرات ويحطم
+   * الشاشة (Rendered more hooks). */
+  const tabClearance = useTabBottomClearance();
   const token = useAuthStore(s => s.token);
   const user = useAuthStore(s => s.user);
 
@@ -154,7 +158,7 @@ export function OrdersScreen({navigation}: Props) {
         <FlatList
           data={filtered}
           keyExtractor={o => String(o.id)}
-          contentContainerStyle={{padding: spacing.lg, gap: spacing.md, paddingBottom: useTabBottomClearance()}}
+          contentContainerStyle={{padding: spacing.lg, gap: spacing.md, paddingBottom: tabClearance}}
           showsVerticalScrollIndicator={false}
           refreshing={refreshing}
           onRefresh={async () => {

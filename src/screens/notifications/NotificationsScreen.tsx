@@ -18,6 +18,10 @@ type Props = NativeStackScreenProps<ShopStackParamList, 'Notifications'>;
 
 export function NotificationsScreen({navigation}: Props) {
   const {palette} = useTheme();
+  /* v2.6: هوك الإخلاء مرفوع لقمة المكون — استدعاؤه داخل
+   * فروع JSX شرطية كان يغيّر عدد الـ hooks بين الرندرات ويحطم
+   * الشاشة (Rendered more hooks). */
+  const stackClearance = useStackBottomClearance();
   const items = useNotificationsStore(s => s.items);
   const unread = useNotificationsStore(s => s.unread);
   const markAllRead = useNotificationsStore(s => s.markAllRead);
@@ -56,7 +60,7 @@ export function NotificationsScreen({navigation}: Props) {
         <FlatList
           data={items}
           keyExtractor={n => n.id}
-          contentContainerStyle={{padding: spacing.lg, gap: spacing.md, paddingBottom: useStackBottomClearance()}}
+          contentContainerStyle={{padding: spacing.lg, gap: spacing.md, paddingBottom: stackClearance}}
           showsVerticalScrollIndicator={false}
           renderItem={({item}) => {
             const c = toneColors(palette, item.kind === 'order' ? 'brand' : 'info');

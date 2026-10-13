@@ -45,6 +45,10 @@ const LABEL_ICONS: Record<string, string> = {
 
 export function AddressBookScreen({navigation}: Props) {
   const {palette} = useTheme();
+  /* v2.6: هوك الإخلاء مرفوع لقمة المكون — استدعاؤه داخل
+   * فروع JSX شرطية كان يغيّر عدد الـ hooks بين الرندرات ويحطم
+   * الشاشة (Rendered more hooks). */
+  const stackClearance = useStackBottomClearance();
   const token = useAuthStore(s => s.token);
   const addresses = useLocationStore(s => s.addresses);
   const applyAddresses = useLocationStore(s => s.applyAddresses);
@@ -152,7 +156,7 @@ export function AddressBookScreen({navigation}: Props) {
         <FlatList
           data={addresses}
           keyExtractor={a => String(a.id)}
-          contentContainerStyle={{padding: spacing.lg, gap: spacing.md, paddingBottom: useStackBottomClearance()}}
+          contentContainerStyle={{padding: spacing.lg, gap: spacing.md, paddingBottom: stackClearance}}
           showsVerticalScrollIndicator={false}
           refreshing={loading}
           onRefresh={load}

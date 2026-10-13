@@ -40,6 +40,10 @@ const SORTS: {key: SortKey; label: string; icon: IconName}[] = [
 
 export function CategoryScreen({navigation, route}: Props) {
   const {palette} = useTheme();
+  /* v2.6: هوك الإخلاء مرفوع لقمة المكون — استدعاؤه داخل
+   * فروع JSX شرطية كان يغيّر عدد الـ hooks بين الرندرات ويحطم
+   * الشاشة (Rendered more hooks). */
+  const stackClearance = useStackBottomClearance();
   const {category} = route.params;
 
   const [products, setProducts] = useState<CrossProduct[]>([]);
@@ -168,7 +172,7 @@ export function CategoryScreen({navigation, route}: Props) {
           keyExtractor={item => `${item.store_id}:${item.id}`}
           numColumns={2}
           columnWrapperStyle={{gap: spacing.md, width: '100%', marginBottom: spacing.md, paddingHorizontal: spacing.lg}}
-          contentContainerStyle={{paddingBottom: useStackBottomClearance()}}
+          contentContainerStyle={{paddingBottom: stackClearance}}
           showsVerticalScrollIndicator={false}
           onEndReached={loadMore}
           onEndReachedThreshold={0.6}

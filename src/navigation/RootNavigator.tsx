@@ -4,7 +4,7 @@
  * السلة/طلباتي/حسابي) + شاشتا الدخول والتسجيل كنوافذ منبثقة من أي
  * مكان (بوابة إتمام الطلب للزوار).
  */
-import React, {useEffect} from 'react';
+import React, {useCallback, useEffect} from 'react';
 import {AppState, I18nManager, StyleSheet, View} from 'react-native';
 import {
   NavigationContainer,
@@ -21,6 +21,7 @@ import {shouldSuppressReLock} from '../services/biometrics';
 import {useAuthStore} from '../stores/authStore';
 import {useCartStore} from '../stores/cartStore';
 import {useNotificationsStore} from '../stores/notificationsStore';
+import {useToastStore} from '../stores/toastStore';
 import {useTheme} from '../theme/ThemeProvider';
 import {Icon, type IconName} from '../components/Icon';
 import {Badge} from '../components/ui';
@@ -124,6 +125,29 @@ const RootStack = createNativeStackNavigator<RootStackParamList>();
 export function useRootNav() {
   return useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 }
+
+/* ══ v2.6: بوابة العمليات للزائر ══════════════════════════════
+ * قرار المستخدم الصريح: الزائر يتصفّح ويرى فقط — أي عملية
+ * (إضافة للسلة/مفضلة/إتمام طلب/تقييم) تتطلب تسجيل دخول.
+ * الدالة تفتح نافذة الدخول مع سبب وتعيد false حتى لا تنفّذ
+ * العملية قبل الدخول؛ بعد الدخول يعود المستخدم للشاشة نفسها
+ * ويعيد الضغطة — لا شيء يضيع. */
+export function useRequireAuth() {
+  const rootNav = useRootNav();
+  const toast = useToastStore(s => s.show);
+  return useCallback(
+    (action: () => void, reason: 'checkout' | 'orders' | 'profile' = 'checkout') => {
+      if (useAuthStore.getState().token != null) {
+        action();
+        return true;
+      }
+      toast('سجّل الدخول أولاً — التسجيل مرة واحدة فقط', 'info');
+      rootNav.navigate('Login', {reason});
+      return false;
+    },
+    [rootNav, toast],
+  );
+}
 const ShopStack = createNativeStackNavigator<ShopStackParamList>();
 const CartStack = createNativeStackNavigator<CartStackParamList>();
 const OrdersStack = createNativeStackNavigator<OrdersStackParamList>();
@@ -207,8 +231,13 @@ function AccountStackScreens() {
 
 function CartTabIcon({color}: {color: string}) {
   const carts = useCartStore(s => s.carts);
-  const count = Object.values(carts).reduce(
-    (sum, e) => sum + e.lines.reduce((s, l) => s + l.quantity, 0),
+  /* v2.6: تعقيم دفاعي — أي بنية تالفة (قرص قديم) لا تقتل التطبيق
+   * عند الإقلاع (كانت حلقة الانهيار: e.lines.reduce على undefined). */
+  const count = Object.values(carts ?? {}).reduce(
+    (sum, e) =>
+      Array.isArray(e?.lines)
+        ? sum + e.lines.reduce((s, l) => s + (Number.isFinite(l?.quantity) ? l.quantity : 0), 0)
+        : sum,
     0,
   );
   return (

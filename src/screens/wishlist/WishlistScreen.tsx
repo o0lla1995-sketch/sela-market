@@ -21,6 +21,10 @@ type Props = NativeStackScreenProps<ShopStackParamList, 'Wishlist'>;
 
 export function WishlistScreen({navigation}: Props) {
   const {palette} = useTheme();
+  /* v2.6: هوك الإخلاء مرفوع لقمة المكون — استدعاؤه داخل
+   * فروع JSX شرطية كان يغيّر عدد الـ hooks بين الرندرات ويحطم
+   * الشاشة (Rendered more hooks). */
+  const stackClearance = useStackBottomClearance();
   const items = useWishlistStore(s => s.items);
   const remove = useWishlistStore(s => s.remove);
   const addProduct = useCartStore(s => s.addProduct);
@@ -47,7 +51,7 @@ export function WishlistScreen({navigation}: Props) {
         <FlatList
           data={list}
           keyExtractor={entry => String(entry.product.id)}
-          contentContainerStyle={{padding: spacing.lg, gap: spacing.md, paddingBottom: useStackBottomClearance()}}
+          contentContainerStyle={{padding: spacing.lg, gap: spacing.md, paddingBottom: stackClearance}}
           showsVerticalScrollIndicator={false}
           renderItem={({item}) => {
             const p = item.product;

@@ -360,6 +360,19 @@ export interface PlaceOrderInput {
   regionName: string;
   address?: string;
   note?: string;
+  /** v2.6 (خادم 5.2): مفتاح إيديمبوتنسية يولّده العميل لكل عملية
+   * إرسال — إعادة المحاولة بعد موت الشبكة تعيد نفس الطلب بدل
+   * إنشاء مكرر (كانت الطلبات تُنشأ على الخادم ويموت ردها في
+   * الطريق فيعلن التطبيق الفشل ويكرر المستخدم الضغط ⇒ طلبات
+   * مكررة فعلياً لدى التاجر). */
+  clientRequestId: string;
+}
+
+/** يولّد مفتاح إيديمبوتنسية فريداً لعملية إرسال طلب واحدة. */
+export function newOrderRequestId(): string {
+  return `ord-${Date.now().toString(36)}-${Math.random()
+    .toString(36)
+    .slice(2, 10)}`;
 }
 
 export async function placeOrder(
@@ -370,6 +383,10 @@ export async function placeOrder(
     method: 'POST',
     token,
     body: input,
+    // v2.6: إعادة المحاولة على فشل الشبكة آمنة الآن — الخادم
+    // يرد نفس الطلب لنفس المفتاح (إيديمبوتنسية). رد POST لا يُعاد
+    // عادة لأن الطلب قد ينشأ فعلاً؛ المفتاح يحسم هذا الخطر.
+    retryOnNetwork: true,
   });
   return res.order;
 }
