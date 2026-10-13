@@ -1,7 +1,7 @@
 /**
  * endpoints.ts — الواجهات المُغلَّفة بأنواعها (مطابقة لـ market.js v4.1).
  */
-import {apiRequest} from './client';
+import {apiRequest, ApiError} from './client';
 import type {
   Address,
   CategoryCount,
@@ -132,15 +132,15 @@ export async function getStoreProducts(
   return res.products;
 }
 
-/* ── v2.1: الجلب المتدرج — الإصلاح الجذري الثالث للاختفاء ────
+/* ── v3.0 (الجولة 60): الجلب المتدرج — سلم قصير ────────────
  * ─────────────────────────────────────────────────────────────────
- * الدليل من ثلاث جولات تجربة المستخدم: كل حمولة عملت كانت إطار TCP
- * واحداً (~430B) وكل حمولة فشلت كانت متعددة الأطر (~2KB). السلم:
- * نطلب 12 — إن فشل النداء شبكياً ننزل 6 ثم 3 ثم 1 (يدعم الخادم
- * per=1 منذ 4.5). عند أي نجاح نكمل الصفحات بنفس الحجم حتى العدد
- * المطلوب. الأسوأ النادر: طلبات متتالية ~200B — تحت عتبة العمل
- * المثبتة ميدانياً. */
-const PER_LADDER: readonly number[] = [12, 6, 3, 1];
+ * السلم القديم (12→6→3→1) كان في أسوأ حالة 38 نداءً لشاشة واحدة
+ * (12=1+2، ثم 6×4، ثم 3×8، ثم 1×24) — وكلها داخل نافذة محدد
+ * المعدل، فكانت الشبكة المتعثرة نفسها تُفجّر حد «محاولات كثيرة».
+ * v2.4 أثبتت أن الضغط gzip جعل ردود الصفحات الكاملة (<450B) تعبر
+ * فلا حاجة للتفكيك المتطرف؛ درجتان فقط: 12 ثم 6 (للمتصفح الأولي
+ * الكسول) — وفوقها نستسلم برسالة واضحة. */
+const PER_LADDER: readonly number[] = [12, 6];
 
 async function fetchAdaptive<T extends {id: number}>(
   want: number,
@@ -169,6 +169,11 @@ async function fetchAdaptive<T extends {id: number}>(
       }
       return items.slice(0, Math.max(1, want));
     } catch (e) {
+      // 4xx من الخادم (ليست شبكة) لا معنى لإعادة المحاولة بدرجات
+      // أصغر — الخادم ردّ بحكم واضح. نستسلم فوراً برسالة الأصل.
+      if (e instanceof ApiError && e.status >= 400 && e.status < 500 && e.status !== 429) {
+        throw e;
+      }
       lastError = e;
     }
   }
@@ -226,6 +231,54 @@ export async function getCategories(): Promise<CategoryCount[]> {
     '/api/market/categories',
   );
   return res.categories;
+}
+
+/* ── v3.0 (الجولة 60): تغذية الرئيسية المجمعة — طلب واحد ────
+ * بدل 3 نداءات متوازية (متاجر + تصنيفات + أحدث المنتجات) + نداء
+ * رابع لمتاجر المنطقة: نداء واحد يعيدها كلها (خادم 5.5) — قطع
+ * جذري لاستهلاك محدد المعدل الذي كان يظهر للمستخدم كـ«محاولات
+ * كثيرة» عند فتح التطبيق. */
+export interface HomeFeed {
+  stores: Store[];
+  categories: CategoryCount[];
+  latest: CrossProduct[];
+  regionStores?: Store[];
+}
+
+export async function getHomeFeed(region?: string | null): Promise<HomeFeed> {
+  const qs = buildQuery({region: region ?? undefined});
+  const res = await apiRequest<{
+    ok: true;
+    stores: Store[];
+    categories: CategoryCount[];
+    latest: CrossProduct[];
+    regionStores?: Store[];
+  }>(`/api/market/home${qs ? `?${qs}` : ''}`);
+  return {
+    stores: res.stores,
+    categories: res.categories,
+    latest: res.latest,
+    regionStores: res.regionStores,
+  };
+}
+
+/* ── v3.0: كاش توصيات «منتجات مشابهة» لكل متجر (60 ثانية) ────
+ * فتح 5 منتجات من متجر واحد كان يرسل 5 نداءات متطابقة per:40 —
+ * الآن نداء واحد لكل متجر في الدقيقة، والباقي من الذاكرة. */
+const similarCache = new Map<number, {at: number; products: Product[]}>();
+const SIMILAR_TTL_MS = 60 * 1000;
+
+export async function getStoreSimilarProducts(
+  storeId: number,
+  want = 40,
+): Promise<Product[]> {
+  const hit = similarCache.get(storeId);
+  if (hit != null && Date.now() - hit.at < SIMILAR_TTL_MS) {
+    return hit.products;
+  }
+  const products = await getStoreProducts(storeId, {per: want});
+  similarCache.set(storeId, {at: Date.now(), products});
+  return products;
 }
 
 /* ── الحساب ─────────────────────────────────────────────── */

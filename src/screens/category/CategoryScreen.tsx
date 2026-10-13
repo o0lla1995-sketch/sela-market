@@ -8,11 +8,12 @@ import React, {useCallback, useEffect, useMemo, useState} from 'react';
 import {FlatList, Pressable, StyleSheet, Text, View} from 'react-native';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 import {useTheme} from '../../theme/ThemeProvider';
-import {radius, spacing, type, fonts} from '../../theme/tokens';
+import {radius, spacing, type, fonts, tileFor} from '../../theme/tokens';
 import {Icon, type IconName} from '../../components/Icon';
 import {
   AppHeader,
   EmptyState,
+  EndOfList,
   ErrorState,
   Loader,
   ProductGridSkeleton,
@@ -53,6 +54,9 @@ export function CategoryScreen({navigation, route}: Props) {
   const [error, setError] = useState<string | null>(null);
   const [stale, setStale] = useState(false);
   const [sort, setSort] = useState<SortKey>('newest');
+  /* v3.0: علم استنفاد — صفحة قصيرة/فارغة توقف الجلب نهائياً بدل
+   * إعادة طلب نفس الصفحة الفارغة عند كل تمرير للنهاية. */
+  const [exhausted, setExhausted] = useState(false);
 
   const load = useCallback(async () => {
     setError(null);
@@ -65,6 +69,7 @@ export function CategoryScreen({navigation, route}: Props) {
       setProducts(res.data);
       setPage(1);
       setStale(res.stale);
+      setExhausted(res.data.length < PRODUCTS_PAGE_SIZE);
     } else if (res.error != null) {
       setError(res.error);
     }
@@ -76,22 +81,24 @@ export function CategoryScreen({navigation, route}: Props) {
   }, [load]);
 
   const loadMore = useCallback(async () => {
-    if (loadingMore || loading || error != null) {
+    if (loadingMore || loading || error != null || exhausted) {
       return;
     }
     setLoadingMore(true);
     try {
       const next = await getCrossProducts({category, page: page + 1, per: PRODUCTS_PAGE_SIZE});
       setProducts(prev => [...prev, ...next.filter(n => !prev.some(p => p.id === n.id && p.store_id === n.store_id))]);
-      if (next.length > 0) {
+      if (next.length >= PRODUCTS_PAGE_SIZE) {
         setPage(p => p + 1);
+      } else {
+        setExhausted(true);
       }
     } catch {
       /* صمت */
     } finally {
       setLoadingMore(false);
     }
-  }, [loadingMore, loading, error, category, page]);
+  }, [loadingMore, loading, error, category, page, exhausted]);
 
   const visible = useMemo(() => {
     switch (sort) {
@@ -106,14 +113,26 @@ export function CategoryScreen({navigation, route}: Props) {
     }
   }, [products, sort]);
 
+  /* v3.0: لون التصنيف الثابت — نفس لون بلاطته في الرئيسية. */
+  const tile = tileFor(category, palette.isDark);
+
   return (
     <Screen>
-      <AppHeader
-        title={category}
-        subtitle="من كل متاجر المول"
-        onBack={() => navigation.goBack()}
-        big
-      />
+      <View
+        style={{
+          backgroundColor: tile.soft,
+          borderBottomRightRadius: radius.xl,
+          borderBottomLeftRadius: radius.xl,
+          paddingBottom: spacing.md,
+        }}>
+        <AppHeader
+          title={category}
+          subtitle="من كل متاجر المول"
+          onBack={() => navigation.goBack()}
+          big
+          transparent
+        />
+      </View>
       {/* الترتيب */}
       <View style={{paddingHorizontal: spacing.lg, paddingBottom: spacing.sm}}>
         <FlatList
@@ -195,6 +214,8 @@ export function CategoryScreen({navigation, route}: Props) {
               <View style={{paddingVertical: spacing.lg}}>
                 <Loader label="نجلب المزيد…" />
               </View>
+            ) : exhausted && products.length >= PRODUCTS_PAGE_SIZE ? (
+              <EndOfList label={`وصلت إلى كل منتجات «${category}»`} />
             ) : null
           }
           renderItem={({item}) => (

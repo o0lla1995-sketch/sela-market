@@ -1,18 +1,24 @@
 /**
- * ProductScreen.tsx — صفحة المنتج (v2.7 — كثافة احترافية):
+ * ProductScreen.tsx — صفحة المنتج (v3.0 — إعادة بناء كاملة، الجولة 60):
  * ─────────────────────────────────────────────────────────────────
- * دراسة معايير المتاجر العالمية (أمازون/نون/طلبات): كثافة أعلى
- * وعناصر أصغر — طلب التاجر بالنص: «أحجام العناصر بها كبيرة وغير
- * عملية». v2.7:
- *  • معرض صور مدمج (60% من العرض بدل 86%) + عناصر سعر أصغر
- *    (21px بدل 30px) وإلغاء صندوق الأيقونة 76px.
- *  • بطاقات مدمجة: السعر+الوحدة+المخزون+التصنيف في بطاقة واحدة؛
- *     المتجر سطر مضغوط؛ الاقتراحات 150px.
- *  • إصلاح جوهري: الهامش السفلي — آخر المحتوى كان يختفي خلف
- *    شريط الشراء الثابت (شكوى «هامش أسفل الصفحة»)؛ أصبح
- *    stackClearance + 140.
- *  • خيارات الشراء + عدّاد الكمية + الإجمالي الحي كما هي (v2.6)
- *    — المنطق المثبت لم يُمس.
+ * طلب التاجر بالنص: «اسجل دخول وافتح صفحة المنتج ولا أرى أي أزرار
+ * لطلب المنتج وتحديد ما أريده» — أعيدت الهيكلية من الصفر بمعيار
+ * المتاجر العالمية (أمازون/نون/سلة):
+ *
+ *  • شريط الشراء السفلي أصبح مُثبَّتاً تثبيتاً مطلقاً (BottomFixed
+ *    الجديد: position:absolute + bottom:0) — يستحيل هندسياً أن
+ *    يُدفَع خارج الشاشة كما كان يحدث مع عمود flex القديم. العدّاد
+ *    وزر «أضف للسلة» مع الإجمالي الحي مرئيان دائماً من أول لحظة.
+ *  • معرض صور بعرض كامل بنسبة 4:5 (نون) مع نقاط وعدّاد وعارض
+ *    ملء الشاشة.
+ *  • بطاقة سعر ملوّنة: خصم + توفير + الوحدة، وشريحة تصنيف بلون
+ *    البلاطة المخصص (نظام الألوان الغني الجديد).
+ *  • خيارات الشراء (مقاس/لون) برقائق ملونة + حالة «مطلوب».
+ *  • قسم كمية صريح داخل المحتوى مع سقف المخزون + الإجمالي الحي.
+ *  • منتجات مشابهة بمحرك التوصية (نفس التصنيف/السعر/الخصم) مع
+ *    كاش 60 ثانية لكل متجر — لا نداء متكرر لكل منتج يُفتح.
+ *  • القائمة كلها تمرر فوق الشريط بـ paddingBottom = ارتفاع الشريط
+ *    + إخلاء النظام: لا محتوى يختفي خلفه أبداً.
  */
 import React, {useEffect, useMemo, useState} from 'react';
 import {
@@ -29,7 +35,7 @@ import {
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {useTheme} from '../../theme/ThemeProvider';
-import {radius, spacing, type, fonts} from '../../theme/tokens';
+import {radius, spacing, type, fonts, tileFor} from '../../theme/tokens';
 import {Icon} from '../../components/Icon';
 import {
   AppHeader,
@@ -43,7 +49,7 @@ import {
 import {ProductCard} from '../../components/ProductCard';
 import {StoreAvatar} from '../../components/StoreCard';
 import {absoluteUrl} from '../../api/client';
-import {getStoreProducts} from '../../api/endpoints';
+import {getStoreSimilarProducts} from '../../api/endpoints';
 import {formatMoney, formatQty} from '../../core/money';
 import {effectiveMinor, hasDiscount} from '../../core/discount';
 import {
@@ -58,7 +64,6 @@ import {useInterestStore} from '../../stores/interestStore';
 import {useWishlistStore} from '../../stores/wishlistStore';
 import {useToastStore} from '../../stores/toastStore';
 import {useRequireAuth, type ShopStackParamList} from '../../navigation/RootNavigator';
-import {useStackBottomClearance} from '../../core/layout';
 import {minQty, qtyStep} from '../../core/money';
 import {recommendSimilar, RECOMMEND_LIMIT} from '../../core/recommend';
 
@@ -66,14 +71,11 @@ type Props = NativeStackScreenProps<ShopStackParamList, 'Product'>;
 
 export function ProductScreen({navigation, route}: Props) {
   const {palette} = useTheme();
-  /* v2.6: هوك الإخلاء مرفوع لقمة المكون — استدعاؤه داخل
-   * فروع JSX شرطية كان يغيّر عدد الـ hooks بين الرندرات ويحطم
-   * الشاشة (Rendered more hooks). */
-  const stackClearance = useStackBottomClearance();
-  const {width: screenWidth} = useWindowDimensions();
   const insets = useSafeAreaInsets();
+  const {width: screenWidth} = useWindowDimensions();
   const {product, storeRef} = route.params;
 
+  /* هوكات مرتبة دائماً في القمة — بلا فروع شرطية (درس v2.6). */
   const addProduct = useCartStore(s => s.addProduct);
   const increment = useCartStore(s => s.increment);
   const decrement = useCartStore(s => s.decrement);
@@ -86,18 +88,15 @@ export function ProductScreen({navigation, route}: Props) {
   const outOfStock = product.stock <= 0;
   const lowStock = !outOfStock && product.stock <= 5;
   const optionGroups: ProductOptionGroup[] = product.options ?? [];
+  const catTile = tileFor(product.category, palette.isDark);
 
-  /* v2.6: الكمية تُختار قبل الإضافة (لا بعدها) — العدّاد يعمل
-   * مباشرة على الشاشة والإجمالي يتحدث مع كل لمسة، كما في تطبيقات
-   * التسوق العالمية. v2.8 (الجولة 59): الحد الأقصى = المخزون
-   * المتاح نفسه — طلب التاجر: «لماذا يستطيع المستخدم طلب أكبر
-   * منها؟» — لا طلب أكبر من المتوفر، لا من العدّاد ولا من السلة. */
+  /* الكمية تُختار قبل الإضافة والإجمالي يتحدث لحظياً (منطق v2.8
+   * المثبت) — والحد الأقصى هو المخزون المتاح نفسه: لا طلب أكبر
+   * من المتوفر لا من العدّاد ولا من السلة. */
   const [qty, setQty] = useState(() => minQty(soldByWeight));
   const maxQty =
     Number.isFinite(product.stock) && product.stock > 0
-      ? /* وزن كسري (٢٫٥ كيلو مثلاً) يبقى كسرياً — لا تقريب لأسفل
-         * يحرم المستخدم من نصف كيلو متاح فعلاً. */
-        Math.max(minQty(soldByWeight), Math.floor(product.stock * 1000) / 1000)
+      ? Math.max(minQty(soldByWeight), Math.floor(product.stock * 1000) / 1000)
       : 999;
   const stepQty = qtyStep(soldByWeight);
   const unitFinalPrice = effectiveMinor(product);
@@ -113,7 +112,7 @@ export function ProductScreen({navigation, route}: Props) {
     s => s.carts[String(storeRef.id)]?.lines.find(l => l.key === activeLineKey),
   );
   const cartQty = cartLine?.quantity ?? 0;
-  /** أسطر أخرى لنفس المنتج بخيارات مختلفة (كم إضافة معلوماتية). */
+  /** أسطر أخرى لنفس المنتج بخيارات مختلفة (معلومة إضافية). */
   const otherVariantCount = useCartStore(
     s =>
       (s.carts[String(storeRef.id)]?.lines ?? []).filter(
@@ -128,24 +127,18 @@ export function ProductScreen({navigation, route}: Props) {
   const [slide, setSlide] = useState(0);
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
 
-  /* v2.8 (الجولة 59): توصيات ذكية احترافية — طلب التاجر بالنص
-   * «في صفحة المنتج يقترح على المستخدم منتجات أخرى مشابهة بشكل
-   * ذكي واحترافي». المحرك (core/recommend) يدمج: نفس التصنيف +
-   * التوفر + قرب السعر + الخصم النشط + أوزان اهتمام المستخدم +
-   * تشابه الاسم — كما أنظمة التوصيات العالمية. */
+  /* توصيات ذكية بمحرك core/recommend — عبر كاش المتجر (60 ث):
+   * فتح عشرة منتجات من متجر واحد = نداء واحد لا عشرة. */
   const [similar, setSimilar] = useState<Product[]>([]);
   const [similarReason, setSimilarReason] = useState<string | null>(null);
 
-  // v2.0: مشاهدة المنتج ترفع وزن تصنيفه في «مقترحات لك» — إشارة
-  // خفيفة (وزن 1) لا تُرسل لأي خادم (كل شيء محلي على الجهاز).
   useEffect(() => {
     useInterestStore.getState().trackView(product.category);
   }, [product.id, product.category]);
+
   useEffect(() => {
     let alive = true;
-    /* بلا تصنيف ولا مرشحين؟ المحرك ما زال يعمل بتشابه الاسم —
-     * نجهز المرشحين دائماً ونترك الترتيب للدرجات. */
-    void getStoreProducts(storeRef.id, {per: 40})
+    void getStoreSimilarProducts(storeRef.id, 40)
       .then(list => {
         if (!alive) {
           return;
@@ -153,8 +146,6 @@ export function ProductScreen({navigation, route}: Props) {
         const weights = useInterestStore.getState().categoryWeights();
         const picked = recommendSimilar(list, {current: product, categoryWeights: weights});
         setSimilar(picked.slice(0, RECOMMEND_LIMIT));
-        /* سبب التوصية يُشرح للمستخدم كما تفعل المتاجر العالمية
-         * («من نفس التصنيف» / «عروض قد تعجبك» / «من متجر …»). */
         const sameCat = picked.filter(p => p.category != null && p.category === product.category).length;
         const discounted = picked.filter(p => (p.discount_pct ?? 0) > 0).length;
         if (sameCat >= 3) {
@@ -182,7 +173,7 @@ export function ProductScreen({navigation, route}: Props) {
       toast(`اختر ${optionGroups.find(g => selection[g.name] == null)!.name} أولاً`, 'danger');
       return;
     }
-    /* v2.6: الزائر لا يضيف للسلة — بوابة الدخول أولاً. */
+    /* الزائر لا يضيف للسلة — بوابة الدخول أولاً. */
     requireAuth(() => {
       addProduct(storeRef, product, variantText, qty);
       toast(`أُضيف «${product.name}» (${formatQty(qty, soldByWeight)}) إلى سلة ${storeRef.name}`, 'success');
@@ -196,7 +187,11 @@ export function ProductScreen({navigation, route}: Props) {
     });
   };
 
-  const galleryHeight = screenWidth * 0.6;
+  /* معرض بنسبة نون (4:5) بعرض كامل — الصورة أكبر مساحة بيع. */
+  const galleryHeight = Math.round(screenWidth * 1.25);
+  /* إخلاء المحتوى فوق الشريط المثبت: ارتفاع الشريط (عدّاد+زر ≈ 64 +
+   * سطر الإجمالي 20 + حواشي 24) + إخلاء النظام. */
+  const barClearance = insets.bottom + 132;
 
   return (
     <Screen>
@@ -205,7 +200,10 @@ export function ProductScreen({navigation, route}: Props) {
         subtitle={`من ${storeRef.name}`}
         onBack={() => navigation.goBack()}
       />
-      <ScrollView contentContainerStyle={{padding: spacing.md, gap: spacing.md, paddingBottom: stackClearance + 140}} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        style={{flex: 1}}
+        contentContainerStyle={{padding: spacing.md, gap: spacing.md, paddingBottom: barClearance}}
+        showsVerticalScrollIndicator={false}>
         {/* ─── معرض الصور ─── */}
         {images.length > 0 ? (
           <View>
@@ -214,8 +212,8 @@ export function ProductScreen({navigation, route}: Props) {
               pagingEnabled
               showsHorizontalScrollIndicator={false}
               onMomentumScrollEnd={e => {
-                // RTL: إزاحات سالبة على أندرويد — القيمة المطلقة
-                // تعطي الفهرس الصحيح دائماً.
+                // RTL: إزاحات سالبة على أندرويد — القيمة المطلقة تعطي
+                // الفهرس الصحيح دائماً.
                 setSlide(Math.round(Math.abs(e.nativeEvent.contentOffset.x) / screenWidth));
               }}
               style={{borderRadius: radius.xl, overflow: 'hidden'}}>
@@ -254,52 +252,38 @@ export function ProductScreen({navigation, route}: Props) {
             </View>
           </View>
         ) : (
-          /* بديل مرسوم عند غياب الصور */
+          /* بديل مرسوم عند غياب الصور — بلون بلاطة التصنيف */
           <View
             style={[
               galleryStyles.placeholder,
-              {backgroundColor: palette.brandSoft, borderColor: palette.brandBorder, height: galleryHeight * 0.8},
+              {backgroundColor: catTile.soft, borderColor: catTile.solid + '55', height: galleryHeight * 0.62},
             ]}>
-            <Icon name="photo" size={54} color={palette.brandDark} />
-            <Text style={[type.small, {color: palette.muted, marginTop: spacing.md}]}>
+            <Icon name="photo" size={54} color={catTile.solid} />
+            <Text style={[type.small, {color: catTile.ink, marginTop: spacing.md}]}>
               لا صور لهذا المنتج بعد — صوره تُرفع من نقطة بيع المتجر
             </Text>
           </View>
         )}
 
-        {/* ─── بطاقة السعر + الوحدة + المخزون + التصنيف (مدمجة v2.7) ─── */}
+        {/* ─── بطاقة السعر الملوّنة ─── */}
         <Card style={{gap: spacing.sm}}>
           <View style={priceStyles.row}>
-            <View style={{gap: 1, flex: 1, alignItems: 'flex-start'}}>
-              {hasDiscount(product) ? (
-                <>
-                  <View style={{flexDirection: 'row-reverse', alignItems: 'center', gap: 6}}>
-                    <Text
-                      style={[type.small, {color: palette.muted, textDecorationLine: 'line-through'}]}>
-                      {formatMoney(product.price_minor)}
-                    </Text>
-                    <View style={[priceStyles.pctChip, {backgroundColor: palette.danger}]}>
-                      <Text style={{fontSize: 9.5, color: '#FFFFFF', fontFamily: fonts.bold}}>
-                        خصم {Math.round(product.discount_pct ?? 0)}%
-                      </Text>
-                    </View>
-                    <Text style={{fontSize: 10.5, color: palette.success, fontFamily: fonts.medium}}>
-                      توفّر {formatMoney(Math.max(0, product.price_minor - effectiveMinor(product)))}
+            <View style={{gap: 2, flex: 1, alignItems: 'flex-start'}}>
+              <Text style={[type.h3, {color: palette.ink, fontFamily: fonts.bold}]}>
+                {product.name}
+              </Text>
+              <View style={{flexDirection: 'row-reverse', alignItems: 'center', gap: 6, flexWrap: 'wrap'}}>
+                {product.category ? (
+                  <View style={[priceStyles.catChip, {backgroundColor: catTile.soft}]}>
+                    <Text style={{fontSize: 10.5, color: catTile.ink, fontFamily: fonts.bold}}>
+                      {product.category}
                     </Text>
                   </View>
-                  <Text style={[priceStyles.amount, {color: palette.brandDark}]}>
-                    {formatMoney(effectiveMinor(product))}
-                  </Text>
-                </>
-              ) : (
-                <Text style={[priceStyles.amount, {color: palette.brandDark}]}>
-                  {formatMoney(product.price_minor)}
+                ) : null}
+                <Text style={{fontSize: 10.5, color: palette.muted}}>
+                  {soldByWeight ? 'بالكيلو — بأنصاف الكيلو' : product.unit_label ? `الوحدة: ${product.unit_label}` : 'يُباع بالقطعة'}
                 </Text>
-              )}
-              <Text style={{fontSize: 10.5, color: palette.muted}}>
-                {soldByWeight ? 'بالكيلو — بأنصاف الكيلو' : product.unit_label ? `الوحدة: ${product.unit_label}` : 'يُباع بالقطعة'}
-                {product.category ? ` · ${product.category}` : ''}
-              </Text>
+              </View>
             </View>
             <Pressable
               onPress={onWishlist}
@@ -312,6 +296,29 @@ export function ProductScreen({navigation, route}: Props) {
               />
             </Pressable>
           </View>
+
+          <View style={priceStyles.priceRow}>
+            <Text style={[priceStyles.amount, {color: palette.brandDark}]}>
+              {formatMoney(effectiveMinor(product))}
+            </Text>
+            {hasDiscount(product) ? (
+              <View style={{flexDirection: 'row-reverse', alignItems: 'center', gap: 6, flexWrap: 'wrap'}}>
+                <Text
+                  style={[type.small, {color: palette.muted, textDecorationLine: 'line-through'}]}>
+                  {formatMoney(product.price_minor)}
+                </Text>
+                <View style={[priceStyles.pctChip, {backgroundColor: palette.danger}]}>
+                  <Text style={{fontSize: 10, color: '#FFFFFF', fontFamily: fonts.bold}}>
+                    خصم {Math.round(product.discount_pct ?? 0)}%
+                  </Text>
+                </View>
+                <Text style={{fontSize: 11, color: palette.success, fontFamily: fonts.medium}}>
+                  توفّر {formatMoney(Math.max(0, product.price_minor - effectiveMinor(product)))}
+                </Text>
+              </View>
+            ) : null}
+          </View>
+
           <View style={priceStyles.chipsRow}>
             <View
               style={[
@@ -339,26 +346,18 @@ export function ProductScreen({navigation, route}: Props) {
                     : `متوفر (${Math.floor(product.stock)}${soldByWeight ? ' كيلو' : ' قطعة'})`}
               </Text>
             </View>
-            {product.category ? (
-              <Pressable
-                onPress={() => navigation.navigate('Category', {category: product.category!})}>
-                <Text style={{fontSize: 11, color: palette.brand, fontFamily: fonts.medium}}>
-                  {product.category} ›
-                </Text>
-              </Pressable>
-            ) : null}
           </View>
         </Card>
 
-        {/* ─── خيارات الشراء (مقاس/لون…) — مضغوطة v2.7 ─── */}
+        {/* ─── خيارات الشراء (مقاس/لون…) ─── */}
         {optionGroups.length > 0 ? (
           <Card style={{gap: spacing.sm}}>
             <View style={{flexDirection: 'row-reverse', alignItems: 'center', gap: 6}}>
-              <Icon name="sliders" size={14} color={palette.brandDark} />
+              <Icon name="sliders" size={14} color={catTile.solid} />
               <Text style={[type.h3, {color: palette.ink}]}>اختياراتك</Text>
               {!complete ? (
-                <View style={[optStyles.requiredChip, {backgroundColor: palette.brandSoft, borderColor: palette.brandBorder}]}>
-                  <Text style={{fontSize: 9.5, color: palette.brandDark, fontFamily: fonts.bold}}>
+                <View style={[optStyles.requiredChip, {backgroundColor: palette.dangerSoft, borderColor: palette.danger}]}>
+                  <Text style={{fontSize: 9.5, color: palette.danger, fontFamily: fonts.bold}}>
                     مطلوب
                   </Text>
                 </View>
@@ -381,8 +380,8 @@ export function ProductScreen({navigation, route}: Props) {
                         style={({pressed}) => [
                           optStyles.valueChip,
                           {
-                            backgroundColor: active ? palette.brand : palette.surface,
-                            borderColor: active ? palette.brand : palette.lineStrong,
+                            backgroundColor: active ? catTile.solid : palette.surface,
+                            borderColor: active ? catTile.solid : palette.lineStrong,
                             opacity: pressed ? 0.85 : 1,
                           },
                         ]}>
@@ -408,6 +407,47 @@ export function ProductScreen({navigation, route}: Props) {
           </Card>
         ) : null}
 
+        {/* ─── الكمية — قسم صريح داخل المحتوى كما أمازون ─── */}
+        {!outOfStock ? (
+          <Card style={{gap: spacing.sm}}>
+            <View style={{flexDirection: 'row-reverse', alignItems: 'center', gap: 6}}>
+              <Icon name={soldByWeight ? 'scale' : 'box'} size={14} color={catTile.solid} />
+              <Text style={[type.h3, {color: palette.ink}]}>
+                {soldByWeight ? 'الوزن المطلوب' : 'الكمية المطلوبة'}
+              </Text>
+            </View>
+            <View style={{flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between'}}>
+              <QtyStepper
+                qty={qty}
+                soldByWeight={soldByWeight}
+                max={maxQty}
+                onIncrease={() =>
+                  setQty(q => Math.min(maxQty, Math.round((q + stepQty) * 1000) / 1000))
+                }
+                onDecrease={() =>
+                  setQty(q =>
+                    q - stepQty < minQty(soldByWeight)
+                      ? minQty(soldByWeight)
+                      : Math.round((q - stepQty) * 1000) / 1000,
+                  )
+                }
+              />
+              <View style={{alignItems: 'flex-start', gap: 2}}>
+                <Text style={{fontSize: 12.5, color: palette.brandDark, fontFamily: fonts.bold}}>
+                  الإجمالي {formatMoney(liveTotal)}
+                </Text>
+                <Text style={{fontSize: 10.5, color: palette.muted}}>
+                  {formatMoney(unitFinalPrice)} × {formatQty(qty, soldByWeight)}
+                  {soldByWeight ? ' كيلو' : ' قطعة'}
+                  {maxQty < 999
+                    ? ` · المتاح ${formatQty(maxQty, soldByWeight)}${soldByWeight ? ' كيلو' : ' قطعة'} فقط`
+                    : ''}
+                </Text>
+              </View>
+            </View>
+          </Card>
+        ) : null}
+
         {/* الوصف */}
         {product.description ? (
           <Card style={{gap: 4, paddingVertical: 10}}>
@@ -418,7 +458,7 @@ export function ProductScreen({navigation, route}: Props) {
           </Card>
         ) : null}
 
-        {/* المتجر — سطر مضغوط v2.7 */}
+        {/* المتجر — سطر مضغوط */}
         <Pressable onPress={() => navigation.navigate('Store', {storeId: storeRef.id, storeName: storeRef.name})}>
           <Card style={{paddingVertical: 10, gap: 4}}>
             <View style={priceStyles.row}>
@@ -435,7 +475,7 @@ export function ProductScreen({navigation, route}: Props) {
           </Card>
         </Pressable>
 
-        {/* من نفس التصنيف */}
+        {/* منتجات مشابهة — توصية ذكية */}
         {similar.length > 0 ? (
           <View style={{gap: spacing.md}}>
             <SectionTitle
@@ -472,77 +512,59 @@ export function ProductScreen({navigation, route}: Props) {
         ) : null}
       </ScrollView>
 
-      {/* ─── شريط الشراء السفلي — الكمية + الإجمالي الحي قبل الإضافة ───
-       * v2.6: العدّاد انتقل من «بعد الإضافة» إلى الشاشة نفسها:
-       * المستخدم يرى الكمية والإجمالي يتحدثان لحظياً ثم يضيف —
-       * لا إضافة عمياء ثم تعديل. */}
+      {/* ─── شريط الشراء السفلي المثبّت — مرئي دائماً ───
+       * v3.0: تثبيت مطلق (position:absolute bottom:0) — العدّاد وزر
+       * الإضافة مع الإجمالي الحي لا يمكن أن يختفيا خلف المحتوى أياً
+       * كان حجمه. هذا هو الزر الذي اشتكى التاجر من اختفائه. */}
       <BottomFixed>
-        {cartQty > 0 ? (
-          <View style={{gap: 8}}>
-            <View style={bottomStyles.row}>
-              <QtyStepper
-                qty={cartQty}
-                soldByWeight={soldByWeight}
-                /* v2.8: سقف المخزون يعمل هنا أيضاً — الزيادة تتوقف
-                 * عند المتاح ولا يتجاوزها أحد. */
-                max={maxQty}
-                onIncrease={() => increment(storeRef.id, activeLineKey)}
-                onDecrease={() => decrement(storeRef.id, activeLineKey)}
-              />
-              <Button
-                label={`في السلة — ${formatMoney(effectiveMinor(product) * cartQty)}`}
-                variant="soft"
-                style={{flex: 1}}
-                onPress={() => navigation.getParent()?.navigate('Cart')}
-              />
-            </View>
-            {otherVariantCount > 0 ? (
-              <Text style={[{fontSize: 11, color: palette.muted, textAlign: 'center'}]}>
-                لديك {otherVariantCount} مواصفة أخرى من هذا المنتج في السلة
-              </Text>
-            ) : null}
-          </View>
-        ) : (
-          <View style={{gap: 8}}>
-            <View style={bottomStyles.row}>
-              <QtyStepper
-                qty={qty}
-                soldByWeight={soldByWeight}
-                max={maxQty}
-                onIncrease={() =>
-                  setQty(q => Math.min(maxQty, Math.round((q + stepQty) * 1000) / 1000))
-                }
-                onDecrease={() =>
-                  setQty(q =>
+        <View style={bottomStyles.row}>
+          <QtyStepper
+            qty={cartQty > 0 ? cartQty : qty}
+            soldByWeight={soldByWeight}
+            max={maxQty}
+            onIncrease={() =>
+              cartQty > 0
+                ? increment(storeRef.id, activeLineKey)
+                : setQty(q => Math.min(maxQty, Math.round((q + stepQty) * 1000) / 1000))
+            }
+            onDecrease={() =>
+              cartQty > 0
+                ? decrement(storeRef.id, activeLineKey)
+                : setQty(q =>
                     q - stepQty < minQty(soldByWeight)
                       ? minQty(soldByWeight)
                       : Math.round((q - stepQty) * 1000) / 1000,
                   )
-                }
-              />
-              <Button
-                label={
-                  outOfStock
-                    ? 'غير متوفر حالياً'
-                    : !complete
-                      ? 'اختر المواصفات أولاً'
-                      : `أضف للسلة — ${formatMoney(liveTotal)}`
-                }
-                icon={complete && !outOfStock ? 'cart' : 'sliders'}
-                style={{flex: 1}}
-                onPress={onAdd}
-                disabled={outOfStock}
-              />
-            </View>
-            <Text style={[{fontSize: 11, color: palette.muted, textAlign: 'center'}]}>
-              {formatMoney(unitFinalPrice)} × {formatQty(qty, soldByWeight)}
-              {soldByWeight ? ' كيلو' : ' قطعة'} = {formatMoney(liveTotal)}
-              {maxQty < 999
-                ? ` · المتاح ${formatQty(maxQty, soldByWeight)}${soldByWeight ? ' كيلو' : ' قطعة'} فقط`
-                : ''}
-            </Text>
-          </View>
-        )}
+            }
+          />
+          <Button
+            label={
+              outOfStock
+                ? 'غير متوفر حالياً'
+                : cartQty > 0
+                  ? `في السلة — ${formatMoney(effectiveMinor(product) * cartQty)}`
+                  : !complete
+                    ? 'اختر المواصفات أولاً'
+                    : `أضف للسلة — ${formatMoney(liveTotal)}`
+            }
+            icon={complete && !outOfStock ? 'cart' : 'sliders'}
+            style={{flex: 1}}
+            onPress={() => {
+              if (cartQty > 0) {
+                navigation.getParent()?.navigate('Cart');
+                return;
+              }
+              onAdd();
+            }}
+            disabled={outOfStock}
+          />
+        </View>
+        <Text style={[bottomStyles.hint, {color: palette.muted}]}>
+          {cartQty > 0
+            ? `في سلة ${storeRef.name} — اضغط الزر لإتمام الطلب`
+            : `${formatMoney(unitFinalPrice)} × ${formatQty(qty, soldByWeight)}${soldByWeight ? ' كيلو' : ' قطعة'} = ${formatMoney(liveTotal)}`
+              + (otherVariantCount > 0 ? ` · لديك ${otherVariantCount} مواصفة أخرى في السلة` : '')}
+        </Text>
       </BottomFixed>
 
       {/* ─── عارض ملء الشاشة ─── */}
@@ -622,14 +644,23 @@ const galleryStyles = StyleSheet.create({
 
 const priceStyles = StyleSheet.create({
   row: {flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.sm},
-  /* v2.7: 21px بدل 30px — كثافة احترافية بلا صراخ. */
-  amount: {fontSize: 21, fontFamily: fonts.black},
+  priceRow: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: spacing.md,
+    flexWrap: 'wrap',
+  },
+  amount: {fontSize: 26, fontFamily: fonts.black},
   pctChip: {
     borderRadius: radius.pill,
     paddingHorizontal: 7,
     paddingVertical: 2,
   },
-  /* v2.7: صندوق الأيقونة 76px حُذف — الوحدة نصاً تحت السعر. */
+  catChip: {
+    borderRadius: radius.pill,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
   wishBtn: {
     width: 40,
     height: 40,
@@ -637,7 +668,6 @@ const priceStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  /* v2.6: رقائق معلوماتية مدمجة بدل الصناديق الملوّنة الكبيرة */
   chipsRow: {
     flexDirection: 'row-reverse',
     flexWrap: 'wrap',
@@ -661,7 +691,6 @@ const optStyles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 6,
   },
-  /* v2.7: رقائق أضيق — لمسة أسرع ومساحة أقل. */
   valueChip: {
     borderRadius: radius.pill,
     borderWidth: 1.5,
@@ -680,6 +709,11 @@ const optStyles = StyleSheet.create({
 
 const bottomStyles = StyleSheet.create({
   row: {flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.md},
+  hint: {
+    fontSize: 10.5,
+    textAlign: 'center',
+    marginTop: 7,
+  },
 });
 
 const viewerStyles = StyleSheet.create({

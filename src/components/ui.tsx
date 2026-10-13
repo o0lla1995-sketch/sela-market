@@ -76,19 +76,25 @@ export function AppHeader({
   onBack,
   right,
   big = false,
+  transparent = false,
 }: {
   title: string;
   subtitle?: string;
   onBack?: () => void;
   right?: React.ReactNode;
   big?: boolean;
+  /** v3.0: خلفية شفافة — للترويسات داخل أشرطة ملونة (صفحة التصنيف). */
+  transparent?: boolean;
 }) {
   const {palette} = useTheme();
   return (
     <View
       style={[
         headerStyles.row,
-        {backgroundColor: palette.bg, paddingHorizontal: spacing.lg},
+        {
+          backgroundColor: transparent ? 'transparent' : palette.bg,
+          paddingHorizontal: spacing.lg,
+        },
       ]}>
       {onBack ? (
         <Pressable
@@ -1086,18 +1092,42 @@ const toastStyles = StyleSheet.create({
 
 /* ═══════════════ BottomFixed ═══════════════ */
 
-/** حاوية مثبتة أسفل الشاشة فوق محتوى قابل للتمرير (أزرار الدفع). */
+/** حاوية مثبتة أسفل الشاشة فوق محتوى قابل للتمرير (أزرار الشراء).
+ *
+ * v3.0 (الجولة 60) — إعادة بناء جذرية بعد شكوى «لا تظهر أي أزرار
+ * في صفحة المنتج»: النسخة القديمة كانت عنصراً عادياً في عمود flex
+ * بعد ScrollView — أي رؤيتها رهينة بسلوك Yoga في تحجيم اللا-مرن.
+ * أي خلل في تلخيص الارتفاعات (قوائم طويلة/لوحات مفاتيح/شاشات
+ * صغيرة) كان يدفعها خارج الشاشة بصمت = المستخدم لا يرى زر
+ * الشراء إطلاقاً.
+ *
+ * الآن: شريط مُثبّت مثبتاً مطلقاً (position:absolute، bottom:0،
+ * يمين:0، يسار:0) فوق الشاشة كلها — يستحيل هندسياً أن يُدفَع خارج
+ * الرؤية، مهما كان حجم المحتوى أو سلوك flexbox. الشاشات التي
+ * تستخدمه تعطي قائمة تمريرها paddingBottom ≈ ارتفاع الشريط +
+ * إخلاء النظام كي لا يختفي آخر عنصر خلفه. هذا هو نمط أمازون/نون/
+ * سلة في كل تطبيقات التجزئة العالمية. */
 export function BottomFixed({children}: {children: React.ReactNode}) {
   const {palette} = useTheme();
   const insets = useSafeAreaInsets();
   return (
     <View
+      pointerEvents="box-none"
       style={[
         fixedStyles.box,
         {
           backgroundColor: palette.surface,
           borderTopColor: palette.line,
           paddingBottom: insets.bottom + 10,
+        },
+        shadowFor(palette.isDark),
+        // ظل علوي واضح فوق المحتوى في الفاتح
+        !palette.isDark && {
+          shadowColor: '#1C1917',
+          shadowOffset: {width: 0, height: -3},
+          shadowOpacity: 0.1,
+          shadowRadius: 7,
+          elevation: 14,
         },
       ]}>
       {children}
@@ -1107,17 +1137,54 @@ export function BottomFixed({children}: {children: React.ReactNode}) {
 
 const fixedStyles = StyleSheet.create({
   box: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
     borderTopWidth: 1,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
   },
 });
 
+/* ═══════════════ EndOfList ═══════════════ */
+
+/** تذييل «وصلت لنهاية القائمة» — بدل لودر يدور للأبد في أسفل
+ * صفحة المتجر حين لا تبقى منتجات (شكوى الجولة 13 حرفياً). */
+export function EndOfList({label = 'وصلت إلى كل المنتجات'}: {label?: string}) {
+  const {palette} = useTheme();
+  return (
+    <View style={endStyles.wrap} pointerEvents="none">
+      <View style={[endStyles.line, {backgroundColor: palette.line}]} />
+      <Icon name="checkCircle" size={14} color={palette.muted} />
+      <Text style={{fontSize: 11, color: palette.muted, fontFamily: fonts.medium}}>
+        {label}
+      </Text>
+      <View style={[endStyles.line, {backgroundColor: palette.line}]} />
+    </View>
+  );
+}
+
+const endStyles = StyleSheet.create({
+  wrap: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.xl,
+  },
+  line: {flex: 1, maxWidth: 70, height: 1},
+});
+
 /* ═══════════════ Global styles ═══════════════ */
 
 const styles = StyleSheet.create({
+  /* v3.0: flex:1 صريحة بدل flexGrow فقط — الحاوية الداخلية للشاشة
+   * يجب أن تكون محدودة الارتفاع دائماً حتى تُلزَم قوائم التمرير
+   * داخل حدودها (والشريط المثبت absolute يحتاج أماً محدوداً
+   * كي يتموضع bottom:0 على حافة الشاشة نفسها لا أبعد). */
   safe: {flex: 1},
-  grow: {flexGrow: 1},
+  grow: {flex: 1},
 });
 
 export {spacing, radius, type, fonts};

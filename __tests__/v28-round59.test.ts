@@ -156,13 +156,13 @@ describe('الجولة 59 — v2.8.0: منطق الشراء العالمي وس�
     expect(ui).toContain('const height = small ? 36 : 44;');
   });
 
-  test('⑥ الإصدار: 2.8.0 (12)', () => {
+  test('⑥ الإصدار: محدّث في الجولة 60 (3.0.0)', () => {
     const config = read('src/core/config.ts');
-    expect(config).toContain("APP_VERSION = '2.8.0'");
-    expect(config).toContain('APP_BUILD_CODE = 12');
+    expect(config).toContain("APP_VERSION = '3.0.0'");
+    expect(config).toContain('APP_BUILD_CODE = 13');
     const gradle = read('android/app/build.gradle');
-    expect(gradle).toContain('versionCode 12');
-    expect(gradle).toContain('versionName "2.8.0"');
+    expect(gradle).toContain('versionCode 13');
+    expect(gradle).toContain('versionName "3.0.0"');
   });
 
   test('⑦ المفضلة تتسق مع المنطق الجديد: زر واحد يفتح صفحة المنتج', () => {

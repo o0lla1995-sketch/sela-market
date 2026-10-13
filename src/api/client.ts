@@ -236,11 +236,12 @@ interface RequestOptions {
   retryOnNetwork?: boolean;
 }
 
-/* v2.4: عدّاد كسر الكاش — كل قراءة GET تحمل `_c=` فريداً متصاعداً.
- * أي وسيط على الطريق (بروكسي مشغّل على HTTP الصريح) لن يجد أبداً
- * نسخة مخزنة لنفس الرابط: كل طلب رابط جديد لم يُر من قبل، فلا كاش
- * ولا 304 ولا ردود مكسورة من نسخة قديمة. يبدأ من قيمة عشوائية كي
- * لا تتطابق العدادات بين الأجهزة بعد إعادة التشغيل. */
+/* v3.0 (الجولة 60): كسر الكاش أصبح انتقائياً — فقط على النقطة
+ * الاحتياطية HTTP الصريحة. كان العدّاد يُلصق بكل قراءة GET فيمنع
+ * أي وسيط من خدمة نسخة، ويجعل كل زيارة شاشة نداءات جديدة كاملة
+ * تستهلك ميزانية محدد المعدل (120/د) بلا داعٍ. النقطة الأساسية
+ * HTTPS مشفّرة طرف-لطرف لا يرى أي وسيط محتواها أصلاً — لا حاجة
+ * لكسر كاش عليها. */
 let cacheBustCounter =
   Date.now() % 1000000 + Math.floor(Math.random() * 1000);
 
@@ -258,10 +259,12 @@ async function requestOnce<T>(
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   const base = normalizeUrl(ENDPOINTS[endpointIndex]);
-  // كسر كاش غير مشروط لكل قراءة — انظر التعليق على العدّاد أعلاه.
-  const bust = method === 'GET'
-    ? `${path.includes('?') ? '&' : '?'}_c=${cacheBustCounter++}`
-    : '';
+  // كسر كاش فقط على الاحتياطية الصريحة (بروكسي المشغّل قد يخزنها)
+  // — الأساسية HTTPS لا تحتاجه فتُخدَم من كاش OKHttp عند التكرار.
+  const bust =
+    method === 'GET' && endpointIndex !== 0
+      ? `${path.includes('?') ? '&' : '?'}_c=${cacheBustCounter++}`
+      : '';
   const startedAt = Date.now();
   let response: Response;
   try {
@@ -361,12 +364,12 @@ async function request<T>(
   options: RequestOptions = {},
 ): Promise<T> {
   const retryOnNetwork = options.retryOnNetwork ?? options.method !== 'POST';
-  // المحاولات: sticky أولاً، ثم النقطة الأخرى، ثم sticky مجدداً —
-  // يمتص فشل نقطة كاملة وضعف الشبكة اللحظي وعتبة الاتصال البارد
-  // الأولى بعد فتح التطبيق.
+  // v3.0: محاولتان بدل ثلاث — sticky ثم البديلة. الثالثة كانت
+  // تضاعف الطلبات على شبكة متعثرة وتحرق ميزانية محدد المعدل
+  // (شكوى «محاولات كثيرة») بلا فائدة تذكر.
   const preferred = loadPreferredIndex();
   const other = preferred === 0 ? 1 : 0;
-  const order = retryOnNetwork ? [preferred, other, preferred] : [preferred];
+  const order = retryOnNetwork ? [preferred, other] : [preferred];
   let lastError: unknown;
   for (let attempt = 0; attempt < order.length; attempt++) {
     try {
@@ -374,15 +377,16 @@ async function request<T>(
     } catch (e) {
       lastError = e;
       const retriable =
-        e instanceof ApiError && (e.code === 'NETWORK' || e.code === 'TIMEOUT');
+        e instanceof ApiError &&
+        (e.code === 'NETWORK' ||
+          e.code === 'TIMEOUT' ||
+          // v3.0: 429 من قراءة GET يعاد مرة واحدة بعد مهلة قصيرة —
+          // حد المعدل نافذة زمنية منزلقة، ثانية واحدة تكفي لتفريغها.
+          (e.code === 'RATE_LIMITED' && options.method !== 'POST'));
       if (!retriable || attempt === order.length - 1) {
         throw e;
       }
-      // v2.4: تباعد أقصر (400ms ثم 1000ms) — الكشف عن الفشل خلال
-      // ثوانٍ لا دقائق، والمحاولة البديلة فورية كي لا يملّ المستخدم.
-      await new Promise(resolve =>
-        setTimeout(resolve, attempt === 0 ? 400 : 1000),
-      );
+      await new Promise(resolve => setTimeout(resolve, 1200));
     }
   }
   throw lastError;

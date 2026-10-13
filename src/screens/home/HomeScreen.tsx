@@ -22,11 +22,12 @@ import {
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 import {useTheme} from '../../theme/ThemeProvider';
-import {radius, shadowFor, spacing, type, fonts} from '../../theme/tokens';
+import {radius, shadowFor, spacing, type, fonts, tileFor} from '../../theme/tokens';
 import {Icon, type IconName} from '../../components/Icon';
 import {
   Badge,
   Button,
+  EndOfList,
   ErrorState,
   Loader,
   ProductGridSkeleton,
@@ -37,17 +38,15 @@ import {
 import {ProductCard} from '../../components/ProductCard';
 import {CircleStoreCard} from '../../components/StoreCard';
 import {
-  getCategories,
   getCrossProducts,
-  getCrossProductsAdaptive,
   getDeliveryRegions,
-  getStoreProducts,
+  getHomeFeed,
   getStores,
 } from '../../api/endpoints';
-import {cachedFetch, readCache} from '../../api/cached';
+import {cachedFetch} from '../../api/cached';
 import {PRODUCTS_PAGE_SIZE} from '../../core/config';
 import {greeting} from '../../core/time';
-import type {CategoryCount, CrossProduct, Product, Store} from '../../core/types';
+import type {CategoryCount, CrossProduct, Store} from '../../core/types';
 import {useAuthStore} from '../../stores/authStore';
 import {useLocationStore} from '../../stores/locationStore';
 import {useInterestStore} from '../../stores/interestStore';
@@ -72,11 +71,6 @@ const CATEGORY_ICONS: Record<string, IconName> = {
   'إلكترونيات': 'grid',
   'ملابس': 'tag',
 };
-
-/** يحوّل منتج متجر إلى منتج عابر (لتوحيد عرض البطاقات). */
-function crossOf(p: Product, store: Store): CrossProduct {
-  return {...p, store_name: store.name, store_number: store.store_number};
-}
 
 export function HomeScreen({navigation}: Props) {
   const {palette} = useTheme();
@@ -106,78 +100,33 @@ export function HomeScreen({navigation}: Props) {
   const [regionPickerOpen, setRegionPickerOpen] = useState(false);
   const [regionChoices, setRegionChoices] = useState<string[]>([]);
 
-  /* ── تحميل الرئيسية ── */
+  /* ── تحميل الرئيسية — v3.0: نداء واحد مجمّع (خادم 5.5) ──
+   * كانت أربع نداءات متوازية (متاجر + تصنيفات + أحدث منتجات +
+   * متاجر المنطقة) فوقها مروحة «شبكة أمان» تضرب كل متجر على حدة
+   * (حتى 12 نداءً إضافياً) — فتح التطبيق وحده كان يستهلك ثلث
+   * ميزانية محدد المعدل فتظهر «محاولات كثيرة» بعد ثوانٍ من التصفح.
+   * الآن: /api/market/home يعيد كل شيء في نداء واحد (مع متاجر
+   * المنطقة إذا حُددت) — والكاش المحلي يحمي عند التعثر. */
   const loadHome = useCallback(async () => {
     setError(null);
     setLoading(true);
     setStale(false);
 
     const region = useLocationStore.getState().myRegion;
-    const [storesRes, catsRes, prodsRes, regionRes] = await Promise.all([
-      cachedFetch('stores', () => getStores()),
-      cachedFetch('categories', () => getCategories()),
-      // v2.1: جلب متدرج (سلم 12→6→3→1) — الإصلاح الجذري الثالث
-      // لاختفاء المنتجات: الحمولات الصغيرة فقط تعبر مسلك شبكات الجوال.
-      cachedFetch(
-        'products:p1',
-        () => getCrossProductsAdaptive(PRODUCTS_PAGE_SIZE),
-      ),
-      region != null
-        ? cachedFetch(`stores:region:${region}`, () => getStores({region}))
-        : Promise.resolve(null),
-    ]);
+    const feedRes = await cachedFetch('home:v1', () => getHomeFeed(region));
 
-    if (storesRes.data != null) {
-      setStores(storesRes.data);
-    } else if (storesRes.error != null) {
-      setError(storesRes.error);
-    }
-    if (catsRes.data != null) {
-      setCategories(catsRes.data);
-    }
-    if (regionRes != null && regionRes.data != null) {
-      setRegionStores(regionRes.data);
-    }
-
-    if (prodsRes.data != null) {
-      setProducts(prodsRes.data);
-      setHasMore(prodsRes.data.length >= PRODUCTS_PAGE_SIZE);
+    if (feedRes.data != null) {
+      setStores(feedRes.data.stores);
+      setCategories(feedRes.data.categories);
+      setRegionStores(feedRes.data.regionStores ?? []);
+      setProducts(feedRes.data.latest);
+      setHasMore(feedRes.data.latest.length >= PRODUCTS_PAGE_SIZE);
       setPage(1);
-    } else if (prodsRes.error != null) {
-      // ── شبكة الأمان: المنتج العابر تعثّر — نجلب من كل متجر على
-      // حدة (نقطة نهاية مختلفة أصغر حجماً قد تنجح حيث فشل الأكبر).
-      const cachedStores = readCache<Store[]>('stores');
-      const fallbackStores = storesRes.data ?? cachedStores?.data ?? [];
-      if (fallbackStores.length > 0) {
-        try {
-          const chunks = await Promise.all(
-            fallbackStores.slice(0, 12).map(s =>
-              getStoreProducts(s.id, {per: 30}).catch(() => [] as Product[]),
-            ),
-          );
-          const merged: CrossProduct[] = [];
-          for (let i = 0; i < Math.min(fallbackStores.length, 12); i++) {
-            for (const p of chunks[i] ?? []) {
-              merged.push(crossOf(p, fallbackStores[i]));
-            }
-          }
-          if (merged.length > 0) {
-            setProducts(merged.slice(0, PRODUCTS_PAGE_SIZE));
-            setHasMore(false);
-            setPage(1);
-            setStale(true); // نجحنا جزئياً — نعلّم أن التحديث الكامل تعثر.
-          } else {
-            setStale(true);
-          }
-        } catch {
-          setStale(true);
-        }
-      } else {
-        setStale(storesRes.data != null);
-        if (storesRes.data == null) {
-          setError(prodsRes.error);
-        }
-      }
+    } else if (feedRes.error != null) {
+      /* فشل التحديث + لا كاش — شبكة الأمان القديمة كانت تضرب كل
+       * متجر على حدة (مروحة طلبات)؛ الآن نكتفي بالكاش إن وُجد. */
+      setError(feedRes.error);
+      setStale(true);
     }
     setLoading(false);
   }, []);
@@ -486,7 +435,7 @@ export function HomeScreen({navigation}: Props) {
                   </View>
                 ) : null}
 
-                {/* ─── التصنيفات ─── */}
+                {/* ─── التصنيفات — بلاطات ملونة عمودية (نمط نون) ─── */}
                 {firstEverLoad ? (
                   <RowSkeleton />
                 ) : categories.length > 0 ? (
@@ -497,33 +446,47 @@ export function HomeScreen({navigation}: Props) {
                       data={categories.slice(0, 12)}
                       keyExtractor={c => c.category}
                       showsHorizontalScrollIndicator={false}
-                      contentContainerStyle={{gap: spacing.md, paddingVertical: 2}}
-                      renderItem={({item}) => (
-                        <Pressable
-                          onPress={() => navigation.navigate('Category', {category: item.category})}
-                          style={({pressed}) => [
-                            catStyles.chip,
-                            {
-                              backgroundColor: palette.surface,
-                              borderColor: palette.line,
-                              opacity: pressed ? 0.85 : 1,
-                            },
-                          ]}>
-                          <View style={[catStyles.iconWrap, {backgroundColor: palette.brandSoft}]}>
-                            <Icon
-                              name={CATEGORY_ICONS[item.category] ?? 'tag'}
-                              size={21}
-                              color={palette.brandDark}
-                            />
-                          </View>
-                          <Text style={[type.smallMedium, {color: palette.ink}]} numberOfLines={1}>
-                            {item.category}
-                          </Text>
-                          <Text style={[{fontSize: 10, color: palette.muted}]}>
-                            {item.n} منتجاً
-                          </Text>
-                        </Pressable>
-                      )}
+                      contentContainerStyle={{gap: spacing.md, paddingVertical: 4}}
+                      renderItem={({item}) => {
+                        /* v3.0: لكل تصنيف لونه الثابت المخصص — نظام
+                         * الألوان الغني الجديد (شكوى «مفتقد للألوان
+                         * الأخرى»): نفس التصنيف يتلوّن بنفس اللون في
+                         * الرئيسية وصفحة المنتج والتصنيف كله. */
+                        const tile = tileFor(item.category, palette.isDark);
+                        return (
+                          <Pressable
+                            onPress={() => navigation.navigate('Category', {category: item.category})}
+                            style={({pressed}) => [
+                              catStyles.tile,
+                              {
+                                backgroundColor: tile.soft,
+                                borderColor: tile.solid + '33',
+                                opacity: pressed ? 0.85 : 1,
+                              },
+                            ]}>
+                            <View style={[catStyles.iconWrap, {backgroundColor: tile.solid}]}>
+                              <Icon
+                                name={CATEGORY_ICONS[item.category] ?? 'tag'}
+                                size={22}
+                                color="#FFFFFF"
+                              />
+                            </View>
+                            <Text
+                              style={{
+                                fontSize: 12.5,
+                                color: tile.ink,
+                                fontFamily: fonts.bold,
+                                textAlign: 'center',
+                              }}
+                              numberOfLines={1}>
+                              {item.category}
+                            </Text>
+                            <Text style={{fontSize: 10, color: tile.solid, fontFamily: fonts.medium}}>
+                              {item.n} منتجاً
+                            </Text>
+                          </Pressable>
+                        );
+                      }}
                     />
                   </View>
                 ) : null}
@@ -569,6 +532,8 @@ export function HomeScreen({navigation}: Props) {
             <View style={{paddingVertical: spacing.lg}}>
               <Loader label="نجلب المزيد…" />
             </View>
+          ) : !hasMore && products.length >= PRODUCTS_PAGE_SIZE ? (
+            <EndOfList label="وصلت إلى كل منتجات المول" />
           ) : null
         }
         renderItem={({item}) => (
@@ -744,13 +709,16 @@ const staleStyles = StyleSheet.create({
 });
 
 const catStyles = StyleSheet.create({
-  chip: {
+  /* v3.0: بلاطة عمودية ملونة كاملة (نمط نون) — لون التصنيف الثابت
+   * نفسه من tileFor يملأ الخلفية والأيقونة الدائرية الصلبة. */
+  tile: {
     alignItems: 'center',
     gap: 6,
     borderRadius: radius.lg,
     borderWidth: 1,
-    padding: spacing.md,
-    width: 104,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.sm,
+    width: 96,
   },
   iconWrap: {
     width: 46,

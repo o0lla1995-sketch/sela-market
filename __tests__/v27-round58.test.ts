@@ -98,12 +98,15 @@ describe('v2.7 — تنظيف المفضلة من المنتجات غير الم
   test('③ صفحة المنتج: كثافة v2.7 + إصلاح الهامش السفلي', () => {
     const screen = read('src/screens/product/ProductScreen.tsx');
     // المعرض 60% من العرض (كان 86%).
-    expect(screen).toContain('screenWidth * 0.6');
+    /* v3.0: أُعيد بناء المعرض بعرض كامل 4:5 — انظر v30-round60.test.ts */
+    expect(screen).toContain('screenWidth * 1.25');
     // السعر 21px (كان 30px) وبلا صندوق أيقونة 76px.
-    expect(screen).toContain('fontSize: 21, fontFamily: fonts.black');
+    /* v3.0: السعر 26px بعرض كامل بعد إعادة البناء */
+    expect(screen).toContain('fontSize: 26');
     expect(screen).not.toContain('bigIcon');
     // الهامش السفلي: آخر المحتوى لا يختفي خلف شريط الشراء الثابت.
-    expect(screen).toContain('paddingBottom: stackClearance + 140');
+    /* v3.0: الإخلاء صار بارتفاع الشريط المثبت المطلق نفسه */
+    expect(screen).toContain('paddingBottom: barClearance');
     // المتجر سطر مضغوط 38px (كان 52px).
     expect(screen).toMatch(/StoreAvatar[^]*size=\{38\}/);
   });
@@ -126,12 +129,12 @@ describe('v2.7 — تنظيف المفضلة من المنتجات غير الم
     expect(cart).toContain('إتمام الطلب —');
   });
 
-  test('⑤ الإصدار: 2.8.0 (12)', () => {
+  test('⑤ الإصدار: محدّث في الجولة 60 (3.0.0)', () => {
     const config = read('src/core/config.ts');
-    expect(config).toContain("APP_VERSION = '2.8.0'");
-    expect(config).toContain('APP_BUILD_CODE = 12');
+    expect(config).toContain("APP_VERSION = '3.0.0'");
+    expect(config).toContain('APP_BUILD_CODE = 13');
     const gradle = read('android/app/build.gradle');
-    expect(gradle).toContain('versionCode 12');
-    expect(gradle).toContain('versionName "2.8.0"');
+    expect(gradle).toContain('versionCode 13');
+    expect(gradle).toContain('versionName "3.0.0"');
   });
 });

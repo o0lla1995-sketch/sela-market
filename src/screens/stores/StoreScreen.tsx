@@ -15,6 +15,7 @@ import {Icon} from '../../components/Icon';
 import {
   Button,
   EmptyState,
+  EndOfList,
   ErrorState,
   Loader,
   Screen,
@@ -52,6 +53,14 @@ export function StoreScreen({navigation, route}: Props) {
   const [error, setError] = useState<string | null>(null);
   /* v2.1: خطأ المنتجات لم يعد يُبتلع — كان يظهر «0+» بلا سبب. */
   const [productsError, setProductsError] = useState<string | null>(null);
+  /* v3.0 (الجولة 60): علم استنفاد الكتالوج — الشكوى الحرفية:
+   * «يبقى في أسفل الصفحة لودر التحميل يعمل ويحاول جلب المزيد حتى
+   * دون وجود المزيد». المنطق القديم كان يعيد النداء عند كل وصول
+   * للنهاية ما دام الطول متساوياً (لا جديد لكن لا توقف أيضاً) —
+   * لودر يدور للأبد + طلبات بلا نهاية تحرق محدد المعدل. الآن:
+   * جلبة لا تُضيف جديدًا = قائمة مستنفدة نهائياً → تذييل «وصلت
+   * إلى كل المنتجات» ولا يُرسل طلب واحد بعدها. */
+  const [exhausted, setExhausted] = useState(false);
 
   const load = useCallback(async () => {
     setError(null);
@@ -72,13 +81,15 @@ export function StoreScreen({navigation, route}: Props) {
     } finally {
       setLoading(false);
     }
-    // المنتجات بجلب متدرج (سلم 12→6→3→1 عند تعثر الشبكة) — وخطأها
+    // المنتجات بجلب متدرج (سلم 12→6 عند تعثر الشبكة) — وخطأها
     // يظهر داخل قسم المنتجات مع زر إعادة محاولة بدل عدّاد 0+ صامت.
     try {
       const p = await getStoreProductsAdaptive(storeId, PRODUCTS_PAGE_SIZE);
       setProducts(p);
       setPage(1);
       setProductsError(null);
+      /* الاستنفاد الفوري: كتالوج أقصر من صفحة كاملة = لا «المزيد». */
+      setExhausted(p.length < PRODUCTS_PAGE_SIZE);
     } catch (e) {
       setProducts([]);
       setProductsError(
@@ -91,25 +102,38 @@ export function StoreScreen({navigation, route}: Props) {
     void load();
   }, [load]);
 
-  /* بحث داخل المتجر (q على الخادم — دقيق ومفهرس). */
+  /* بحث داخل المتجر (q على الخادم — دقيق ومفهرس). v3.0: حارس
+   * تسلسل يمنع الاستجابات القديمة من الكتابة فوق الأحدث عند
+   * الكتابة السريعة، والنتائج الفارغة تعلن الاستنفاد (لا لودر
+   * أبدياً أسفل نتائج البحث القصيرة). */
+  const searchSeq = React.useRef(0);
   useEffect(() => {
+    const mySeq = ++searchSeq.current;
     const t = setTimeout(async () => {
       try {
         const p = await getStoreProducts(storeId, {
           q: query.trim() || undefined,
           per: PRODUCTS_PAGE_SIZE,
         });
+        if (mySeq !== searchSeq.current) {
+          return; // جاء رد أحدث — تجاهل
+        }
         setProducts(p);
         setPage(1);
+        setExhausted(p.length < PRODUCTS_PAGE_SIZE);
       } catch {
         /* تجاهل أخطاء الكتابة السريعة */
       }
-    }, 350);
+    }, 400);
     return () => clearTimeout(t);
   }, [query, storeId]);
 
   const loadMore = useCallback(async () => {
     if (loadingMore || loading || query.trim().length > 0) {
+      return;
+    }
+    /* v3.0: القائمة مستنفدة — لا محاولة إطلاقاً (قتل اللودر الأبدي). */
+    if (exhausted) {
       return;
     }
     if (productsError != null) {
@@ -119,6 +143,7 @@ export function StoreScreen({navigation, route}: Props) {
         setProducts(p);
         setPage(1);
         setProductsError(null);
+        setExhausted(p.length < PRODUCTS_PAGE_SIZE);
       } catch {
         /* صمت — زر إعادة المحاولة داخل القسم يكفي */
       }
@@ -129,7 +154,7 @@ export function StoreScreen({navigation, route}: Props) {
     }
     setLoadingMore(true);
     try {
-      // v2.1: جلب شامل بجلب متدرج — يعيد القائمة الموسعة كاملة (idempotent)
+      // جلب شامل بجلب متدرج — يعيد القائمة الموسعة كاملة (idempotent)
       // بدل حساب الإزاحات مع أحجام per متغيرة.
       const next = await getStoreProductsAdaptive(
         storeId,
@@ -138,13 +163,18 @@ export function StoreScreen({navigation, route}: Props) {
       if (next.length > products.length) {
         setProducts(next);
         setPage(p => p + 1);
+        /* صفحة غير مكتملة = نهاية الكتالوج — توقف نهائي. */
+        setExhausted(next.length < products.length + PRODUCTS_PAGE_SIZE);
+      } else {
+        /* لا جديد إطلاقاً — استنفاد نهائي، لن نعيد المحاولة. */
+        setExhausted(true);
       }
     } catch {
-      /* صمت */
+      /* فشل مؤقت — إسكات اللودر فقط، المحاولة القادمة عند تمرير جديد */
     } finally {
       setLoadingMore(false);
     }
-  }, [loadingMore, loading, query, products, productsError, storeId]);
+  }, [loadingMore, loading, query, products, productsError, storeId, exhausted]);
 
   const store = detail?.store;
   const regions: DeliveryRegion[] = detail?.deliveryRegions ?? [];
@@ -478,6 +508,10 @@ export function StoreScreen({navigation, route}: Props) {
             <View style={{paddingVertical: spacing.lg}}>
               <Loader label="نجلب المزيد…" />
             </View>
+          ) : /* v3.0: تذييل نهاية القائمة بدل لا شيء — إشعار واضح أن
+           * الكتالوج انتهى (لا لودر يدور بلا نهاية). */
+          !loading && !productsError && products.length >= PRODUCTS_PAGE_SIZE && exhausted ? (
+            <EndOfList label={`وصلت إلى كل منتجات ${store?.name ?? 'المتجر'}`} />
           ) : null
         }
         renderItem={({item}) => (

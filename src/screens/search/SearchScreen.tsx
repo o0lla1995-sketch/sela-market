@@ -129,7 +129,7 @@ export function SearchScreen({navigation, route}: Props) {
     })();
   }, []);
 
-  const search = useCallback(async (q: string, f: Filters, pageNo = 1) => {
+  const search = useCallback(async (q: string, f: Filters, pageNo = 1, seq?: number) => {
     const clean = q.trim();
     if (clean.length < 2 && f.category == null) {
       setResults([]);
@@ -146,6 +146,10 @@ export function SearchScreen({navigation, route}: Props) {
         page: pageNo,
         per: PRODUCTS_PAGE_SIZE,
       });
+      /* حارس التسلسل: رد متقادم بعد كتابة أحدث — يُهمل بصمت. */
+      if (seq != null && seq !== searchSeq.current) {
+        return;
+      }
       setResults(prev => (pageNo === 1 ? products : [...prev, ...products]));
       setPage(pageNo);
       setHasMore(products.length >= PRODUCTS_PAGE_SIZE);
@@ -154,6 +158,9 @@ export function SearchScreen({navigation, route}: Props) {
         addRecent(clean);
       }
     } catch (e) {
+      if (seq != null && seq !== searchSeq.current) {
+        return;
+      }
       if (pageNo === 1) {
         setResults([]);
       }
@@ -163,14 +170,20 @@ export function SearchScreen({navigation, route}: Props) {
     }
   }, [addRecent]);
 
-  // إعادة البحث عند تغيّر الاستعلام أو فلاتر الخادم (تصنيف)
+  /* v3.0 (الجولة 60): debounce أطول (500ms) + حارس تسلسل صارم.
+   * الشكوى: «عند البحث تظهر خطأ محاولات كثيرة وكأنه يرسل طلبات
+   * كثيرة» — طبقة client تعيد المحاولة بذكاء على 429 الآن، وحارس
+   * التسلسل هنا يضمن أن ردود الكتابة السريعة المتقاطعة لا تستبدل
+   * بعضها ولا تُظهر نتائج استعلام قديم فوق الأحدث. */
+  const searchSeq = useRef(0);
   useEffect(() => {
     if (debounceRef.current != null) {
       clearTimeout(debounceRef.current);
     }
+    const mySeq = ++searchSeq.current;
     debounceRef.current = setTimeout(() => {
-      void search(query, filters, 1);
-    }, 350);
+      void search(query, filters, 1, mySeq);
+    }, 500);
     return () => {
       if (debounceRef.current != null) {
         clearTimeout(debounceRef.current);

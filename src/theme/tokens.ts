@@ -202,3 +202,59 @@ export function toneColors(p: Palette, tone: Tone) {
       return {fg: p.muted, bg: p.surfaceAlt, border: p.line, solid: p.muted};
   }
 }
+
+/* ─── v3.0 (الجولة 60): بلاطات الألوان الغنية ────────────────────
+ * شكوى التاجر: «مفتقد للألوان الأخرى — لم تستوحِ شيئاً من تصميم
+ * الأنظمة العالمية؟» — تطبيقات التجزئة العالمية (نون تحديداً)
+ * تُلوّن كل تصنيف بلونه المميز: بلاطة فاتحة + لون صلب داكن.
+ * الدالة تُعطي كل تصنيف لوناً ثابتاً (hash من الاسم) من عائلة
+ * تدرجات دافئة/باردة منسجمة مع البرتقالي الأساسي — الهوية تبقى
+ * برتقالية والتصنيفات تتلون حولها. */
+export interface TilePalette {
+  /** خلفية فاتحة للبلاطة/الشريحة. */
+  soft: string;
+  /** لون صلب للأيقونة/الرقاقة. */
+  solid: string;
+  /** نص داكن فوق الخلفية الفاتحة. */
+  ink: string;
+}
+
+const TILES_LIGHT: readonly TilePalette[] = [
+  {soft: '#FFF7ED', solid: '#EA580C', ink: '#9A3412'}, // برتقالي دافئ
+  {soft: '#FEF2F2', solid: '#DC2626', ink: '#991B1B'}, // أحمر طماطم
+  {soft: '#F0FDF4', solid: '#16A34A', ink: '#166534'}, // أخضر خضروات
+  {soft: '#EFF6FF', solid: '#2563EB', ink: '#1E40AF'}, // أزرق منتجات منزلية
+  {soft: '#FAF5FF', solid: '#9333EA', ink: '#6B21A8'}, // بنفسجي حلويات
+  {soft: '#FFFBEB', solid: '#D97706', ink: '#92400E'}, // كهرماني مخبوزات
+  {soft: '#F0FDFA', solid: '#0D9488', ink: '#115E59'}, // تركوازي مشروبات
+  {soft: '#FDF2F8', solid: '#DB2777', ink: '#9D174D'}, // وردي ألبان
+  {soft: '#F8FAFC', solid: '#475569', ink: '#334155'}, // رمادي إلكترونيات
+  {soft: '#FEFCE8', solid: '#CA8A04', ink: '#854D0E'}, // أصفر عسل
+];
+
+const TILES_DARK: readonly TilePalette[] = [
+  {soft: '#2E1C0D', solid: '#FB923C', ink: '#FDBA74'},
+  {soft: '#331717', solid: '#F87171', ink: '#FCA5A5'},
+  {soft: '#0E2A1B', solid: '#4ADE80', ink: '#86EFAC'},
+  {soft: '#14213A', solid: '#93C5FD', ink: '#BFDBFE'},
+  {soft: '#2B1A3D', solid: '#C084FC', ink: '#D8B4FE'},
+  {soft: '#33270E', solid: '#FBBF24', ink: '#FCD34D'},
+  {soft: '#0E2E2A', solid: '#2DD4BF', ink: '#5EEAD4'},
+  {soft: '#331A2B', solid: '#F472B6', ink: '#F9A8D4'},
+  {soft: '#1E293B', solid: '#94A3B8', ink: '#CBD5E1'},
+  {soft: '#322E0E', solid: '#EAB308', ink: '#FDE047'},
+];
+
+/** لون بلاطة ثابت لكل مفتاح (تصنيف/متجر/وسم) — نفس الاسم يعطي
+ * نفس اللون في كل مكان بالتطبيق، كما تثبّت نون ألوان تصنيفاتها. */
+export function tileFor(key: string | null | undefined, isDark: boolean): TilePalette {
+  const list = isDark ? TILES_DARK : TILES_LIGHT;
+  if (key == null || key === '') {
+    return list[0];
+  }
+  let h = 0;
+  for (let i = 0; i < key.length; i++) {
+    h = (h * 31 + key.charCodeAt(i)) >>> 0;
+  }
+  return list[h % list.length];
+}
