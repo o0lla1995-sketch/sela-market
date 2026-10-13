@@ -34,8 +34,8 @@ android {
         applicationId "com.sela.market"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 8
-        versionName "2.4.0"
+        versionCode 9
+        versionName "2.5.0"
     }
 
     signingConfigs {
@@ -74,6 +74,12 @@ dependencies {
 
     // NotificationCompat لإشعارات حالة الطلب المحلية.
     implementation("androidx.core:core-ktx:1.13.1")
+
+    // v2.5: BiometricPrompt الرسمي لبوابة البصمة — مسار KeyguardManager
+    // القديم مهمل من Google منذ API 29 ويرجع RESULT_CANCELED
+    // حتى بعد بصمة صحيحة على أجهزة كثيرة — فكان المستخدم
+    // علقاً على شاشة البصمة يطلبها كل مرة.
+    implementation("androidx.biometric:biometric:1.1.0")
 
     if (hermesEnabled.toBoolean()) {
         implementation("com.facebook.react:hermes-android")

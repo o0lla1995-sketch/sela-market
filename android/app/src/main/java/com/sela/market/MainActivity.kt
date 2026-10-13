@@ -4,12 +4,18 @@ import android.content.Context
 import android.content.res.Configuration
 import android.os.Bundle
 import java.util.Locale
-import com.facebook.react.ReactActivity
+import com.facebook.react.ReactFragmentActivity
 import com.facebook.react.ReactActivityDelegate
 import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint.fabricEnabled
 import com.facebook.react.defaults.DefaultReactActivityDelegate
 
-class MainActivity : ReactActivity() {
+/**
+ * v2.5: ReactFragmentActivity بدل ReactActivity — حوار BiometricPrompt
+ * الرسمي (مسار البنوك المعتمد) يحتاج FragmentActivity.
+ * كل تسلسل RN العام محفوظ كما هو — هذه الفئة تصل بواسطة نفس
+ * المنطق (نفس delegate ونفس الواجهات) مع دعم الـ Fragments.
+ */
+class MainActivity : ReactFragmentActivity() {
 
     /**
      * The name of the main component registered from JavaScript. This is used to schedule

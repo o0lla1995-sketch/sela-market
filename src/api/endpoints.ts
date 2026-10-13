@@ -41,6 +41,32 @@ export async function getMarketConfig(): Promise<MarketConfig> {
   };
 }
 
+/* ── v2.5: بانِي سلسلة الاستعلام المحلي — السبب الجذري الحقيقي ────
+ * ─────────────────────────────────────────────────────────────────
+ * محرك Hermes في RN 0.74 لا يوفر URLSearchParams إطلاقاً (متحقق
+ * منه من libhermes.so داخل APK: صفر ظهور). كل نداء لمنتجات كان
+ * يرمي ReferenceError قبل خروج أي طلب شبكة — لذلك سبع جولات من
+ * إصلاحات الخادم (gzip/304/HTTPS/كسر الكاش) لم تغيّر شيئاً:
+ * التطبيق لم يرسل طلب منتجات واحداً في حياته. المتاجر/التصنيفات
+ * كانت تعمل لأنها بلا معاملات استعلام. encodeURIComponent مضمون
+ * في كل محركات JS — نبني به الاستعلام يدوياً ونموت هذا الفصل
+ * إلى الأبد. */
+function buildQuery(
+  params: Record<string, string | number | boolean | undefined | null>,
+): string {
+  const parts: string[] = [];
+  for (const key of Object.keys(params)) {
+    const value = params[key];
+    if (value === undefined || value === null || value === '') {
+      continue;
+    }
+    parts.push(
+      `${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`,
+    );
+  }
+  return parts.join('&');
+}
+
 export interface StoresQuery {
   /** v2.0 (خادم 4.4): متاجر تخدم هذه المنطقة فقط (مرتبة برسم
    *  التوصيل لها تصاعدياً) مع deliveryFeeMinor لكل متجر. */
@@ -48,11 +74,8 @@ export interface StoresQuery {
 }
 
 export async function getStores(query: StoresQuery = {}): Promise<Store[]> {
-  const params = new URLSearchParams();
-  if (query.region) {
-    params.set('region', query.region);
-  }
-  const qs = params.toString();
+  // v2.5: buildQuery بدل URLSearchParams (غير موجود في Hermes).
+  const qs = buildQuery({region: query.region});
   const res = await apiRequest<{ok: true; stores: Store[]}>(
     `/api/market/stores${qs ? `?${qs}` : ''}`,
   );
@@ -95,20 +118,14 @@ export async function getStoreProducts(
   storeId: number,
   query: StoreProductsQuery = {},
 ): Promise<Product[]> {
-  const params = new URLSearchParams();
-  if (query.q) {
-    params.set('q', query.q);
-  }
-  if (query.page) {
-    params.set('page', String(query.page));
-  }
-  if (query.per) {
-    params.set('per', String(query.per));
-  }
-  if (query.offers) {
-    params.set('offers', '1');
-  }
-  const qs = params.toString();
+  // v2.5: buildQuery بدل URLSearchParams (غير موجود في Hermes —
+  // كان هذا المسار بالذات سبب اختفاء منتجات المتجر كلياً).
+  const qs = buildQuery({
+    q: query.q,
+    page: query.page,
+    per: query.per,
+    offers: query.offers === true ? 1 : undefined,
+  });
   const res = await apiRequest<{ok: true; products: Product[]}>(
     `/api/market/stores/${storeId}/products${qs ? `?${qs}` : ''}`,
   );
@@ -180,20 +197,14 @@ export interface CrossProductsQuery {
 export async function getCrossProducts(
   query: CrossProductsQuery = {},
 ): Promise<CrossProduct[]> {
-  const params = new URLSearchParams();
-  if (query.q) {
-    params.set('q', query.q);
-  }
-  if (query.category) {
-    params.set('category', query.category);
-  }
-  if (query.page) {
-    params.set('page', String(query.page));
-  }
-  if (query.per) {
-    params.set('per', String(query.per));
-  }
-  const qs = params.toString();
+  // v2.5: buildQuery بدل URLSearchParams (غير موجود في Hermes —
+  // هذا المسار يغذي «أحدث المنتجات» في الرئيسية وكان ميتاً كلياً).
+  const qs = buildQuery({
+    q: query.q,
+    category: query.category,
+    page: query.page,
+    per: query.per,
+  });
   const res = await apiRequest<{ok: true; products: CrossProduct[]}>(
     `/api/market/products${qs ? `?${qs}` : ''}`,
   );

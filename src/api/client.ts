@@ -384,11 +384,14 @@ async function request<T>(
 
 export const apiRequest = request;
 
-/* ── v2.4: فحص الشبكة الذاتي — شاشة التشخيص ═════════════════
- * يطلق السلسلة الحرجة كاملة (إعدادات → متاجر → منتجات متجر →
- * منتجات عابرة) على النقطة الأساسية ثم الاحتياطية ويعيد تقريراً
- * صريحاً بكل خطوة: الحالة والحجم والزمن. هكذا يرى المستخدم بعينه
- * أن طلب المنتجات يخرج فعلاً وماذا يحدث له بالضبط على شبكته. */
+/* ── v2.5: فحص الشبكة الذاتي — شاشة التشخيص ════════════════════
+ * درس الجولة الثامنة: الفحص القديم كان يمرر مسارات نصية جاهزة
+ * فيفحص طبقة الشبكة وحدها — بينما كان الخلل الفعلي في طبقة بناء
+ * الطلب (URLSearchParams غير موجودة في Hermes ترمي ReferenceError
+ * قبل أي نداء). الفحص الجديد يستدعي الدوال الحقيقية نفسها التي
+ * تستخدمها الشاشات (يحقنها المستدعي من endpoints.ts لتفادي
+ * الاستيراد الدائري) + يفحص قدرات محرك JS أولاً — هكذا أي
+ * خلل قادم في أي طبقة يظهر باسمه في التقرير. */
 
 export interface ProbeStep {
   label: string;
@@ -407,22 +410,102 @@ export interface ProbeReport {
   steps: ProbeStep[];
 }
 
-export async function runNetworkProbe(): Promise<ProbeReport> {
+/** تعريف خطوة فحص — دالة حقيقية من endpoints.ts (لا مسار نصي). */
+export interface ProbeDef {
+  label: string;
+  /** المسار المتوقع (للعرض فقط). */
+  path: string;
+  run: () => Promise<unknown>;
+}
+
+/* v2.5: قدرات محرك JS — أول ما يُفحص. الدرس الثامنة:
+ * RN 0.74 يزود بإثناء URLSearchParams «مزيفاً» — المنشئ و
+ * toString يعملان ولكن set() يرمي «not implemented» — فالفحص
+ * النوعي بـ typeof ينجح والواقع مكسور! الفحص هنا وظيفي
+ * فعلي: نبني نداء حقيقياً ونجرب أن يعمل فعلاً. */
+export interface RuntimeCaps {
+  fetch: boolean;
+  AbortController: boolean;
+  URLSearchParams: boolean;
+  URL: boolean;
+  encodeURIComponent: boolean;
+  Promise: boolean;
+}
+
+function urlSearchParamsWorks(): boolean {
+  try {
+    if (typeof URLSearchParams !== 'function') {
+      return false;
+    }
+    const probe = new URLSearchParams();
+    probe.set('a', '1');
+    return probe.toString() === 'a=1';
+  } catch {
+    return false;
+  }
+}
+
+function urlWorks(): boolean {
+  try {
+    if (typeof URL !== 'function') {
+      return false;
+    }
+    const probe = new URL('https://example.com/x');
+    return probe.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+export function runtimeCapabilities(): RuntimeCaps {
+  return {
+    fetch: typeof fetch === 'function',
+    AbortController: typeof AbortController === 'function',
+    URLSearchParams: urlSearchParamsWorks(),
+    URL: urlWorks(),
+    encodeURIComponent: typeof encodeURIComponent === 'function',
+    Promise: typeof Promise === 'function',
+  };
+}
+
+export async function runNetworkProbe(defs: ProbeDef[]): Promise<ProbeReport> {
   clearCallLog();
   const steps: ProbeStep[] = [];
-  const probes: {label: string; path: string}[] = [
-    {label: 'الإعدادات العامة', path: '/api/market/config'},
-    {label: 'قائمة المتاجر', path: '/api/market/stores'},
-    {label: 'تفاصيل متجر (1)', path: '/api/market/stores/1'},
-    {label: 'منتجات المتجر', path: '/api/market/stores/1/products?per=12'},
-    {label: 'المنتجات العابرة', path: '/api/market/products?per=12'},
-  ];
+
+  // الخطوة صفر: قدرات المحرك. الفشل الفادح في ما يعتمد عليه
+  // التطبيق فعلاً (fetch/Abort/encode/Promise) — أما URLSearchParams/URL
+  // فمعلوماتية فقط لأن التطبيق منذ v2.5 لا يستخدمها إطلاقاً
+  // (نتعلمها من الدرس الثامن: مزيفة RN 0.74 مكسورة).
+  const caps = runtimeCapabilities();
+  const missing = (Object.keys(caps) as (keyof RuntimeCaps)[]).filter(
+    k => !caps[k],
+  );
+  const criticalMissing = missing.filter(
+    k => k !== 'URLSearchParams' && k !== 'URL',
+  );
+  const informational = missing.filter(
+    k => k === 'URLSearchParams' || k === 'URL',
+  );
+  steps.push({
+    label: 'قدرات محرك JS',
+    path: 'fetch · AbortController · encodeURIComponent · …',
+    status: criticalMissing.length === 0 ? 200 : 0,
+    bytes: 0,
+    ms: 0,
+    ok: criticalMissing.length === 0,
+    detail:
+      criticalMissing.length > 0
+        ? `خطير مفقود: ${criticalMissing.join('، ')} — ثبّت التحديث الأخير`
+        : informational.length > 0
+          ? `كل الميزات الحرجة سليمة. (معلومة: ${informational.join('، ')} غير متاحة في المحرك — التطبيق لا يحتاجها)`
+          : 'كل واسطات الشبكة متوفرة وتعمل فعلياً',
+  });
+
   let endpointUsed: ProbeReport['endpoint'] = null;
-  const before = getCallLog().length;
-  for (const p of probes) {
+  for (const p of defs) {
     const t0 = Date.now();
     try {
-      const res = await apiRequest<unknown>(p.path);
+      await p.run();
       const rec = getCallLog()[getCallLog().length - 1];
       steps.push({
         label: p.label,
@@ -446,10 +529,11 @@ export async function runNetworkProbe(): Promise<ProbeReport> {
         detail:
           e instanceof ApiError
             ? `${e.code}: ${e.message}`
-            : 'خطأ غير معروف',
+            : e instanceof Error
+              ? `${e.name}: ${e.message}`
+              : 'خطأ غير معروف',
       });
     }
   }
-  void before;
   return {at: Date.now(), endpoint: endpointUsed, steps};
 }

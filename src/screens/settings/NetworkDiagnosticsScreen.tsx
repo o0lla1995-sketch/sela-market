@@ -29,8 +29,21 @@ import {
   runNetworkProbe,
   subscribeCallLog,
   type ApiCallRecord,
+  type ProbeDef,
   type ProbeReport,
 } from '../../api/client';
+/* v2.5: الفحص يستدعي الدوال الحقيقية نفسها التي تستخدمها الشاشات —
+ * لا مسارات نصية جاهزة. هكذا لو انكسر أي مسار (بناء استعلام، تحويل
+ * نوع، غياب API في Hermes) يظهر في التقرير باسمه، بدل فحص شبكة
+ * سليم يخفي خللاً في طبقة الكود (ما حدث فعلاً في الجولات السابقة). */
+import {
+  getCategories,
+  getCrossProducts,
+  getMarketConfig,
+  getStoreDetail,
+  getStoreProducts,
+  getStores,
+} from '../../api/endpoints';
 import {PRIMARY_SERVER_URL, FALLBACK_SERVER_URL, APP_VERSION_LABEL} from '../../core/config';
 import type {ShopStackParamList} from '../../navigation/RootNavigator';
 
@@ -61,7 +74,41 @@ export function NetworkDiagnosticsScreen({navigation}: Props) {
     setRunning(true);
     setReport(null);
     try {
-      const r = await runNetworkProbe();
+      /* v2.5: كل خطوة تمر عبر الكود الحقيقي — نفس الدوال التي تستهلكها
+       * شاشات المتجر والرئيسية والبحث. منتجات المتجر تُجلب عبر نقطة
+       * نهاية "مست" حقيقية (متجر موجود فعلاً) لا معرّف ثابت. */
+      let realStoreId = 1;
+      let realStoreName = 'متجر (1)';
+      try {
+        const stores = await getStores();
+        if (stores.length > 0) {
+          realStoreId = stores[0].id;
+          realStoreName = stores[0].name.slice(0, 18);
+        }
+      } catch {
+        /* بلا متاجر — نستخدم 1 مثل السابق */
+      }
+      const defs: ProbeDef[] = [
+        {label: 'الإعدادات العامة', path: '/api/market/config', run: () => getMarketConfig()},
+        {label: 'قائمة المتاجر', path: '/api/market/stores', run: () => getStores()},
+        {label: 'التصنيفات', path: '/api/market/categories', run: () => getCategories()},
+        {
+          label: `تفاصيل المتجر (${realStoreName})`,
+          path: `/api/market/stores/${realStoreId}`,
+          run: () => getStoreDetail(realStoreId),
+        },
+        {
+          label: 'منتجات المتجر — المسار الحقيقي',
+          path: `/api/market/stores/${realStoreId}/products?per=12`,
+          run: () => getStoreProducts(realStoreId, {per: 12}),
+        },
+        {
+          label: 'منتجات المول — المسار الحقيقي',
+          path: '/api/market/products?per=12',
+          run: () => getCrossProducts({per: 12}),
+        },
+      ];
+      const r = await runNetworkProbe(defs);
       setReport(r);
     } finally {
       setRunning(false);
@@ -69,7 +116,9 @@ export function NetworkDiagnosticsScreen({navigation}: Props) {
   }, []);
 
   const okCount = report ? report.steps.filter(s => s.ok).length : 0;
-  const productStep = report?.steps.find(s => s.label === 'منتجات المتجر');
+  const productStep = report?.steps.find(
+    s => s.label.includes('منتجات المتجر') || s.label.includes('منتجات المول'),
+  );
 
   return (
     <Screen>
