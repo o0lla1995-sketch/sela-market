@@ -1,12 +1,18 @@
 /**
- * ProductScreen.tsx — صفحة المنتج (v1.2 — خيارات الشراء + شفافية الوحدة):
+ * ProductScreen.tsx — صفحة المنتج (v2.7 — كثافة احترافية):
  * ─────────────────────────────────────────────────────────────────
- * معرض صور بنقاط وعدّاد + عارض ملء الشاشة، بطاقة سعر كبيرة تشرح
- * وحدة البيع (كيلو/قطعة/علبة…) بلا لبس، مجموعات خيارات الشراء
- * (مقاسات/ألوان) كرقائق إلزامية قبل الإضافة — المنتج نفسه بخيارين
- * سطران مستقلان في السلة، عدّاد كمية بأنصاف الكيلو للوزن مع إجمالي
- * حيّ يتحدث مع كل لمسة، حالة المخزون، بطاقة المتجر، و«المزيد من
- * التصنيف».
+ * دراسة معايير المتاجر العالمية (أمازون/نون/طلبات): كثافة أعلى
+ * وعناصر أصغر — طلب التاجر بالنص: «أحجام العناصر بها كبيرة وغير
+ * عملية». v2.7:
+ *  • معرض صور مدمج (60% من العرض بدل 86%) + عناصر سعر أصغر
+ *    (21px بدل 30px) وإلغاء صندوق الأيقونة 76px.
+ *  • بطاقات مدمجة: السعر+الوحدة+المخزون+التصنيف في بطاقة واحدة؛
+ *     المتجر سطر مضغوط؛ الاقتراحات 150px.
+ *  • إصلاح جوهري: الهامش السفلي — آخر المحتوى كان يختفي خلف
+ *    شريط الشراء الثابت (شكوى «هامش أسفل الصفحة»)؛ أصبح
+ *    stackClearance + 140.
+ *  • خيارات الشراء + عدّاد الكمية + الإجمالي الحي كما هي (v2.6)
+ *    — المنطق المثبت لم يُمس.
  */
 import React, {useEffect, useMemo, useState} from 'react';
 import {
@@ -169,7 +175,7 @@ export function ProductScreen({navigation, route}: Props) {
     });
   };
 
-  const galleryHeight = screenWidth * 0.86;
+  const galleryHeight = screenWidth * 0.6;
 
   return (
     <Screen>
@@ -178,7 +184,7 @@ export function ProductScreen({navigation, route}: Props) {
         subtitle={`من ${storeRef.name}`}
         onBack={() => navigation.goBack()}
       />
-      <ScrollView contentContainerStyle={{padding: spacing.lg, gap: spacing.lg, paddingBottom: stackClearance}} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{padding: spacing.md, gap: spacing.md, paddingBottom: stackClearance + 140}} showsVerticalScrollIndicator={false}>
         {/* ─── معرض الصور ─── */}
         {images.length > 0 ? (
           <View>
@@ -196,7 +202,7 @@ export function ProductScreen({navigation, route}: Props) {
                 <Pressable key={uri} onPress={() => setViewerIndex(i)}>
                   <Image
                     source={{uri}}
-                    style={{width: screenWidth - spacing.lg * 2, height: galleryHeight}}
+                    style={{width: screenWidth - spacing.md * 2, height: galleryHeight}}
                     resizeMode="cover"
                     progressiveRenderingEnabled
                   />
@@ -240,32 +246,28 @@ export function ProductScreen({navigation, route}: Props) {
           </View>
         )}
 
-        {/* ─── بطاقة السعر + وحدة البيع ─── */}
-        <Card style={{gap: spacing.md}}>
+        {/* ─── بطاقة السعر + الوحدة + المخزون + التصنيف (مدمجة v2.7) ─── */}
+        <Card style={{gap: spacing.sm}}>
           <View style={priceStyles.row}>
-            <View style={{gap: 2, flex: 1, alignItems: 'flex-start'}}>
-              <Text style={[type.small, {color: palette.muted}]}>السعر</Text>
+            <View style={{gap: 1, flex: 1, alignItems: 'flex-start'}}>
               {hasDiscount(product) ? (
                 <>
-                  <View style={{flexDirection: 'row-reverse', alignItems: 'center', gap: 8}}>
+                  <View style={{flexDirection: 'row-reverse', alignItems: 'center', gap: 6}}>
                     <Text
-                      style={[
-                        type.small,
-                        {color: palette.muted, textDecorationLine: 'line-through'},
-                      ]}>
+                      style={[type.small, {color: palette.muted, textDecorationLine: 'line-through'}]}>
                       {formatMoney(product.price_minor)}
                     </Text>
                     <View style={[priceStyles.pctChip, {backgroundColor: palette.danger}]}>
-                      <Text style={{fontSize: 10.5, color: '#FFFFFF', fontFamily: fonts.bold}}>
+                      <Text style={{fontSize: 9.5, color: '#FFFFFF', fontFamily: fonts.bold}}>
                         خصم {Math.round(product.discount_pct ?? 0)}%
                       </Text>
                     </View>
+                    <Text style={{fontSize: 10.5, color: palette.success, fontFamily: fonts.medium}}>
+                      توفّر {formatMoney(Math.max(0, product.price_minor - effectiveMinor(product)))}
+                    </Text>
                   </View>
                   <Text style={[priceStyles.amount, {color: palette.brandDark}]}>
                     {formatMoney(effectiveMinor(product))}
-                  </Text>
-                  <Text style={{fontSize: 11, color: palette.success, fontFamily: fonts.medium}}>
-                    توفّر {formatMoney(Math.max(0, product.price_minor - effectiveMinor(product)))}
                   </Text>
                 </>
               ) : (
@@ -273,17 +275,10 @@ export function ProductScreen({navigation, route}: Props) {
                   {formatMoney(product.price_minor)}
                 </Text>
               )}
-            </View>
-            <View
-              style={[
-                priceStyles.bigIcon,
-                {backgroundColor: palette.brandSoft, borderColor: palette.brandBorder},
-              ]}>
-              <Icon
-                name={soldByWeight ? 'scale' : 'box'}
-                size={34}
-                color={palette.brandDark}
-              />
+              <Text style={{fontSize: 10.5, color: palette.muted}}>
+                {soldByWeight ? 'بالكيلو — بأنصاف الكيلو' : product.unit_label ? `الوحدة: ${product.unit_label}` : 'يُباع بالقطعة'}
+                {product.category ? ` · ${product.category}` : ''}
+              </Text>
             </View>
             <Pressable
               onPress={onWishlist}
@@ -291,21 +286,12 @@ export function ProductScreen({navigation, route}: Props) {
               style={[priceStyles.wishBtn, {backgroundColor: palette.surfaceAlt}]}>
               <Icon
                 name={wishlisted ? 'heartFilled' : 'heart'}
-                size={22}
+                size={19}
                 color={wishlisted ? palette.danger : palette.muted}
               />
             </Pressable>
           </View>
-
-          {/* وحدة البيع + حالة المخزون — رقائق معلوماتية أنيقة بدل
-           * الصناديق الملوّنة الكبيرة (شكوى: الصفحة كانت مزدحمة). */}
           <View style={priceStyles.chipsRow}>
-            <View style={[priceStyles.infoChip, {backgroundColor: palette.surfaceAlt, borderColor: palette.line}]}>
-              <Icon name={soldByWeight ? 'scale' : 'box'} size={13} color={palette.brandDark} />
-              <Text style={{fontSize: 11.5, color: palette.inkSoft, fontFamily: fonts.medium}}>
-                {soldByWeight ? 'بالكيلو — بأنصاف الكيلو' : product.unit_label ? `الوحدة: ${product.unit_label}` : 'يُباع بالقطعة'}
-              </Text>
-            </View>
             <View
               style={[
                 priceStyles.infoChip,
@@ -316,12 +302,12 @@ export function ProductScreen({navigation, route}: Props) {
               ]}>
               <Icon
                 name={outOfStock ? 'xCircle' : lowStock ? 'warning' : 'checkCircle'}
-                size={13}
+                size={12}
                 color={outOfStock ? palette.danger : lowStock ? palette.warning : palette.success}
               />
               <Text
                 style={{
-                  fontSize: 11.5,
+                  fontSize: 11,
                   fontFamily: fonts.medium,
                   color: outOfStock ? palette.danger : lowStock ? palette.warning : palette.success,
                 }}>
@@ -332,38 +318,34 @@ export function ProductScreen({navigation, route}: Props) {
                     : `متوفر (${Math.floor(product.stock)}${soldByWeight ? ' كيلو' : ' قطعة'})`}
               </Text>
             </View>
+            {product.category ? (
+              <Pressable
+                onPress={() => navigation.navigate('Category', {category: product.category!})}>
+                <Text style={{fontSize: 11, color: palette.brand, fontFamily: fonts.medium}}>
+                  {product.category} ›
+                </Text>
+              </Pressable>
+            ) : null}
           </View>
-
-          {/* التصنيف */}
-          {product.category ? (
-            <Pressable
-              onPress={() => navigation.navigate('Category', {category: product.category!})}
-              style={{flexDirection: 'row-reverse', alignItems: 'center', gap: 6}}>
-              <Icon name="tag" size={14} color={palette.muted} />
-              <Text style={[{fontSize: 12.5, color: palette.brand, fontFamily: fonts.medium}]}>
-                {product.category}
-              </Text>
-            </Pressable>
-          ) : null}
         </Card>
 
-        {/* ─── خيارات الشراء (مقاس/لون…) ─── */}
+        {/* ─── خيارات الشراء (مقاس/لون…) — مضغوطة v2.7 ─── */}
         {optionGroups.length > 0 ? (
-          <Card style={{gap: spacing.md}}>
+          <Card style={{gap: spacing.sm}}>
             <View style={{flexDirection: 'row-reverse', alignItems: 'center', gap: 6}}>
-              <Icon name="sliders" size={16} color={palette.brandDark} />
+              <Icon name="sliders" size={14} color={palette.brandDark} />
               <Text style={[type.h3, {color: palette.ink}]}>اختياراتك</Text>
               {!complete ? (
                 <View style={[optStyles.requiredChip, {backgroundColor: palette.brandSoft, borderColor: palette.brandBorder}]}>
-                  <Text style={{fontSize: 10, color: palette.brandDark, fontFamily: fonts.bold}}>
+                  <Text style={{fontSize: 9.5, color: palette.brandDark, fontFamily: fonts.bold}}>
                     مطلوب
                   </Text>
                 </View>
               ) : null}
             </View>
             {optionGroups.map(group => (
-              <View key={group.name} style={{gap: spacing.sm}}>
-                <Text style={[type.smallMedium, {color: palette.inkSoft}]}>
+              <View key={group.name} style={{gap: 5}}>
+                <Text style={{fontSize: 11.5, color: palette.inkSoft, fontFamily: fonts.medium}}>
                   {group.name}
                 </Text>
                 <View style={optStyles.valuesWrap}>
@@ -384,13 +366,11 @@ export function ProductScreen({navigation, route}: Props) {
                           },
                         ]}>
                         <Text
-                          style={[
-                            {fontSize: 13},
-                            {
-                              color: active ? '#FFFFFF' : palette.ink,
-                              fontFamily: active ? fonts.bold : fonts.medium,
-                            },
-                          ]}>
+                          style={{
+                            fontSize: 12,
+                            color: active ? '#FFFFFF' : palette.ink,
+                            fontFamily: active ? fonts.bold : fonts.medium,
+                          }}>
                           {value}
                         </Text>
                       </Pressable>
@@ -400,7 +380,7 @@ export function ProductScreen({navigation, route}: Props) {
               </View>
             ))}
             {variantText != null ? (
-              <Text style={[{fontSize: 11.5, color: palette.muted}]}>
+              <Text style={{fontSize: 10.5, color: palette.muted}}>
                 ستُضاف بالمواصفة: {variantText}
               </Text>
             ) : null}
@@ -409,32 +389,28 @@ export function ProductScreen({navigation, route}: Props) {
 
         {/* الوصف */}
         {product.description ? (
-          <Card style={{gap: spacing.sm}}>
-            <Text style={[type.h3, {color: palette.ink}]}>عن المنتج</Text>
-            <Text style={[type.small, {color: palette.inkSoft, lineHeight: 22}]}>
+          <Card style={{gap: 4, paddingVertical: 10}}>
+            <Text style={{fontSize: 13, color: palette.ink, fontFamily: fonts.bold}}>عن المنتج</Text>
+            <Text style={{fontSize: 12, color: palette.inkSoft, lineHeight: 19}}>
               {product.description}
             </Text>
           </Card>
         ) : null}
 
-        {/* المتجر */}
+        {/* المتجر — سطر مضغوط v2.7 */}
         <Pressable onPress={() => navigation.navigate('Store', {storeId: storeRef.id, storeName: storeRef.name})}>
-          <Card style={{gap: spacing.md}}>
+          <Card style={{paddingVertical: 10, gap: 4}}>
             <View style={priceStyles.row}>
-              <StoreAvatar name={storeRef.name} logoUrl={storeRef.logoUrl} size={52} />
-              <View style={{flex: 1, gap: 2, alignItems: 'flex-start'}}>
-                <Text style={[type.bodyMedium, {color: palette.ink, fontFamily: fonts.bold}]}>
+              <StoreAvatar name={storeRef.name} logoUrl={storeRef.logoUrl} size={38} />
+              <View style={{flex: 1, gap: 1, alignItems: 'flex-start'}}>
+                <Text style={{fontSize: 13, color: palette.ink, fontFamily: fonts.bold}}>
                   {storeRef.name}
                 </Text>
-                {storeRef.storeNumber ? (
-                  <Text style={[{fontSize: 11.5, color: palette.muted}]}>{storeRef.storeNumber}</Text>
-                ) : null}
+                <Text style={{fontSize: 10.5, color: palette.muted}}>
+                  {storeRef.storeNumber ? `${storeRef.storeNumber} · ` : ''}زيارة المتجر وتصفح منتجاته ومناطق توصيله ›
+                </Text>
               </View>
-              <Icon name="forward" size={18} color={palette.muted} />
             </View>
-            <Text style={[{fontSize: 12, color: palette.muted}]}>
-              اضغط لزيارة المتجر وتصفح كل منتجاته ومناطق توصيله
-            </Text>
           </Card>
         </Pressable>
 
@@ -456,7 +432,7 @@ export function ProductScreen({navigation, route}: Props) {
               contentContainerStyle={{gap: spacing.md, paddingVertical: 2}}
               style={{marginHorizontal: -spacing.lg, paddingHorizontal: spacing.lg}}
               renderItem={({item}) => (
-                <View style={{width: 168}}>
+                <View style={{width: 150}}>
                   <ProductCard
                     product={item}
                     storeName={storeRef.name}
@@ -614,25 +590,19 @@ const galleryStyles = StyleSheet.create({
 });
 
 const priceStyles = StyleSheet.create({
-  row: {flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.md},
-  amount: {fontSize: 30, fontFamily: fonts.black},
+  row: {flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.sm},
+  /* v2.7: 21px بدل 30px — كثافة احترافية بلا صراخ. */
+  amount: {fontSize: 21, fontFamily: fonts.black},
   pctChip: {
     borderRadius: radius.pill,
-    paddingHorizontal: 9,
-    paddingVertical: 3,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
   },
-  bigIcon: {
-    width: 76,
-    height: 76,
-    borderRadius: 24,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  /* v2.7: صندوق الأيقونة 76px حُذف — الوحدة نصاً تحت السعر. */
   wishBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 15,
+    width: 40,
+    height: 40,
+    borderRadius: 13,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -640,16 +610,17 @@ const priceStyles = StyleSheet.create({
   chipsRow: {
     flexDirection: 'row-reverse',
     flexWrap: 'wrap',
+    alignItems: 'center',
     gap: spacing.sm,
   },
   infoChip: {
     flexDirection: 'row-reverse',
     alignItems: 'center',
-    gap: 6,
+    gap: 5,
     borderRadius: radius.pill,
     borderWidth: 1,
-    paddingHorizontal: 11,
-    paddingVertical: 7,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
   },
 });
 
@@ -657,20 +628,21 @@ const optStyles = StyleSheet.create({
   valuesWrap: {
     flexDirection: 'row-reverse',
     flexWrap: 'wrap',
-    gap: spacing.sm,
+    gap: 6,
   },
+  /* v2.7: رقائق أضيق — لمسة أسرع ومساحة أقل. */
   valueChip: {
     borderRadius: radius.pill,
     borderWidth: 1.5,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: 9,
-    minWidth: 52,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 6,
+    minWidth: 46,
     alignItems: 'center',
   },
   requiredChip: {
     borderRadius: radius.pill,
     borderWidth: 1,
-    paddingHorizontal: 8,
+    paddingHorizontal: 7,
     paddingVertical: 2,
   },
 });

@@ -1,0 +1,130 @@
+/**
+ * v2.7 — الجولة 58 (تطبيق المتجر): تنظيف المفضلة + كثافة الصفحات
+ * + سلسلة إرسال الطلب.
+ * ─────────────────────────────────────────────────────────────────
+ * شكوى التاجر بالنص:
+ *  «صفحة المنتج ليست احترافية وأحجام العناصر بها كبيرة وغير عملية»
+ *  «صفحة طلب المنتج غير عملية… وعند الضغط علي زر الطلب لا يرسل
+ *   الطلب مطلقاً الي نقطة البيع وايضا [لا] تضاف الي قائمة الطلبات»
+ *  «اذا اضاف المستخدم منتج الي المفضلة وقد تم إزالة المنتج ولم
+ *   يعد موجود يبقي ظاهر بقائمة المفضلة».
+ *
+ * ① المفضلة: prune/markVerified/staleIds + TTL ٢٤ ساعة + البقاء
+ *    عند فشل الجلب (انقطاع ≠ حذف) — سلوكياً على المخزن الحقيقي.
+ * ② WishlistScreen: تحقق عند الفتح بنداء واحد لكل متجر (المصدر).
+ * ③ ProductScreen: كثافة v2.7 (معرض 60%، سعر 21px، بلا صندوق
+ *    أيقونة) + إصلاح الهامش السفلي خلف الشريط الثابت (+140).
+ * ④ CheckoutScreen: صف تحذير الفشل فوق الزر + syncOrdersOnce فوري
+ *    بعد النجاح (قائمة الطلبات تتحدث لحظياً) + مفتاح الإيديمبوتنسية
+ *    يبقى نفسه حتى النجاح.
+ * ⑤ الإصدار: 2.7.0 (11).
+ */
+import {useWishlistStore} from '../src/stores/wishlistStore';
+
+const read = (p: string) => require('fs').readFileSync(p, 'utf8') as string;
+
+/** منتج تجريبي بأقل الحقول التي تلمسها المفضلة. */
+function fakeProduct(id: number, storeId = 7) {
+  return {
+    id,
+    store_id: storeId,
+    name: `منتج ${id}`,
+    price_minor: 1000,
+    stock: 5,
+    category: 'بقالة',
+  } as never;
+}
+
+describe('v2.7 — تنظيف المفضلة من المنتجات غير الموجودة', () => {
+  beforeEach(() => {
+    useWishlistStore.setState({items: {}});
+  });
+
+  test('① staleIds: الجديد محدّث والقديم منتهي (TTL ٢٤ ساعة)', () => {
+    const s = useWishlistStore.getState();
+    s.toggle(fakeProduct(1), 'متجر أ'); // جديد — verifiedAt null → منتهي فوراً
+    useWishlistStore.setState({
+      items: {
+        ...useWishlistStore.getState().items,
+        '1': {...useWishlistStore.getState().items['1'], verifiedAt: Date.now()},
+        // منتج 2: منتهي (تحقق قبل 25 ساعة)
+        '2': {
+          product: fakeProduct(2),
+          storeName: 'متجر أ',
+          savedAt: Date.now() - 48 * 3600 * 1000,
+          verifiedAt: Date.now() - 25 * 3600 * 1000,
+        },
+      },
+    });
+    const stale = useWishlistStore.getState().staleIds();
+    expect(stale).toContain(2);
+    expect(stale).not.toContain(1);
+  });
+
+  test('① prune: يحذف المعطيات فقط ويعيد العدد — والباقي لا يُمس', () => {
+    const s = useWishlistStore.getState();
+    s.toggle(fakeProduct(10), 'متجر أ');
+    s.toggle(fakeProduct(11), 'متجر أ');
+    const removed = s.prune([10, 999]);
+    expect(removed).toBe(1);
+    const items = useWishlistStore.getState().items;
+    expect(items['10']).toBeUndefined();
+    expect(items['11']).toBeDefined();
+    expect(items['999']).toBeUndefined();
+  });
+
+  test('① markVerified: يختم المحدّثين فقط', () => {
+    const s = useWishlistStore.getState();
+    s.toggle(fakeProduct(20), 'متجر أ');
+    s.toggle(fakeProduct(21), 'متجر أ');
+    s.markVerified([20]);
+    const items = useWishlistStore.getState().items;
+    expect(items['20'].verifiedAt).not.toBeNull();
+    expect(items['21'].verifiedAt).toBeUndefined();
+  });
+
+  test('② شاشة المفضلة: تحقق عند الفتح — نداء لكل متهر لا لكل منتج، وفشل الجلب لا يحذف', () => {
+    const screen = read('src/screens/wishlist/WishlistScreen.tsx');
+    // التجميع حسب المتجر + نداء واحد لكل متجر مختلف.
+    expect(screen).toContain('const byStore = new Map<number, number[]>()');
+    expect(screen).toMatch(/getStoreProducts\(storeId, \{per: VERIFY_PAGE_PER, page\}\)/);
+    // فشل جلب متجر ≠ حذف منتجاته.
+    expect(screen).toContain('if (available == null) {');
+    expect(screen).toMatch(/continue; \/\/ فشل جلب — لا نحذف \(انقطاع ≠ حذف\)\./);
+    // إشعار لطيف عند التنظيف.
+    expect(screen).toContain('نُظّفت مفضلتك');
+  });
+
+  test('③ صفحة المنتج: كثافة v2.7 + إصلاح الهامش السفلي', () => {
+    const screen = read('src/screens/product/ProductScreen.tsx');
+    // المعرض 60% من العرض (كان 86%).
+    expect(screen).toContain('screenWidth * 0.6');
+    // السعر 21px (كان 30px) وبلا صندوق أيقونة 76px.
+    expect(screen).toContain('fontSize: 21, fontFamily: fonts.black');
+    expect(screen).not.toContain('bigIcon');
+    // الهامش السفلي: آخر المحتوى لا يختفي خلف شريط الشراء الثابت.
+    expect(screen).toContain('paddingBottom: stackClearance + 140');
+    // المتجر سطر مضغوط 38px (كان 52px).
+    expect(screen).toMatch(/StoreAvatar[^]*size=\{38\}/);
+  });
+
+  test('④ صفحة الطلب: فشل واضح + تحديث لحظي لقائمة الطلبات', () => {
+    const screen = read('src/screens/checkout/CheckoutScreen.tsx');
+    // صف التحذير فوق الزر.
+    expect(screen).toContain('lastSendError');
+    expect(screen).toContain('sendStyles.errorRow');
+    // تحديث قائمة الطلبات فور النجاح (كان ينتظر ٤٥ ثانية).
+    expect(screen).toContain('void syncOrdersOnce(true);');
+    // إعادة الضغط بلا خوف التكرار — نص يطمئن المستخدم.
+    expect(screen).toContain('لا تنشئ طلباً مكرراً');
+  });
+
+  test('⑤ الإصدار: 2.7.0 (11)', () => {
+    const config = read('src/core/config.ts');
+    expect(config).toContain("APP_VERSION = '2.7.0'");
+    expect(config).toContain('APP_BUILD_CODE = 11');
+    const gradle = read('android/app/build.gradle');
+    expect(gradle).toContain('versionCode 11');
+    expect(gradle).toContain('versionName "2.7.0"');
+  });
+});

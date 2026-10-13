@@ -21,6 +21,7 @@ import {
   Screen,
 } from '../../components/ui';
 import {getStoreDetail, placeOrder, newOrderRequestId} from '../../api/endpoints';
+import {syncOrdersOnce} from '../../services/ordersSync';
 import {ApiError} from '../../api/client';
 import {formatMoney, formatQty, lineTotal} from '../../core/money';
 import {cartSavings, lineSavings} from '../../core/discount';
@@ -106,6 +107,9 @@ export function CheckoutScreen({navigation, route}: Props) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [placing, setPlacing] = useState(false);
+  /* v2.7: آخر خطأ إرسال — يظهر بصف تحذير فوق الزر ليكمل التوجيه
+   * لا يخفيه كما كان (شكوى: الزر «لا يفعل شيئاً»). */
+  const [lastSendError, setLastSendError] = useState<string | null>(null);
 
   /* v2.6: مفتاح إيديمبوتنسية الطلب — يُولّد مرة ويُعاد استخدامه في
    * كل محاولة (نفس الضغطة أو ضغطات متتالية بعد فشل شبكة) حتى ينجح
@@ -218,6 +222,7 @@ export function CheckoutScreen({navigation, route}: Props) {
       return;
     }
     setPlacing(true);
+    setLastSendError(null);
     try {
       const order = await placeOrder(token, {
         storeId,
@@ -238,6 +243,10 @@ export function CheckoutScreen({navigation, route}: Props) {
       rememberRegion(storeId, regionName);
       // الطلب المكتمل يرفع وزن تصنيفاته في «مقترحات لك».
       trackOrder(entry.lines.map(l => l.category ?? null));
+      /* v2.7: تحديث قائمة «طلباتي» وشارة التبويب فوراً — كان ينتظر
+       * دورة الـ ٤٥ ثانية فيظهر للمستخدم أن طلبه «لم يُرسل» (شكوى
+       * التاجر) بينما هو مسجل. الآن: لحظي وبلا إشعارات مزعجة. */
+      void syncOrdersOnce(true);
       navigation.replace('OrderSuccess', {order});
     } catch (e) {
       if (e instanceof ApiError) {
@@ -245,8 +254,10 @@ export function CheckoutScreen({navigation, route}: Props) {
           // المناطق تغيّرت على الخادم — أعد التحميل وأبلغ.
           await load();
         }
+        setLastSendError(e.message);
         toast(e.message, 'danger');
       } else {
+        setLastSendError('تعذر إرسال الطلب — تحقق من الإنترنت وحاول مجدداً');
         toast('تعذر إرسال الطلب — تحقق من الإنترنت وحاول مجدداً', 'danger');
       }
     } finally {
@@ -515,6 +526,15 @@ export function CheckoutScreen({navigation, route}: Props) {
       </ScrollView>
 
       <BottomFixed>
+        {lastSendError != null ? (
+          <View style={sendStyles.errorRow}>
+            <Icon name="warning" size={15} color={palette.warning} />
+            <Text style={{flex: 1, fontSize: 11.5, color: palette.warning, fontFamily: fonts.medium, lineHeight: 17}}>
+              {lastSendError} — طلبك لم يُسجل بعد؛ أعد الضغط. بلا خوف
+              التكرار: إعادة الضغط لا تنشئ طلباً مكرراً.
+            </Text>
+          </View>
+        ) : null}
         <Button
           label={placing ? 'جارٍ إرسال الطلب…' : `إرسال الطلب — ${formatMoney(total)}`}
           icon="cash"
@@ -542,10 +562,11 @@ const stepStyles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.sm,
   },
+  /* v2.7: 24 بدل 30 — إشعار التقدم لا زخرفة. */
   circle: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -559,12 +580,13 @@ const addrStyles = StyleSheet.create({
     borderRadius: radius.md,
     borderWidth: 1.5,
     paddingHorizontal: spacing.md,
-    paddingVertical: 11,
+    paddingVertical: 9,
   },
+  /* v2.7: 18 بدل 21. */
   radio: {
-    width: 21,
-    height: 21,
-    borderRadius: 11,
+    width: 18,
+    height: 18,
+    borderRadius: 10,
     borderWidth: 2,
     alignItems: 'center',
     justifyContent: 'center',
@@ -581,6 +603,7 @@ const addrStyles = StyleSheet.create({
 });
 
 const regionStyles = StyleSheet.create({
+  /* v2.7: 10 بدل 13 — قائمة أقصر تُنجز أسرع. */
   row: {
     flexDirection: 'row-reverse',
     alignItems: 'center',
@@ -588,13 +611,13 @@ const regionStyles = StyleSheet.create({
     borderRadius: radius.md,
     borderWidth: 1.5,
     paddingHorizontal: spacing.md,
-    paddingVertical: 13,
+    paddingVertical: 10,
   },
   right: {flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.sm},
   radio: {
-    width: 21,
-    height: 21,
-    borderRadius: 11,
+    width: 18,
+    height: 18,
+    borderRadius: 10,
     borderWidth: 2,
     alignItems: 'center',
     justifyContent: 'center',
@@ -624,5 +647,20 @@ const regionStyles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: 9,
     marginTop: spacing.xs,
+  },
+});
+
+/* v2.7: صف تحذير فشل الإرسال فوق الزر. */
+const sendStyles = StyleSheet.create({
+  errorRow: {
+    flexDirection: 'row-reverse',
+    alignItems: 'flex-start',
+    gap: 7,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.08)',
+    paddingHorizontal: spacing.md,
+    paddingVertical: 8,
+    marginBottom: 8,
   },
 });

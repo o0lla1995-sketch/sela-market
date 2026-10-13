@@ -4,8 +4,8 @@
 import {MMKV} from 'react-native-mmkv';
 
 /** إصدار التطبيق المعروض للمستخدم (يجب أن يطابق versionName في Gradle). */
-export const APP_VERSION = '2.6.0';
-export const APP_BUILD_CODE = 10;
+export const APP_VERSION = '2.7.0';
+export const APP_BUILD_CODE = 11;
 export const APP_VERSION_LABEL = `${APP_VERSION} (${APP_BUILD_CODE})`;
 
 /**
