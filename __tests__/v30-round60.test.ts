@@ -73,6 +73,8 @@ describe('الجولة 60 — v3.0.0: إعادة البناء الهيكلي', (
     expect(endpoints).toContain('api/market/home');
     // كاش التوصيات لكل متجر
     expect(endpoints).toContain('getStoreSimilarProducts');
+    // احتياط النشر المزدوج: خادم قديم بلا /home لا يكسر الرئيسية
+    expect(endpoints).toContain('e.status === 404');
   });
 
   test('③ صفحة المتجر: استنفاد نهائي بدل اللودر الأبدي', () => {
@@ -111,10 +113,10 @@ describe('الجولة 60 — v3.0.0: إعادة البناء الهيكلي', (
 
   test('⑤ الإصدار: 3.0.0 (13)', () => {
     const config = read('src/core/config.ts');
-    expect(config).toContain("APP_VERSION = '3.0.0'");
-    expect(config).toContain('APP_BUILD_CODE = 13');
+    expect(config).toContain("APP_VERSION = '3.0.1'");
+    expect(config).toContain('APP_BUILD_CODE = 14');
     const gradle = read('android/app/build.gradle');
-    expect(gradle).toContain('versionCode 13');
-    expect(gradle).toContain('versionName "3.0.0"');
+    expect(gradle).toContain('versionCode 14');
+    expect(gradle).toContain('versionName "3.0.1"');
   });
 });

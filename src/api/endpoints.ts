@@ -247,19 +247,40 @@ export interface HomeFeed {
 
 export async function getHomeFeed(region?: string | null): Promise<HomeFeed> {
   const qs = buildQuery({region: region ?? undefined});
-  const res = await apiRequest<{
-    ok: true;
-    stores: Store[];
-    categories: CategoryCount[];
-    latest: CrossProduct[];
-    regionStores?: Store[];
-  }>(`/api/market/home${qs ? `?${qs}` : ''}`);
-  return {
-    stores: res.stores,
-    categories: res.categories,
-    latest: res.latest,
-    regionStores: res.regionStores,
-  };
+  try {
+    const res = await apiRequest<{
+      ok: true;
+      stores: Store[];
+      categories: CategoryCount[];
+      latest: CrossProduct[];
+      regionStores?: Store[];
+    }>(`/api/market/home${qs ? `?${qs}` : ''}`);
+    return {
+      stores: res.stores,
+      categories: res.categories,
+      latest: res.latest,
+      regionStores: res.regionStores,
+    };
+  } catch (e) {
+    /* v3.0: احتياط النشر المزدوج — الخادم المحدَّث أولاً يوفّر
+     * /home؛ إن كان الإصدار المنشور أقدم (ترتيب تحديث معكوس: التطبيق
+     * الجديد فوق خادم قديم) نرجع للنداءات القديمة الثلاثة بدل كسر
+     * الرئيسية. فشل الشبكة الصادق يُعاد كما هو (لا معنى للترقية
+     * لثلاثة طلبات حين يتعذر الواحد). */
+    if (e instanceof ApiError && e.status === 404) {
+      const [stores, categories, latest] = await Promise.all([
+        getStores(),
+        getCategories(),
+        getCrossProducts({per: 24, page: 1}),
+      ]);
+      let regionStores: Store[] | undefined;
+      if (region != null && region !== '') {
+        regionStores = await getStores({region}).catch(() => []);
+      }
+      return {stores, categories, latest, regionStores};
+    }
+    throw e;
+  }
 }
 
 /* ── v3.0: كاش توصيات «منتجات مشابهة» لكل متجر (60 ثانية) ────
