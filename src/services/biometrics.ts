@@ -44,3 +44,32 @@ export async function authenticateBiometric(reason: string): Promise<boolean> {
     return false;
   }
 }
+
+/* ── v2.5: حالة قفل البصمة — قتل سباق إعادة القفل ──────────────
+ * حوار المصادقة نشاط منفصل، فتطبيق الرئيسي يذهب للخلفية ثم يعود
+ * عند إغلاقه. مستمع إعادة القفل في RootNavigator (v2.3) يفتح البوابة
+ * عند كل عودة من الخلفية — وبدون هذا الحارس كان يُعاد قفل التطبيق
+ * في وجه المستخدم في نفس اللحظة التي نجحت فيها بصمته (السبب الخفي
+ * الثاني لبقاء المستخدم «عالقاً على شاشة البصمة»). */
+let biometricAuthInFlight = false;
+let lastBiometricUnlockAt = 0;
+
+/** قبل بدء محاولة المصادقة (بصمة أو مسار الرمز القديم). */
+export function markBiometricAuthStarted(): void {
+  biometricAuthInFlight = true;
+}
+
+/** بعد انتهاء المحاولة — ok=true يسجل لحظة الفتح. */
+export function markBiometricAuthEnded(ok: boolean): void {
+  biometricAuthInFlight = false;
+  if (ok) {
+    lastBiometricUnlockAt = Date.now();
+  }
+}
+
+/** هل نتجاهل إعادة القفل الآن؟ (مصادقة جارية أو فتح نجح قبل لحظات) */
+export function shouldSuppressReLock(): boolean {
+  return (
+    biometricAuthInFlight || Date.now() - lastBiometricUnlockAt < 3000
+  );
+}

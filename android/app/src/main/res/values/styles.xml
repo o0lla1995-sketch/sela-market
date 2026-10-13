@@ -17,4 +17,15 @@
         <item name="android:windowBackground">@drawable/splash_background</item>
     </style>
 
+    <!-- v2.5: نشاط حوار البصمة الشفاف — لا خلفية ولا عنوان ولا
+         رسم إطلاقاً: مجرد مضيف لنافذة BiometricPrompt النظامية
+         يظهر فوق التطبيق وكأن الحوار من التطبيق نفسه. -->
+    <style name="MarketBiometricDialog" parent="Theme.AppCompat.DayNight.NoActionBar">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:backgroundDimEnabled">false</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowContentOverlay">@null</item>
+    </style>
+
 </resources>

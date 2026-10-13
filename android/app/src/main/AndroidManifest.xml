@@ -42,5 +42,15 @@
           <category android:name="android.intent.category.LAUNCHER" />
         </intent-filter>
       </activity>
+      <!-- v2.5: نشاط شفاف يستضيف حوار BiometricPrompt الرسمي
+           (يتطلب FragmentActivity) — يظهر كنافذة نظام فوق التطبيق
+           ويغلق نفسه فور انتهاء المصادقة. -->
+      <activity
+        android:name=".native_modules.BiometricDialogActivity"
+        android:theme="@style/MarketBiometricDialog"
+        android:excludeFromRecents="true"
+        android:noHistory="true"
+        android:configChanges="orientation|screenSize|keyboardHidden|screenLayout|smallestScreenSize|uiMode"
+        android:exported="false" />
     </application>
 </manifest>

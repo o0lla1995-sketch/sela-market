@@ -14,7 +14,12 @@ import {useTheme} from '../../theme/ThemeProvider';
 import {radius, spacing, type, fonts} from '../../theme/tokens';
 import {Icon} from '../../components/Icon';
 import {Button} from '../../components/ui';
-import {authenticateBiometric, fingerprintEnrolled} from '../../services/biometrics';
+import {
+  authenticateBiometric,
+  fingerprintEnrolled,
+  markBiometricAuthEnded,
+  markBiometricAuthStarted,
+} from '../../services/biometrics';
 import {useToastStore} from '../../stores/toastStore';
 import type {RootStackParamList} from '../../navigation/RootNavigator';
 
@@ -36,13 +41,20 @@ export function BiometricGateScreen({navigation}: Props) {
       return;
     }
     setBusy(true);
+    /* v2.5: تعليم بداية المحاولة — يمنع مستمع إعادة القفل من
+     * إقفال التطبيق في وجه المستخدم لحظة نجاح بصمته (سباق
+     * الخلفية/العودة مع النشاط الشفاف المستضيف للحوار). */
+    markBiometricAuthStarted();
     try {
       const ok = await authenticateBiometric('افتح جلسة سيلا ماركت المحفوظة');
+      markBiometricAuthEnded(ok);
       if (ok) {
         navigation.replace('Main');
       } else {
         toast('أُلغي الدخول بالبصمة — استخدم كلمة المرور', 'info');
       }
+    } catch {
+      markBiometricAuthEnded(false);
     } finally {
       setBusy(false);
     }

@@ -17,6 +17,7 @@ import type {NavigatorScreenParams} from '@react-navigation/native';
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 
 import {useSettingsStore} from '../stores/settingsStore';
+import {shouldSuppressReLock} from '../services/biometrics';
 import {useAuthStore} from '../stores/authStore';
 import {useCartStore} from '../stores/cartStore';
 import {useNotificationsStore} from '../stores/notificationsStore';
@@ -358,7 +359,16 @@ export function RootNavigator() {
         wentBackground = false;
         const s = useSettingsStore.getState();
         const token = useAuthStore.getState().token;
-        if (s.onboarded && s.biometricLoginEnabled && token != null) {
+        /* v2.5: لا إعادة قفل أثناء مصادقة جارية أو بعد فتح ناجح
+         * قبل لحظات — حوار البصمة نشاط منفصل يمرر التطبيق
+         * بالخلفية/العودة، وبدون هذا الحارس يُقفل التطبيق في وجه
+         * المستخدم لحظة نجاح بصمته (ثاني أسباب «الشاشة العالقة»). */
+        if (
+          s.onboarded &&
+          s.biometricLoginEnabled &&
+          token != null &&
+          !shouldSuppressReLock()
+        ) {
           const root = navigationRef.current?.getRootState();
           const topRoute = root?.routes[root.routes.length - 1]?.name;
           if (topRoute !== 'BiometricGate') {

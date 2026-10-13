@@ -7,9 +7,6 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import androidx.biometric.BiometricManager
-import androidx.biometric.BiometricPrompt
-import androidx.core.content.ContextCompat
-import androidx.fragment.app.FragmentActivity
 import com.facebook.react.bridge.ActivityEventListener
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
@@ -17,14 +14,18 @@ import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
 
 /**
- * BiometricModule — سيلا ماركت (v2.5 — إعادة كتابة كاملة)
+ * BiometricModule — سيلا ماركت (v2.5 — إعادة كتابة كاملة).
  * ─────────────────────────────────────────────────────────────────
  * المسار القديم (KeyguardManager.createConfirmDeviceCredentialIntent)
  * مهمل من Google منذ API 29 وبه عيوب موثقة على أجهزة كثيرة: يرجع
  * RESULT_CANCELED حتى بعد بصمة/رمز صحيح — فبقي المستخدم عالقاً على
- * شاشة البصمة كل مرة يفتح التطبيق. البديل الرسمي المعتمد الذي
- * تستخدمه تطبيقات البنوك: androidx BiometricPrompt (يتطلب
- * FragmentActivity — MainActivity حُوّلت لـ ReactFragmentActivity).
+ * شاشة البصمة كل مرة يفتح التطبيق.
+ *
+ * البديل الرسمي المعتمد (نفس مسار تطبيقات البنوك): androidx
+ * BiometricPrompt — لكنه يتطلب FragmentActivity وRN 0.74 لا يوفر
+ * ReactFragmentActivity، لذلك يستضيفه نشاط شفاف مخصص
+ * (BiometricDialogActivity) يفتح فوق التطبيق ويسلّم النتيجة عبر
+ * BiometricBridge. MainActivity تبقى ReactActivity كما هي.
  *
  *  isSupported()            -> جهاز فيه قفل آمن (بصمة/نقشة/رمز)
  *  hasEnrolledFingerprint() -> بصمة مسجلة (أو قفل آمن كحد أدنى)
@@ -92,63 +93,24 @@ class BiometricModule(reactContext: ReactApplicationContext) :
         return
       }
 
-      // ── المسار الحديث: BiometricPrompt عبر FragmentActivity ──
-      val fragmentActivity = activity as? FragmentActivity
-      if (fragmentActivity != null) {
-        val authenticators: Int =
-          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            // API 30+: البصمة + بيانات اعتماد الجهاز في نافذة واحدة.
-            BiometricManager.Authenticators.BIOMETRIC_WEAK or
-              BiometricManager.Authenticators.DEVICE_CREDENTIAL
-          } else if (canBiometric()) {
-            // API 21–29 مع بصمة: نافذة البصمة فقط (الرمز عبر مسار
-            // الإلغاء → زر «كلمة المرور» في الشاشة).
-            BiometricManager.Authenticators.BIOMETRIC_WEAK
-          } else {
-            // بلا بصمة على إصدار قديم → المسار القديم أسفل.
-            -1
-          }
-
-        if (authenticators != -1) {
-          val prompt = BiometricPrompt(
-            fragmentActivity,
-            ContextCompat.getMainExecutor(fragmentActivity),
-            object : BiometricPrompt.AuthenticationCallback() {
-              override fun onAuthenticationSucceeded(
-                result: BiometricPrompt.AuthenticationResult,
-              ) {
-                promise.resolve(true)
-              }
-
-              override fun onAuthenticationError(
-                errorCode: Int,
-                errString: CharSequence,
-              ) {
-                // خطأ المستخدم (إلغاء/محاولات كثيرة) → false؛
-                // خطأ النظام أيضاً false — لا تعليق أبداً.
-                promise.resolve(false)
-              }
-            },
-          )
-          val info = BiometricPrompt.PromptInfo.Builder()
-            .setTitle("الدخول إلى سيلا ماركت")
-            .setSubtitle(reason.ifBlank { "استخدم بصمتك أو رمز القفل للمتابعة" })
-            .setAllowedAuthenticators(authenticators)
-            // بصمة ناجحة = فتح فوري بلا نقرة تأكيد إضافية.
-            .setConfirmationRequired(false)
-          // DEVICE_CREDENTIAL مع BIOMETRIC_WEAK لا يقبل نص زر الإلغاء.
-          if (authenticators ==
-            BiometricManager.Authenticators.BIOMETRIC_WEAK
-          ) {
-            info.setNegativeButton("إلغاء", ContextCompat.getMainExecutor(fragmentActivity)) { _, _ -> }
-          }
-          prompt.authenticate(info.build())
-          return
+      // ── المسار الحديث: نشاط شفاف يستضيف BiometricPrompt ──
+      // API 30+ أو (21–29 مع بصمة مسجلة).
+      val useBiometricPrompt =
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.R || canBiometric()
+      if (useBiometricPrompt) {
+        BiometricBridge.onResult = { ok ->
+          // قد يصل الرد من خيط آخر — resolve آمن من أي خيط.
+          promise.resolve(ok)
         }
+        val intent = Intent(activity, BiometricDialogActivity::class.java)
+        intent.putExtra(BiometricDialogActivity.EXTRA_REASON, reason)
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        activity.startActivity(intent)
+        return
       }
 
-      // ── المسار القديم (بلا FragmentActivity أو بلا بصمة قبل API 30):
-      // Keyguard القديم — موثوق على الإصدارات التي صُمم لها.
+      // ── المسار القديم: بلا بصمة قبل API 30 (قفل فقط) — Keyguard
+      // القديم موثوق على الإصدارات التي صُمم لها.
       val km = keyguard
       if (km == null) {
         promise.resolve(false)
