@@ -11,6 +11,9 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <!-- إشعارات محلية لتغيّرات حالة الطلب (وقت التشغيل على 13+). -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- اهتزاز لمسي خفيف للأفعال الحرجة (v3.3): إذن عادي يُمنح
+         تلقائياً عند التثبيت — بدونه تظل نبضات Vibration صامتة. -->
+    <uses-permission android:name="android.permission.VIBRATE" />
     <!-- الدخول بالبصمة (v2.1): إذن عادي يُمنح تلقائياً عند التثبيت —
          يلزم لقراءة حالة تسجيل البصمة عبر مدير البصمة على API 28+.
          المصادقة نفسها شاشة قفل النظام، لا تحتاج أي إذن. -->

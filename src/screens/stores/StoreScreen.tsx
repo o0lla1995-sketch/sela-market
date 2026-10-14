@@ -298,7 +298,6 @@ export function StoreScreen({navigation, route}: Props) {
           hitSlop={10}
           accessibilityRole="button"
           accessibilityLabel="رجوع"
-          android_ripple={{color: palette.ripple, borderless: true, foreground: true}}
           style={[stickyStyles.backBtn, {borderColor: palette.line}]}>
           <Icon name="chevronLeft" size={20} color={palette.ink} strokeWidth={2.4} />
         </Pressable>
@@ -320,7 +319,6 @@ export function StoreScreen({navigation, route}: Props) {
           hitSlop={10}
           accessibilityRole="button"
           accessibilityLabel="بحث داخل المتجر"
-          android_ripple={{color: palette.ripple, borderless: true, foreground: true}}
           style={[stickyStyles.searchBtn, {borderColor: palette.line}]}>
           <Icon name="search" size={18} color={palette.ink} />
         </Pressable>
@@ -358,7 +356,6 @@ export function StoreScreen({navigation, route}: Props) {
                 hitSlop={10}
                 accessibilityRole="button"
                 accessibilityLabel="رجوع"
-                android_ripple={{color: 'rgba(255,255,255,0.25)', borderless: true, foreground: true}}
                 style={heroStyles.backBtn}>
                 <Icon name="chevronLeft" size={20} color="#FFFFFF" strokeWidth={2.4} />
               </Pressable>
@@ -414,7 +411,6 @@ export function StoreScreen({navigation, route}: Props) {
                     {store?.phone ? (
                       <Pressable
                         onPress={() => Linking.openURL(`tel:${store.phone}`)}
-                        android_ripple={{color: palette.ripple, borderless: false, foreground: true}}
                         style={({pressed}) => [
                           actionStyles.btn,
                           {
@@ -434,7 +430,6 @@ export function StoreScreen({navigation, route}: Props) {
                             `https://wa.me/${store.whatsapp!.replace(/[^\d]/g, '')}`,
                           )
                         }
-                        android_ripple={{color: palette.ripple, borderless: false, foreground: true}}
                         style={({pressed}) => [
                           actionStyles.btn,
                           {
@@ -582,7 +577,6 @@ export function StoreScreen({navigation, route}: Props) {
                         <Pressable
                           key={`offer-${p.id}`}
                           onPress={() => navigation.navigate('Product', {product: p, storeRef})}
-                          android_ripple={{color: palette.ripple, borderless: false, foreground: true}}
                           style={({pressed}) => [
                             offerStyles.card,
                             {
@@ -767,7 +761,7 @@ export function StoreScreen({navigation, route}: Props) {
   );
 }
 
-/* v3.2: رقاقة فلترة سريعة — نفس لغة الرقائق مع لمسة ripple. */
+/* v3.2: رقاقة فلترة سريعة — نفس لغة الرقائق (بلا ripple — v3.3). */
 function FilterChip({
   label,
   active,
@@ -786,7 +780,6 @@ function FilterChip({
       accessibilityRole="button"
       accessibilityLabel={label}
       accessibilityState={{selected: active}}
-      android_ripple={{color: palette.ripple, borderless: false, foreground: true}}
       style={[
         filterStyles.chip,
         {

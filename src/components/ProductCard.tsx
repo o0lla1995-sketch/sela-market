@@ -13,7 +13,8 @@
  *  • بطاقة للتسوّق والاكتشاف فقط — الطلب يبدأ من صفحة المنتج
  *    (قرار معماري: سلة منفصلة لكل متجر — لا أزرار إضافة عامة).
  *  • الوضع الداكن: حدود ‎#2A2A2A + ظل خافت؛ الفاتح: ظل ناعم.
- *  • ripple عند اللمس + اهتزاز خفيف عند تبديل المفضلة.
+ *  • v3.3: أُزيل android_ripple كلياً — كان يفجّر انهياراً فورياً عند كل
+ *    لمسة على أندرويد (السلوك المطابق لـ v3.1.0 المُجرّب والشغّال).
  */
 import React from 'react';
 import {Image, Pressable, StyleSheet, Text, useWindowDimensions, View} from 'react-native';
@@ -122,7 +123,6 @@ export function ProductCard({
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={product.name}
-      android_ripple={{color: palette.ripple, borderless: false, foreground: true}}
       style={({pressed}) => [
         styles.card,
         {
@@ -167,7 +167,6 @@ export function ProductCard({
           hitSlop={10}
           accessibilityRole="button"
           accessibilityLabel={wishlisted ? 'إزالة من المفضلة' : 'إضافة إلى المفضلة'}
-          android_ripple={{color: palette.ripple, borderless: true, foreground: true}}
           style={[styles.heartBtn, {backgroundColor: palette.surface}]}>
           <Icon
             name={wishlisted ? 'heartFilled' : 'heart'}

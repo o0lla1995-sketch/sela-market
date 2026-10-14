@@ -137,7 +137,6 @@ export function CircleStoreCard({
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={store.name}
-      android_ripple={{color: palette.ripple, borderless: false, foreground: true}}
       style={({pressed}) => [
         circleStyles.card,
         {backgroundColor: palette.surface, borderColor: cardBorderFor(palette.isDark)},
@@ -147,7 +146,9 @@ export function CircleStoreCard({
       {/* حلقة الهوية حول الدائرة — لمسة علامة تجارية عالمية */}
       <View style={[circleStyles.ringWrap, {borderColor: palette.brandBorder}]}>
         <View style={[circleStyles.ringPad, {backgroundColor: palette.surface}]}>
-          <StoreAvatar name={store.name} logoUrl={store.logo_url} size={64} />
+          {/* v3.3: صورة أصغر بطلب التاجر الثلاثي المتكرر — 64 كانت
+           * تبتلع الشريط؛ 46 مع حلقة أرفع تُبقي الهوية دون تضخيم. */}
+          <StoreAvatar name={store.name} logoUrl={store.logo_url} size={46} />
         </View>
         {/* شارة نوع النشاط أسفل الدائرة */}
         <View
@@ -155,7 +156,7 @@ export function CircleStoreCard({
             circleStyles.typeBadge,
             {backgroundColor: palette.brand, borderColor: palette.surface},
           ]}>
-          <Icon name={typeInfo.icon} size={11} color="#FFFFFF" />
+          <Icon name={typeInfo.icon} size={9} color="#FFFFFF" />
         </View>
       </View>
       <Text
@@ -176,25 +177,26 @@ export function CircleStoreCard({
 }
 
 const circleStyles = StyleSheet.create({
+  /* v3.3: البطاقة كلها انكمشت مع الصورة — 96 → 78 عرضاً. */
   card: {
-    width: 96,
+    width: 78,
     alignItems: 'center',
     gap: spacing.sm,
     borderRadius: radius.lg,
     borderWidth: 1,
-    padding: spacing.md,
+    padding: spacing.sm,
   },
   ringWrap: {
-    width: 74,
-    height: 74,
+    width: 56,
+    height: 56,
     borderRadius: 999,
-    borderWidth: 2,
+    borderWidth: 1.5,
     alignItems: 'center',
     justifyContent: 'center',
   },
   ringPad: {
-    width: 66,
-    height: 66,
+    width: 48,
+    height: 48,
     borderRadius: 999,
     alignItems: 'center',
     justifyContent: 'center',
@@ -203,10 +205,10 @@ const circleStyles = StyleSheet.create({
     position: 'absolute',
     bottom: -2,
     left: -2,
-    width: 22,
-    height: 22,
+    width: 18,
+    height: 18,
     borderRadius: 999,
-    borderWidth: 2,
+    borderWidth: 1.5,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -234,7 +236,6 @@ export function StoreCard({
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={store.name}
-      android_ripple={{color: palette.ripple, borderless: false, foreground: true}}
       style={({pressed}) => [
         vStyles.card,
         {
@@ -246,7 +247,7 @@ export function StoreCard({
         },
         shadowFor(palette.isDark),
       ]}>
-      <StoreAvatar name={store.name} size={54} />
+      <StoreAvatar name={store.name} logoUrl={store.logo_url} size={54} />
       <View style={{flex: 1, gap: 3}}>
         <View style={{flexDirection: 'row-reverse', alignItems: 'center', gap: 6}}>
           <Text
@@ -254,8 +255,17 @@ export function StoreCard({
             numberOfLines={1}>
             {store.name}
           </Text>
+          {/* v3.3: شارة توثيق المتجر — من storeNumber الصادر من الخادم. */}
+          {store.store_number ? (
+            <View style={[vStyles.verifyChip, {backgroundColor: palette.successSoft}]}>
+              <Icon name="checkCircle" size={11} color={palette.success} />
+              <Text style={{fontSize: 9.5, color: palette.success, fontFamily: fonts.bold}}>
+                موثّق
+              </Text>
+            </View>
+          ) : null}
           {store.rating != null && store.rating > 0 ? (
-            <Stars rating={store.rating} size={13} compact />
+            <Stars rating={store.rating} count={store.ratingCount} size={13} compact />
           ) : null}
         </View>
         <View style={vStyles.metaRow}>
@@ -277,7 +287,7 @@ export function StoreCard({
           ) : null}
         </View>
         {(servesMe || store.deliveryFeeMinor != null) && myRegion != null ? (
-          <View style={vStyles.feeRow}>
+          <View style={[vStyles.feeRow, {backgroundColor: palette.successSoft}]}>
             <Icon name="truck" size={12} color={palette.success} />
             <Text style={[{fontSize: 11, color: palette.success, fontFamily: fonts.medium}]}>
               يوصّل إلى {myRegion} · {formatMoney(store.deliveryFeeMinor ?? 0)}
@@ -306,7 +316,25 @@ const vStyles = StyleSheet.create({
   },
   metaRow: {flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.sm, flexWrap: 'wrap'},
   metaItem: {flexDirection: 'row-reverse', alignItems: 'center', gap: 3},
-  feeRow: {flexDirection: 'row-reverse', alignItems: 'center', gap: 4},
+  /* v3.3: صف رسوم التوصيل — رقاقة خضراء ناعمة بدل نص عارٍ. */
+  feeRow: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 4,
+    alignSelf: 'flex-start',
+    borderRadius: radius.pill,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  /* v3.3: شارة التوثيق. */
+  verifyChip: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 3,
+    borderRadius: radius.pill,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
   chip: {
     borderRadius: radius.pill,
     paddingHorizontal: 8,

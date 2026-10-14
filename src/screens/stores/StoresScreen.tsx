@@ -11,7 +11,7 @@ import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 import {useTheme} from '../../theme/ThemeProvider';
 import {spacing, type, fonts} from '../../theme/tokens';
 import {Icon} from '../../components/Icon';
-import {Chip, ErrorState, Loader, Screen, AppHeader, EmptyState} from '../../components/ui';
+import {Chip, ErrorState, Loader, Screen, AppHeader, EmptyState, SearchBar} from '../../components/ui';
 import {StoreCard} from '../../components/StoreCard';
 import {getStores, getDeliveryRegions} from '../../api/endpoints';
 import {cachedFetch} from '../../api/cached';
@@ -135,14 +135,38 @@ export function StoresScreen({navigation}: Props) {
         }
         big
       />
+      {/* v3.3 (الجولة 63): بحث مخصص داخل الصفحة — حقل حقيقي يفلتر
+       * المتاجر محلياً بالاسم/الوصف/المنطقة (كانت رقاقة تقفز لبحث
+       * المنتجات العام — طلب التاجر: بحث مخصص داخل صفحة المول). */}
       <View style={styles.controls}>
-        {/* بحث محلي */}
-        <Chip
-          label={query.length > 0 ? `بحث: ${query}` : 'اكتب للبحث عن متجر…'}
-          icon="search"
-          active={query.length > 0}
-          onPress={() => navigation.navigate('Search')}
+        <SearchBar
+          value={query}
+          onChangeText={setQuery}
+          placeholder="ابحث عن متجر، نشاط أو منطقة…"
         />
+
+        {/* عدّاد النتائج + مسح شامل عند تفعيل أي فلتر */}
+        {(query.trim().length > 0 || category != null || selectedRegion != null) &&
+        !loading &&
+        error == null ? (
+          <View style={styles.resultRow}>
+            <Text style={[type.tiny, {color: palette.muted}]}>
+              {filtered.length} من{' '}
+              {(selectedRegion != null ? regionStores : stores).length} متجراً
+            </Text>
+            <Pressable
+              onPress={() => {
+                setQuery('');
+                setCategory(null);
+                setSelectedRegion(null);
+              }}
+              hitSlop={8}>
+              <Text style={{fontSize: 11.5, color: palette.brand, fontFamily: fonts.bold}}>
+                مسح الفلاتر
+              </Text>
+            </Pressable>
+          </View>
+        ) : null}
 
         {/* v2.2: فلترة المناطق الذكية — كل المناطق بلا اشتراط تحديد
          * منطقة المستخدم؛ منطقته تُعلَّم وتُقدَّم أولاً. */}
@@ -266,6 +290,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     gap: spacing.xs,
     paddingBottom: spacing.sm,
+  },
+  /* v3.3: سطر العدّاد + مسح الفلاتر. */
+  resultRow: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 2,
   },
   regionChip: {
     flexDirection: 'row-reverse',

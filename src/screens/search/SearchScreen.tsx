@@ -453,7 +453,10 @@ export function SearchScreen({navigation, route}: Props) {
           data={visible}
           keyExtractor={item => `${item.store_id}:${item.id}`}
           numColumns={2}
-          columnWrapperStyle={visible.length > 1 ? gridStyles.row : undefined}
+          /* v3.3: صف الشبكة يُطبّق دائماً — والخلية نفسها مسقوفة
+           * بنصف العرض، فلا تتمدد النتيجة الوحيدة شريطاً عرضياً
+           * بكامل الشاشة (شكوى الجولة 63: «تفتح بشكل عرضي ومقرف»). */
+          columnWrapperStyle={gridStyles.row}
           contentContainerStyle={{padding: spacing.lg, gap: spacing.lg, paddingBottom: stackClearance}}
           showsVerticalScrollIndicator={false}
           onEndReached={loadMore}
@@ -488,16 +491,18 @@ export function SearchScreen({navigation, route}: Props) {
             ) : null
           }
           renderItem={({item}) => (
-            <ProductCard
-              product={item}
-              storeRef={{id: item.store_id, name: item.store_name, storeNumber: item.store_number}}
-              onPress={() =>
-                navigation.navigate('Product', {
-                  product: item,
-                  storeRef: {id: item.store_id, name: item.store_name, storeNumber: item.store_number},
-                })
-              }
-            />
+            <View style={gridStyles.cell}>
+              <ProductCard
+                product={item}
+                storeRef={{id: item.store_id, name: item.store_name, storeNumber: item.store_number}}
+                onPress={() =>
+                  navigation.navigate('Product', {
+                    product: item,
+                    storeRef: {id: item.store_id, name: item.store_name, storeNumber: item.store_number},
+                  })
+                }
+              />
+            </View>
           )}
         />
       )}
@@ -725,4 +730,7 @@ const styles = StyleSheet.create({
 
 const gridStyles = StyleSheet.create({
   row: {gap: spacing.md, width: '100%'},
+  /* v3.3: الخلية لا تتجاوز نصف العد أبداً — حتى لو كانت النتيجة
+   * الوحيدة في صفها، فتبقى بنفس عرض بطاقات الشبكة الثنائية. */
+  cell: {flex: 1, maxWidth: '50%'},
 });

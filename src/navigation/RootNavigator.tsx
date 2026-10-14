@@ -203,7 +203,13 @@ function OrdersStackScreens() {
   return (
     <OrdersStack.Navigator screenOptions={screenOptions}>
       <OrdersStack.Screen name="Orders" component={OrdersScreen} />
-      <OrdersStack.Screen name="OrderDetail" component={OrderDetailScreen} />
+      {/* v3.3 (الجولة 63): تفاصيل الطلب كنافذة منبثقة تنزلق من الأسفل —
+       * نفس لغة العرض النمطية المعتمدة في بقية نوافذ التطبيق. */}
+      <OrdersStack.Screen
+        name="OrderDetail"
+        component={OrderDetailScreen}
+        options={{presentation: 'modal', animation: 'slide_from_bottom'}}
+      />
     </OrdersStack.Navigator>
   );
 }

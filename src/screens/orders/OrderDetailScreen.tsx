@@ -4,11 +4,11 @@
  * إلغاء قبل الإرسال، وإعادة الطلب بلمسة.
  */
 import React, {useCallback, useState} from 'react';
-import {Linking, ScrollView, StyleSheet, Text, View} from 'react-native';
+import {Linking, Modal, Pressable, ScrollView, StyleSheet, Text, View} from 'react-native';
 import {useFocusEffect} from '@react-navigation/native';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 import {useTheme} from '../../theme/ThemeProvider';
-import {spacing, type, fonts} from '../../theme/tokens';
+import {spacing, type, fonts, radius, toneColors} from '../../theme/tokens';
 import {Icon} from '../../components/Icon';
 import {
   AppHeader,
@@ -156,6 +156,9 @@ export function OrderDetailScreen({navigation, route}: Props) {
 
   const meta = STATUS_META[order.status];
   const canRate = order.status === 'delivered';
+  /* v3.3: لون حالة الطلب — يلوّن الحافة الأمامية لبطاقة الحالة
+   * (نفس لغة بطاقات القائمة). */
+  const tone = toneColors(palette, meta.tone);
 
   return (
     <Screen>
@@ -165,8 +168,8 @@ export function OrderDetailScreen({navigation, route}: Props) {
         onBack={() => navigation.goBack()}
       />
       <ScrollView contentContainerStyle={{padding: spacing.lg, gap: spacing.lg, paddingBottom: stackClearance}} showsVerticalScrollIndicator={false}>
-        {/* حالة الطلب */}
-        <Card style={{gap: spacing.md}}>
+        {/* حالة الطلب — v3.3: حافة ملونة بحالة الطلب + وصف */}
+        <Card style={{gap: spacing.md, borderRightWidth: 4, borderRightColor: tone.fg}}>
           <View style={detailStyles.statusRow}>
             <OrderStatusBadge status={order.status} />
             <Text style={[{fontSize: 12, color: palette.muted}]}>
@@ -313,37 +316,12 @@ export function OrderDetailScreen({navigation, route}: Props) {
         {/* الإجراءات */}
         <View style={{gap: spacing.md}}>
           {canCancel(order.status) ? (
-            confirmCancel ? (
-              <Card style={{gap: spacing.md, borderColor: palette.danger}}>
-                <Text style={[type.small, {color: palette.inkSoft}]}>
-                  الإلغاء متاح فقط قبل أن يرسل المتجر الطلب. هل أنت متأكد؟
-                </Text>
-                <View style={{flexDirection: 'row-reverse', gap: spacing.md}}>
-                  <Button
-                    label="نعم، ألغِ الطلب"
-                    variant="danger"
-                    small
-                    style={{flex: 1}}
-                    loading={cancelling}
-                    onPress={doCancel}
-                  />
-                  <Button
-                    label="تراجع"
-                    variant="outline"
-                    small
-                    style={{flex: 1}}
-                    onPress={() => setConfirmCancel(false)}
-                  />
-                </View>
-              </Card>
-            ) : (
-              <Button
-                label="إلغاء الطلب (قبل الإرسال)"
-                variant="outline"
-                icon="close"
-                onPress={() => setConfirmCancel(true)}
-              />
-            )
+            <Button
+              label="إلغاء الطلب (قبل الإرسال)"
+              variant="outline"
+              icon="close"
+              onPress={() => setConfirmCancel(true)}
+            />
           ) : null}
           <Button
             label="إعادة الطلب إلى السلة"
@@ -353,6 +331,60 @@ export function OrderDetailScreen({navigation, route}: Props) {
           />
         </View>
       </ScrollView>
+
+      {/* v3.3: تأكيد الإلغاء — حوار مركزي حقيقي (نافذة منبثقة بغطاء
+       * شفاف ولوحة مستديرة) بدل بطاقة مضمنة داخل التمرير. */}
+      {confirmCancel ? (
+        <Modal
+          visible
+          transparent
+          animationType="fade"
+          onRequestClose={() => setConfirmCancel(false)}>
+          <View style={[dialogStyles.overlay, {backgroundColor: palette.overlay}]}>
+            <Pressable
+              style={StyleSheet.absoluteFill}
+              onPress={() => setConfirmCancel(false)}
+            />
+            <View
+              style={[
+                dialogStyles.panel,
+                {backgroundColor: palette.surface, borderColor: palette.line},
+              ]}>
+              <View style={[dialogStyles.iconWrap, {backgroundColor: palette.dangerSoft}]}>
+                <Icon name="xCircle" size={26} color={palette.danger} />
+              </View>
+              <Text style={[type.h3, {color: palette.ink, textAlign: 'center'}]}>
+                إلغاء الطلب
+              </Text>
+              <Text
+                style={[
+                  type.small,
+                  {color: palette.muted, textAlign: 'center', lineHeight: 20},
+                ]}>
+                الإلغاء متاح فقط قبل أن يرسل المتجر الطلب ولا يمكن التراجع
+                بعده. هل أنت متأكد؟
+              </Text>
+              <View style={{flexDirection: 'row-reverse', gap: spacing.md, width: '100%'}}>
+                <Button
+                  label="نعم، ألغِ الطلب"
+                  variant="danger"
+                  small
+                  style={{flex: 1}}
+                  loading={cancelling}
+                  onPress={doCancel}
+                />
+                <Button
+                  label="تراجع"
+                  variant="outline"
+                  small
+                  style={{flex: 1}}
+                  onPress={() => setConfirmCancel(false)}
+                />
+              </View>
+            </View>
+          </View>
+        </Modal>
+      ) : null}
 
       {/* نافذة التقييم */}
       <RatingSheet
@@ -415,5 +447,31 @@ const detailStyles = StyleSheet.create({
     flexDirection: 'row-reverse',
     alignItems: 'center',
     gap: spacing.md,
+  },
+});
+
+/* v3.3: حوار التأكيد المركزي. */
+const dialogStyles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: spacing.xl,
+  },
+  panel: {
+    width: '100%',
+    maxWidth: 340,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    padding: spacing.lg,
+    gap: spacing.md,
+    alignItems: 'center',
+  },
+  iconWrap: {
+    width: 56,
+    height: 56,
+    borderRadius: radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

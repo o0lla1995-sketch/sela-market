@@ -7,12 +7,11 @@ import {FlatList, Pressable, StyleSheet, Text, View} from 'react-native';
 import {useFocusEffect} from '@react-navigation/native';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 import {useTheme} from '../../theme/ThemeProvider';
-import {spacing, type, fonts} from '../../theme/tokens';
+import {spacing, type, fonts, radius} from '../../theme/tokens';
 import {Icon} from '../../components/Icon';
 import {
   AppHeader,
   Button,
-  Chip,
   EmptyState,
   ErrorState,
   Loader,
@@ -104,6 +103,17 @@ export function OrdersScreen({navigation}: Props) {
     return true;
   });
 
+  /* v3.3: عدادات الفلاتر داخل المبدّل الشرائحي — المستخدم يرى حجم
+   * كل قسم قبل الضغط (لغة الواجهات الحديثة). */
+  const activeCount = orders.filter(o =>
+    ['new', 'accepted', 'sent'].includes(o.status),
+  ).length;
+  const counts: Record<Filter, number> = {
+    active: activeCount,
+    done: orders.length - activeCount,
+    all: orders.length,
+  };
+
   const unratedCount = orders.filter(
     o => o.status === 'delivered' && o.rating == null,
   ).length;
@@ -116,15 +126,38 @@ export function OrdersScreen({navigation}: Props) {
         big
       />
 
-      <View style={filterStyles.row}>
-        {FILTERS.map(f => (
-          <Chip
-            key={f.value}
-            label={f.label}
-            active={filter === f.value}
-            onPress={() => setFilter(f.value)}
-          />
-        ))}
+      {/* v3.3: مبدّل شرائحي (Segmented) بالعدادات — بديل احترافي
+       * للرقائق المنفصلة؛ القطاع النشط يمتلئ بلون العلامة. */}
+      <View
+        style={[
+          filterStyles.seg,
+          {backgroundColor: palette.surfaceAlt, borderColor: palette.line},
+        ]}>
+        {FILTERS.map(f => {
+          const on = filter === f.value;
+          return (
+            <Pressable
+              key={f.value}
+              onPress={() => setFilter(f.value)}
+              accessibilityRole="button"
+              accessibilityLabel={f.label}
+              accessibilityState={{selected: on}}
+              style={[
+                filterStyles.segItem,
+                {backgroundColor: on ? palette.brand : 'transparent'},
+              ]}>
+              <Text
+                style={{
+                  fontSize: 12,
+                  fontFamily: on ? fonts.bold : fonts.medium,
+                  color: on ? palette.onBrand : palette.inkSoft,
+                }}>
+                {f.label}
+                {counts[f.value] > 0 ? ` · ${counts[f.value]}` : ''}
+              </Text>
+            </Pressable>
+          );
+        })}
       </View>
 
       {/* شريط تذكير التقييم — طلبات مسلّمة بانتظار رأيك */}
@@ -224,17 +257,28 @@ export function OrdersScreen({navigation}: Props) {
 }
 
 const filterStyles = StyleSheet.create({
-  row: {
+  /* v3.3: حاوية المبدّل الشرائحي. */
+  seg: {
     flexDirection: 'row-reverse',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.md,
+    gap: 3,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    padding: 3,
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.md,
+  },
+  segItem: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    borderRadius: radius.pill,
   },
   rateBanner: {
     flexDirection: 'row-reverse',
     alignItems: 'center',
     gap: spacing.sm,
-    borderRadius: 12,
+    borderRadius: radius.md,
     borderWidth: 1,
     marginHorizontal: spacing.lg,
     marginBottom: spacing.md,

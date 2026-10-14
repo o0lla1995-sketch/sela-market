@@ -322,7 +322,6 @@ export function HomeScreen({navigation}: Props) {
                 hitSlop={8}
                 accessibilityRole="button"
                 accessibilityLabel="المفضلة"
-                android_ripple={{color: 'rgba(255,255,255,0.25)', borderless: true, foreground: true}}
                 style={heroStyles.iconBtnOnBrand}>
                 <Icon name="heart" size={19} color="#FFFFFF" />
               </Pressable>
@@ -331,7 +330,6 @@ export function HomeScreen({navigation}: Props) {
                 hitSlop={8}
                 accessibilityRole="button"
                 accessibilityLabel="الإشعارات"
-                android_ripple={{color: 'rgba(255,255,255,0.25)', borderless: true, foreground: true}}
                 style={heroStyles.iconBtnOnBrand}>
                 <Icon name="bell" size={19} color="#FFFFFF" />
                 {unread > 0 ? (
@@ -349,7 +347,6 @@ export function HomeScreen({navigation}: Props) {
             onPress={openRegionPicker}
             accessibilityRole="button"
             accessibilityLabel={`منطقة التوصيل: ${myRegion ?? 'غير محددة'}`}
-            android_ripple={{color: 'rgba(255,255,255,0.2)', borderless: false, foreground: true}}
             style={heroStyles.regionBar}>
             <Icon name="pin" size={16} color="#FFFFFF" />
             <View style={{flex: 1, alignItems: 'flex-start'}}>
@@ -366,7 +363,6 @@ export function HomeScreen({navigation}: Props) {
             onPress={() => navigation.navigate('Search')}
             accessibilityRole="button"
             accessibilityLabel="البحث في المول"
-            android_ripple={{color: palette.ripple, borderless: false, foreground: true}}
             style={[heroStyles.searchEntry, shadowFor(palette.isDark)]}>
             <Icon name="search" size={19} color={palette.muted} />
             <Text style={[type.body, {color: palette.muted, flex: 1, textAlign: 'right'}]}>
@@ -426,7 +422,6 @@ export function HomeScreen({navigation}: Props) {
               <Pressable
                 onPress={openRegionPicker}
                 accessibilityRole="button"
-                android_ripple={{color: palette.ripple, borderless: false, foreground: true}}
                 style={({pressed}) => [
                   regionStyles.emptyCard,
                   {
@@ -451,8 +446,9 @@ export function HomeScreen({navigation}: Props) {
                   data={regionStores.slice(0, 10)}
                   keyExtractor={s => `r${s.id}`}
                   showsHorizontalScrollIndicator={false}
-                  /* v3.2: snap ناعم على عرض البطاقة — استمرار تصفح مريح */
-                  snapToInterval={112}
+                  /* v3.2: snap ناعم على عرض البطاقة — استمرار تصفح مريح
+                   * (v3.3: حُدّث لعرض 78 بعد انكماش بطاقة المتجر). */
+                  snapToInterval={78 + spacing.md}
                   decelerationRate="fast"
                   contentContainerStyle={{gap: spacing.md, paddingVertical: 2}}
                   renderItem={({item}) => (
@@ -534,7 +530,6 @@ export function HomeScreen({navigation}: Props) {
                         onPress={() => navigation.navigate('Category', {category: item.category})}
                         accessibilityRole="button"
                         accessibilityLabel={item.category}
-                        android_ripple={{color: palette.ripple, borderless: false, foreground: true}}
                         style={({pressed}) => [
                           catStyles.tile,
                           {

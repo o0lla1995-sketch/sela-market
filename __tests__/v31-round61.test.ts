@@ -113,11 +113,11 @@ describe('الجولة 61 — v3.1.0', () => {
     expect(nav).toContain('brandSoft');
   });
 
-  test('⑨ الإصدار: 3.2.0 (16)', () => {
+  test('⑨ الإصدار: 3.3.0 (17)', () => {
     const config = read('src/core/config.ts');
-    expect(config).toContain("APP_VERSION = '3.2.0'");
+    expect(config).toContain("APP_VERSION = '3.3.0'");
     const gradle = read('android/app/build.gradle');
-    expect(gradle).toContain('versionName "3.2.0"');
-    expect(gradle).toContain('versionCode 16');
+    expect(gradle).toContain('versionName "3.3.0"');
+    expect(gradle).toContain('versionCode 17');
   });
 });

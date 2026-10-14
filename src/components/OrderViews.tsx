@@ -199,8 +199,13 @@ export function OrderListCard({
   const {palette} = useTheme();
   const items = order.items ?? [];
   const canRate = order.status === 'delivered' && order.rating == null && onRate != null;
+  /* v3.3: لمسة لونية بحالة الطلب على الحافة الأمامية للبطاقة —
+   * المسح البصري يميّز النشط من المكتمل قبل قراءة أي نص. */
+  const tone = toneColors(palette, STATUS_META[order.status].tone);
   return (
-    <Card onPress={onPress} style={{gap: spacing.sm}}>
+    <Card
+      onPress={onPress}
+      style={[{gap: spacing.sm, borderRightWidth: 4, borderRightColor: tone.fg}]}>
       <View style={listStyles.topRow}>
         {absoluteUrl(order.store?.logo_url ?? null) != null ? (
           <Image
@@ -224,6 +229,7 @@ export function OrderListCard({
           </Text>
         </View>
         <OrderStatusBadge status={order.status} />
+        <Icon name="chevronLeft" size={16} color={palette.muted} />
       </View>
 
       <View style={listStyles.itemsRow}>

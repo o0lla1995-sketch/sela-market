@@ -10,7 +10,8 @@
  *  ③ الشريط السفلي: غير النشط inkSoft (لا رمادي باهت) + تسميات
  *     وصول + ارتفاع ثابت يمنع انزياح التخطيط.
  *  ④ البطاقات: حدود ‎#2A2A2A في الداكن + صفر نصوص فوق صور المنتجات
- *     (الرقائق تحت الصورة) + ripple + اهتزاز المفضلة.
+ *     (الرقائق تحت الصورة) + اهتزاز المفضلة (v3.3: ripple أُزيل —
+ *     كان يفجّر انهياراً عند كل لمسة على أندرويد).
  *  ⑤ صفحة التاجر: شريط لاصق منسحب (رجوع + بحث) + رقائق فلترة
  *     سريعة + كاروسيل آراء أفقي مدمج مقضم.
  *  ⑥ البحث: فلترة محلية فورية + وضع التصفح «عرض الكل» + وسم نطاق
@@ -76,13 +77,14 @@ describe('الجولة 62 — v3.2.0: التطوير الشامل UX/UI', () => 
     expect(card).not.toContain('cartBadge');
     // الرقائق المعلوماتية تحت الصورة
     expect(card).toContain('chipsRow');
-    // ripple + اهتزاز المفضلة
-    expect(card).toContain('android_ripple');
+    // v3.3: أُزيل android_ripple كلياً (كان يكسر التطبيق عند كل
+    // لمسة) — اهتزاز المفضلة باقٍ.
+    expect(card).not.toContain('android_ripple={{');
     expect(card).toContain('hapticLight');
-    // بطاقات المتاجر كذلك: حدود داكنة + ripple
+    // بطاقات المتاجر كذلك: حدود داكنة وبلا ripple
     const storeCard = read('src/components/StoreCard.tsx');
     expect(storeCard).toContain('cardBorderFor(palette.isDark)');
-    expect(storeCard).toContain('android_ripple');
+    expect(storeCard).not.toContain('android_ripple={{');
   });
 
   test('⑤ صفحة التاجر: شريط لاصق + فلاتر سريعة + كاروسيل آراء', () => {
@@ -129,10 +131,13 @@ describe('الجولة 62 — v3.2.0: التطوير الشامل UX/UI', () => 
     expect(ui).toContain('gap: spacing.md');
   });
 
-  test('⑧ اللمسات اللمسية: ripple واهتزاز على الأفعال الحرجة', () => {
+  test('⑧ اللمسات اللمسية: اهتزاز على الأفعال الحرجة (بلا ripple — v3.3)', () => {
     const haptics = read('src/core/haptics.ts');
     expect(haptics).toContain('hapticLight');
     expect(haptics).toContain('hapticSuccess');
+    // إذن الاهتزاز في المانيفست — بدونه تبقى النبضات صامتة
+    const manifest = read('android/app/src/main/AndroidManifest.xml');
+    expect(manifest).toContain('android.permission.VIBRATE');
     // إضافة للسلة: تأكيد لمسي
     const product = read('src/screens/product/ProductScreen.tsx');
     expect(product).toContain('hapticSuccess');
@@ -140,9 +145,10 @@ describe('الجولة 62 — v3.2.0: التطوير الشامل UX/UI', () => 
     const cart = read('src/screens/cart/CartScreen.tsx');
     expect(cart).toContain('hapticSuccess');
     expect(cart).toContain('haptic="success"');
-    // الأزرار العامة: ripple موحد
+    // v3.3: صفر ripple في كل مكونات الواجهة — كان يفجّر انهياراً
+    // فورياً عند كل لمسة على أندرويد (شكوى الجولة 63 القاتلة).
     const ui = read('src/components/ui.tsx');
-    expect(ui).toContain('android_ripple');
+    expect(ui).not.toContain('android_ripple={{');
   });
 
   test('⑨ الكاروسيلات: صفحات شبكية 2×2 مقضمة snap', () => {
@@ -157,12 +163,12 @@ describe('الجولة 62 — v3.2.0: التطوير الشامل UX/UI', () => 
     expect(home).toContain('snapToInterval={176 + spacing.md}');
   });
 
-  test('⑩ الإصدار: 3.2.0 (16)', () => {
+  test('⑩ الإصدار: 3.3.0 (17)', () => {
     const config = read('src/core/config.ts');
-    expect(config).toContain("APP_VERSION = '3.2.0'");
-    expect(config).toContain('APP_BUILD_CODE = 16');
+    expect(config).toContain("APP_VERSION = '3.3.0'");
+    expect(config).toContain('APP_BUILD_CODE = 17');
     const gradle = read('android/app/build.gradle');
-    expect(gradle).toContain('versionName "3.2.0"');
-    expect(gradle).toContain('versionCode 16');
+    expect(gradle).toContain('versionName "3.3.0"');
+    expect(gradle).toContain('versionCode 17');
   });
 });

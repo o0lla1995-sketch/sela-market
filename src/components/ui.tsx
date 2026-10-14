@@ -109,7 +109,6 @@ export function AppHeader({
           hitSlop={10}
           accessibilityRole="button"
           accessibilityLabel="رجوع"
-          android_ripple={{color: palette.ripple, borderless: true, foreground: true}}
           style={[headerStyles.backBtn, {backgroundColor: palette.surface, borderColor: palette.line}]}>
           {/* v3.2 (الجولة 62): سهم الرجوع يشير يساراً «‹» دائماً —
            * طلب التاجر بالنص: «back chevron must point to the left
@@ -224,7 +223,6 @@ export function Button({
       accessibilityRole="button"
       accessibilityLabel={label}
       accessibilityState={{disabled: disabled || loading, busy: loading}}
-      android_ripple={{color: palette.ripple, borderless: false, foreground: true}}
       style={({pressed: p}) => [
         btnStyles.base,
         {
@@ -295,7 +293,6 @@ export function Card({
       <Pressable
         onPress={onPress}
         accessibilityRole="button"
-        android_ripple={{color: palette.ripple, borderless: false, foreground: true}}
         style={({pressed}) => [base, pressed ? {opacity: 0.9} : null]}>
         {children}
       </Pressable>
@@ -325,11 +322,6 @@ export function Chip({
       accessibilityRole="button"
       accessibilityLabel={label}
       accessibilityState={{selected: active}}
-      android_ripple={
-        onPress != null
-          ? {color: palette.ripple, borderless: false, foreground: true}
-          : undefined
-      }
       style={[
         chipStyles.base,
         {
@@ -724,7 +716,6 @@ export function QtyStepper({
         disabled={atMax}
         accessibilityRole="button"
         accessibilityLabel="زيادة الكمية"
-        android_ripple={{color: palette.ripple, borderless: true, foreground: true}}
         style={stepperStyles.btn}>
         <Icon
           name="plus"
@@ -748,7 +739,6 @@ export function QtyStepper({
         hitSlop={8}
         accessibilityRole="button"
         accessibilityLabel="إنقاص الكمية"
-        android_ripple={{color: palette.ripple, borderless: true, foreground: true}}
         style={stepperStyles.btn}>
         <Icon name="minus" size={compact ? 15 : 17} color={palette.brandDark} strokeWidth={2.4} />
       </Pressable>
@@ -1080,7 +1070,6 @@ export function SectionTitle({
           hitSlop={10}
           accessibilityRole="button"
           accessibilityLabel={actionLabel}
-          android_ripple={{color: palette.ripple, borderless: true, foreground: true}}
           style={({pressed}) => [
             sectionStyles.action,
             {backgroundColor: palette.brandSoft, opacity: pressed ? 0.7 : 1},

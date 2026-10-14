@@ -370,32 +370,51 @@ function StoreCheckout({
 
   return (
     <View style={[cardStyles.group, {backgroundColor: palette.surface, borderColor: palette.line}]}>
-      {/* رأس المتجر */}
-      <View style={cardStyles.groupHead}>
+      {/* v3.3: رأس المتجر — شريط هوية ملون ناعم (brandSoft) يفصل
+       * كل متجر بصرياً كبطاقة متجر حقيقية، لا مجرد عنوان نصي. */}
+      <View style={[cardStyles.groupHead, {backgroundColor: palette.brandSoft}]}>
         <Pressable onPress={onOpenStore} style={cardStyles.storeRow} hitSlop={6}>
-          <StoreAvatar name={entry.storeName} logoUrl={entry.storeLogoUrl} size={36} />
-          <View style={{gap: 1, alignItems: 'flex-start'}}>
+          <StoreAvatar name={entry.storeName} logoUrl={entry.storeLogoUrl} size={40} />
+          <View style={{gap: 1, alignItems: 'flex-start', flex: 1}}>
             <Text style={[type.bodyMedium, {color: palette.ink, fontFamily: fonts.bold}]} numberOfLines={1}>
               {entry.storeName}
             </Text>
-            <Text style={[{fontSize: 10.5, color: palette.muted}]}>
-              {entry.lines.length} منتجاً · طلب مستقل لهذا المتجر
+            <Text style={[{fontSize: 10.5, color: palette.brandDark}]}>
+              سلة مستقلة · {entry.lines.length} منتجاً
             </Text>
           </View>
+          <Icon name="chevronLeft" size={16} color={palette.brandDark} />
         </Pressable>
-        <Pressable onPress={onClear} hitSlop={8}>
-          <Icon name="trash" size={16} color={palette.danger} />
+        <Pressable
+          onPress={onClear}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel={`إفراغ سلة ${entry.storeName}`}
+          style={[cardStyles.clearChip, {backgroundColor: palette.surface, borderColor: palette.line}]}>
+          <Icon name="trash" size={14} color={palette.danger} />
         </Pressable>
       </View>
 
-      {/* الأصناف — العدّاد محدود بالمخزون المتاح */}
+      {/* الأصناف — العدّاد محدود بالمخزون المتاح (v3.3: كل صنف
+       * بطاقة مضمنة بحدودها وصورة حرفية للهوية، كبطاقات السلة
+       * العالمية — لا فوارق باهتة بين سطور متلاصقة). */}
+      <View style={cardStyles.linesWrap}>
       {entry.lines.map(line => {
         const cap = line.stock > 0 ? line.stock : undefined;
         const overStock = line.stock > 0 && line.quantity > line.stock + 0.0001;
+        const initial = line.name.trim().charAt(0) || '؟';
         return (
-          <View key={line.key} style={cardStyles.line}>
+          <View
+            key={line.key}
+            style={[cardStyles.line, {backgroundColor: palette.surfaceAlt, borderColor: palette.line}]}>
+            {/* بلاطة حرفية — هوية بصرية للصنف رغم غياب الصورة في السلة */}
+            <View style={[cardStyles.lineTile, {backgroundColor: palette.brandSoft, borderColor: palette.brandBorder}]}>
+              <Text style={{fontSize: 17, fontFamily: fonts.black, color: palette.brandDark}}>
+                {initial}
+              </Text>
+            </View>
             <View style={{flex: 1, gap: 3, alignItems: 'flex-start'}}>
-              <Text style={[type.smallMedium, {color: palette.ink}]} numberOfLines={2}>
+              <Text style={[type.smallMedium, {color: palette.ink, fontFamily: fonts.bold}]} numberOfLines={2}>
                 {line.name}
               </Text>
               {line.variant != null ? (
@@ -445,11 +464,14 @@ function StoreCheckout({
           </View>
         );
       })}
+      </View>
 
       {/* العنوان — مشترك، ذكي: الافتراضي معبأ مسبقاً */}
       <View style={[cardStyles.section, {borderTopColor: palette.line}]}>
         <View style={cardStyles.sectionHead}>
-          <Icon name="pin" size={14} color={palette.brandDark} />
+          <View style={[cardStyles.sectionIcon, {backgroundColor: palette.brandSoft}]}>
+            <Icon name="pin" size={13} color={palette.brandDark} />
+          </View>
           <Text style={[type.small, {color: palette.ink, fontFamily: fonts.bold, flex: 1}]}>
             عنوان التسليم
           </Text>
@@ -534,7 +556,9 @@ function StoreCheckout({
       {/* التوصيل — منطقة تلقائية بذكاء + رسمها */}
       <View style={cardStyles.section}>
         <View style={cardStyles.sectionHead}>
-          <Icon name="truck" size={14} color={palette.brandDark} />
+          <View style={[cardStyles.sectionIcon, {backgroundColor: palette.brandSoft}]}>
+            <Icon name="truck" size={13} color={palette.brandDark} />
+          </View>
           <Text style={[type.small, {color: palette.ink, fontFamily: fonts.bold, flex: 1}]}>
             التوصيل
           </Text>
@@ -616,9 +640,10 @@ function StoreCheckout({
         />
       )}
 
-      {/* الملخص + الإرسال المباشر */}
-      <View style={[cardStyles.foot, {borderTopColor: palette.line}]}>
-        <View style={{gap: 2, alignItems: 'flex-start', flex: 1}}>
+      {/* v3.3: الملخص — الإجمالي داخل لوحة بارزة (brandSoft) بجانب
+       * رقاقة الدفع نقداً؛ الفصل البصري يلفت العين لمبلغ الطلب. */}
+      <View style={cardStyles.foot}>
+        <View style={{gap: 4, alignItems: 'flex-start', flex: 1}}>
           <View style={cardStyles.sumRow}>
             <Text style={{fontSize: 11, color: palette.muted}}>المنتجات</Text>
             <Text style={{fontSize: 12, color: palette.ink, fontFamily: fonts.medium}}>
@@ -643,13 +668,26 @@ function StoreCheckout({
               {formatMoney(deliveryFee)}
             </Text>
           </View>
-          <View style={cardStyles.sumRow}>
-            <Text style={{fontSize: 13, color: palette.ink, fontFamily: fonts.bold}}>الإجمالي</Text>
-            <Text style={{fontSize: 16, color: palette.brandDark, fontFamily: fonts.black}}>
-              {formatMoney(total)}
+        </View>
+        <View
+          style={[
+            cardStyles.totalPanel,
+            {backgroundColor: palette.brandSoft, borderColor: palette.brandBorder},
+          ]}>
+          <View style={{gap: 4, alignItems: 'flex-start', flex: 1}}>
+            <Text style={{fontSize: 12.5, color: palette.ink, fontFamily: fonts.bold}}>
+              الإجمالي
             </Text>
+            <View style={[cardStyles.cashChip, {backgroundColor: palette.surface, borderColor: palette.brandBorder}]}>
+              <Icon name="cash" size={11} color={palette.brandDark} />
+              <Text style={{fontSize: 10, color: palette.brandDark, fontFamily: fonts.medium}}>
+                الدفع نقداً عند الاستلام
+              </Text>
+            </View>
           </View>
-          <Text style={{fontSize: 10, color: palette.muted}}>الدفع نقداً عند الاستلام</Text>
+          <Text style={{fontSize: 20, color: palette.brandDark, fontFamily: fonts.black}}>
+            {formatMoney(total)}
+          </Text>
         </View>
       </View>
 
@@ -662,17 +700,20 @@ function StoreCheckout({
         </View>
       ) : null}
 
-      <Button
-        label={placing ? 'جارٍ إرسال الطلب…' : `إتمام الطلب — ${formatMoney(total)}`}
-        icon="cash"
-        onPress={() => void submit()}
-        loading={placing}
-        disabled={!ready}
-        small
-        haptic="success"
-      />
+      {/* v3.3: زر الفعل الأساسي بحجم 44 القياسي العالمي — طلب
+       * التاجر نفسه (40–44px للفعل الأساسي)؛ الصغير 36 كان للثانوي. */}
+      <View style={{paddingHorizontal: spacing.md, paddingBottom: spacing.md}}>
+        <Button
+          label={placing ? 'جارٍ إرسال الطلب…' : `إتمام الطلب — ${formatMoney(total)}`}
+          icon="cash"
+          onPress={() => void submit()}
+          loading={placing}
+          disabled={!ready}
+          haptic="success"
+        />
+      </View>
       {!ready ? (
-        <Text style={[{fontSize: 10.5, color: palette.warning, textAlign: 'center', marginTop: 6}]}>
+        <Text style={[{fontSize: 10.5, color: palette.warning, textAlign: 'center', marginTop: 2, marginBottom: spacing.sm, marginHorizontal: spacing.md}]}>
           {regions.length === 0
             ? 'المتجر بلا مناطق توصيل حالياً'
             : regionName == null
@@ -686,6 +727,7 @@ function StoreCheckout({
 
 const cardStyles = StyleSheet.create({
   group: {borderRadius: radius.lg, borderWidth: 1, overflow: 'hidden'},
+  /* v3.3: رأس المتجر — شريط هوية ملون. */
   groupHead: {
     flexDirection: 'row-reverse',
     alignItems: 'center',
@@ -694,14 +736,38 @@ const cardStyles = StyleSheet.create({
     gap: spacing.sm,
   },
   storeRow: {flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.md, flex: 1},
+  /* v3.3: زر إفراغ السلة — رقاقة حدودية بدل أيقونة عارية. */
+  clearChip: {
+    width: 32,
+    height: 32,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  /* v3.3: حاوية الأصناف — مساحة تنفس حول بطاقات الأصناف. */
+  linesWrap: {
+    padding: spacing.md,
+    paddingTop: spacing.sm,
+    gap: spacing.sm,
+  },
+  /* v3.3: صنف السلة — بطاقة مضمنة بحدودها وخلفية surfaceAlt. */
   line: {
     flexDirection: 'row-reverse',
     alignItems: 'center',
-    gap: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(0,0,0,0.05)',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md - 2,
+    gap: spacing.sm,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    padding: spacing.sm + 2,
+  },
+  /* v3.3: بلاطة حرفية 44×44 — هوية الصنف كبطاقات السلة العالمية. */
+  lineTile: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   variantChip: {
     flexDirection: 'row-reverse',
@@ -719,7 +785,15 @@ const cardStyles = StyleSheet.create({
     paddingVertical: spacing.md - 2,
     gap: 8,
   },
-  sectionHead: {flexDirection: 'row-reverse', alignItems: 'center', gap: 6},
+  sectionHead: {flexDirection: 'row-reverse', alignItems: 'center', gap: 8},
+  /* v3.3: رقاقة أيقونة القسم — مربع ناعم 26×26 بلون brandSoft. */
+  sectionIcon: {
+    width: 26,
+    height: 26,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   savedChip: {
     flexDirection: 'row-reverse',
     alignItems: 'center',
@@ -761,7 +835,7 @@ const cardStyles = StyleSheet.create({
   foot: {
     borderTopWidth: 1,
     padding: spacing.md,
-    gap: 4,
+    gap: spacing.sm,
   },
   sumRow: {
     flexDirection: 'row-reverse',
@@ -769,6 +843,26 @@ const cardStyles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: spacing.md,
     width: '100%',
+  },
+  /* v3.3: لوحة الإجمالي البارزة — خلفية brandSoft وحد brandBorder
+   * ورقم كبير 20px؛ تجذب العين لمبلغ الطلب فوراً. */
+  totalPanel: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    borderRadius: radius.md,
+    borderWidth: 1,
+    padding: spacing.md,
+    gap: spacing.sm,
+  },
+  /* v3.3: رقاقة طريقة الدفع داخل لوحة الإجمالي. */
+  cashChip: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 4,
+    borderWidth: 1,
+    borderRadius: radius.pill,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
   },
   errorRow: {
     flexDirection: 'row-reverse',
