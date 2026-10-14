@@ -36,8 +36,8 @@ describe('الجولة 59 — v2.8.0: منطق الشراء العالمي وس�
     expect(card).not.toContain('addBtn');
     // الشارة المعلوماتية «في السلة» موجودة بدلهما.
     expect(card).toContain('في السلة');
-    // إحالة بصرية لفتح صفحة المنتج.
-    expect(card).toContain('openHint');
+    // إحالة بصرية لفتح صفحة المنتج — سهم «‹» (v3.2).
+    expect(card).toContain('chevronLeft');
     // المتجر لا يزال يرى شارات الخصم والنفاد.
     expect(card).toContain('نفدت');
     expect(card).toContain('بقي القليل');
@@ -156,13 +156,13 @@ describe('الجولة 59 — v2.8.0: منطق الشراء العالمي وس�
     expect(ui).toContain('const height = small ? 36 : 44;');
   });
 
-  test('⑥ الإصدار: محدّث في الجولة 60 (3.0.0)', () => {
+  test('⑥ الإصدار: محدّث في الجولة 62 (3.2.0)', () => {
     const config = read('src/core/config.ts');
-    expect(config).toContain("APP_VERSION = '3.1.0'");
-    expect(config).toContain('APP_BUILD_CODE = 14');
+    expect(config).toContain("APP_VERSION = '3.2.0'");
+    expect(config).toContain('APP_BUILD_CODE = 16');
     const gradle = read('android/app/build.gradle');
-    expect(gradle).toContain('versionCode 15');
-    expect(gradle).toContain('versionName "3.1.0"');
+    expect(gradle).toContain('versionCode 16');
+    expect(gradle).toContain('versionName "3.2.0"');
   });
 
   test('⑦ المفضلة تتسق مع المنطق الجديد: زر واحد يفتح صفحة المنتج', () => {

@@ -63,6 +63,7 @@ import {useCartStore} from '../../stores/cartStore';
 import {useInterestStore} from '../../stores/interestStore';
 import {useWishlistStore} from '../../stores/wishlistStore';
 import {useToastStore} from '../../stores/toastStore';
+import {hapticLight, hapticSuccess} from '../../core/haptics';
 import {useRequireAuth, type ShopStackParamList} from '../../navigation/RootNavigator';
 import {minQty, qtyStep} from '../../core/money';
 import {recommendSimilar, RECOMMEND_LIMIT} from '../../core/recommend';
@@ -176,12 +177,16 @@ export function ProductScreen({navigation, route}: Props) {
     /* الزائر لا يضيف للسلة — بوابة الدخول أولاً. */
     requireAuth(() => {
       addProduct(storeRef, product, variantText, qty);
+      /* v3.2: تأكيد لمسي ملموس لحظة دخول المنتج للسلة. */
+      hapticSuccess();
       toast(`أُضيف «${product.name}» (${formatQty(qty, soldByWeight)}) إلى سلة ${storeRef.name}`, 'success');
     });
   };
 
   const onWishlist = () => {
     requireAuth(() => {
+      /* v3.2: نبضة خفيفة عند تبديل المفضلة. */
+      hapticLight();
       const added = toggleWishlist(product, storeRef.name);
       toast(added ? 'حُفظ في المفضلة' : 'أُزيل من المفضلة', 'info');
     });
@@ -553,6 +558,7 @@ export function ProductScreen({navigation, route}: Props) {
             style={{flex: 1}}
             onPress={() => {
               if (cartQty > 0) {
+                hapticLight();
                 navigation.getParent()?.navigate('Cart');
                 return;
               }

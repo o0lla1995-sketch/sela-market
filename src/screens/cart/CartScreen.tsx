@@ -45,6 +45,7 @@ import {useInterestStore} from '../../stores/interestStore';
 import {useLocationStore} from '../../stores/locationStore';
 import {useSettingsStore} from '../../stores/settingsStore';
 import {useToastStore} from '../../stores/toastStore';
+import {hapticSuccess} from '../../core/haptics';
 import {getStoreDetail, placeOrder, newOrderRequestId} from '../../api/endpoints';
 import {syncOrdersOnce} from '../../services/ordersSync';
 import {ApiError} from '../../api/client';
@@ -327,6 +328,9 @@ function StoreCheckout({
         addAddress(address.trim());
         rememberRegion(entry.storeId, regionName);
         trackOrder(entry.lines.map(l => l.category ?? null));
+        /* v3.2: تأكيد لمسي لحظة نجاح الطلب — إحساس إنجاز ملموس
+         * كما تطبيقات الدفع العالمية (طلب التاجر: تفاعلات لمسية). */
+        hapticSuccess();
         /* «طلباتي» وشارة التبويب تتحدثان فوراً — لا دورة ٤٥ ثانية
          * تُوهم المستخدم أن طلبه «لم يُرسل». */
         void syncOrdersOnce(true);
@@ -665,6 +669,7 @@ function StoreCheckout({
         loading={placing}
         disabled={!ready}
         small
+        haptic="success"
       />
       {!ready ? (
         <Text style={[{fontSize: 10.5, color: palette.warning, textAlign: 'center', marginTop: 6}]}>

@@ -174,6 +174,36 @@ export function shadowFor(isDark: boolean) {
       };
 }
 
+/* ─── v3.2 (الجولة 62): حدود البطاقات ────────────────────────────
+ * طلب التاجر بالنص: «حدود 1px بلون ‎#2A2A2A للبطاقات في الوضع
+ * الداكن لخلق تمايز وعمق». في الداكن تُستبدل حدود palette.line
+ * الفاتحة جداً بهذا الرمادي الداكن المحدد؛ وفي الفاتح تبقى
+ * حدود الثيم العادية مع الظل الناعم. */
+export function cardBorderFor(isDark: boolean): string {
+  return isDark ? '#2A2A2A' : '#E7E5E4';
+}
+
+/* ─── v3.2 (الجولة 62): ظل ناعم موحّد للطبقات المرتفعة ────────
+ * للتروسة اللاصقة والشريط السفلي — ظل أوضح قليلاً من ظل البطاقات
+ * كي تطفو الطبقة فوق المحتوى بوضوح (نمط أمازون/نون). */
+export function shadowRaised(isDark: boolean) {
+  return isDark
+    ? {
+        shadowColor: '#000000',
+        shadowOffset: {width: 0, height: 2},
+        shadowOpacity: 0.45,
+        shadowRadius: 8,
+        elevation: 8,
+      }
+    : {
+        shadowColor: '#1C1917',
+        shadowOffset: {width: 0, height: 3},
+        shadowOpacity: 0.1,
+        shadowRadius: 10,
+        elevation: 8,
+      };
+}
+
 /** نبرات الشرائح الدلالية — تُحوّل إلى ألوان ملموسة في المكونات. */
 export type Tone =
   | 'brand'

@@ -9,7 +9,14 @@
 import React from 'react';
 import {Image, Pressable, StyleSheet, Text, View} from 'react-native';
 import {useTheme} from '../theme/ThemeProvider';
-import {radius, shadowFor, spacing, type, fonts} from '../theme/tokens';
+import {
+  radius,
+  shadowFor,
+  spacing,
+  type,
+  fonts,
+  cardBorderFor,
+} from '../theme/tokens';
 import {Icon, type IconName} from './Icon';
 import {Stars} from './RatingSheet';
 import {formatMoney} from '../core/money';
@@ -128,9 +135,12 @@ export function CircleStoreCard({
   return (
     <Pressable
       onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={store.name}
+      android_ripple={{color: palette.ripple, borderless: false, foreground: true}}
       style={({pressed}) => [
         circleStyles.card,
-        {backgroundColor: palette.surface, borderColor: palette.line},
+        {backgroundColor: palette.surface, borderColor: cardBorderFor(palette.isDark)},
         shadowFor(palette.isDark),
         pressed ? {transform: [{scale: 0.95}]} : null,
       ]}>
@@ -222,11 +232,16 @@ export function StoreCard({
   return (
     <Pressable
       onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={store.name}
+      android_ripple={{color: palette.ripple, borderless: false, foreground: true}}
       style={({pressed}) => [
         vStyles.card,
         {
           backgroundColor: palette.surface,
-          borderColor: servesMe ? palette.brandBorder : palette.line,
+          borderColor: servesMe
+            ? palette.brandBorder
+            : cardBorderFor(palette.isDark),
           opacity: pressed ? 0.9 : 1,
         },
         shadowFor(palette.isDark),
@@ -274,7 +289,8 @@ export function StoreCard({
           </Text>
         ) : null}
       </View>
-      <Icon name="forward" size={18} color={palette.muted} />
+      {/* v3.2: سهم «‹» في اتجاه الاستمرار (RTL) بدل «›» المعاكس. */}
+      <Icon name="chevronLeft" size={18} color={palette.muted} />
     </Pressable>
   );
 }

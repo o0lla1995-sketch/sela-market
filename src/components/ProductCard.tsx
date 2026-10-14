@@ -1,14 +1,32 @@
 /**
- * ProductCard.tsx — بطاقة منتج (v2.8 — الجولة 59):
- * البطاقة للتسوّق والاكتشاف فقط — الطلب يبدأ من صفحة المنتج
- * (طلب التاجر بالنص: «لا أريد الطلب من زر إضافة في بطاقة المنتج»).
- * كما أمازون ونون: لمسة البطاقة تفتح صفحة المنتج لاختيار الكمية/
- * الوزن/المواصفة هناك. شارة «في السلة» تخبر المستخدم بما أضافه.
+ * ProductCard.tsx — بطاقة منتج (v3.2 — الجولة 62):
+ * ─────────────────────────────────────────────────────────────────
+ * طلب التاجر بالنص: «أزل النصوص/الأسعار المحفورة داخل صور المنتجات —
+ * اعتمد على تصوير منتج نظيف ومعزول» + «حدود 1px بلون ‎#2A2A2A في
+ * الوضع الداكن» + «تفاعلات لمسية (ripple + اهتزاز خفيف للمفضلة)».
+ *
+ *  • الصورة أصبحت نظيفة تماماً: لا شارات نصية فوقها إطلاقاً — كل
+ *    المعلومات (الوحدة/الخيارات/الخصم/التوفر/في السلة) انتقلت لصف
+ *    رقائق أسفل الصورة فوق السعر، كي لا تتكرر مع بطاقات السعر
+ *    الأصلية ولا تحجب التصوير. الزر الوحيد الباقي فوق الصورة: قلب
+ *    المفضلة (فعل لا نص).
+ *  • بطاقة للتسوّق والاكتشاف فقط — الطلب يبدأ من صفحة المنتج
+ *    (قرار معماري: سلة منفصلة لكل متجر — لا أزرار إضافة عامة).
+ *  • الوضع الداكن: حدود ‎#2A2A2A + ظل خافت؛ الفاتح: ظل ناعم.
+ *  • ripple عند اللمس + اهتزاز خفيف عند تبديل المفضلة.
  */
 import React from 'react';
 import {Image, Pressable, StyleSheet, Text, useWindowDimensions, View} from 'react-native';
 import {useTheme} from '../theme/ThemeProvider';
-import {radius, shadowFor, spacing, type, fonts} from '../theme/tokens';
+import {
+  radius,
+  shadowFor,
+  spacing,
+  type,
+  fonts,
+  cardBorderFor,
+} from '../theme/tokens';
+import {hapticLight} from '../core/haptics';
 import {Icon} from './Icon';
 import {absoluteUrl} from '../api/client';
 import {formatMoney} from '../core/money';
@@ -19,11 +37,25 @@ import {useWishlistStore} from '../stores/wishlistStore';
 import {useToastStore} from '../stores/toastStore';
 import {useRequireAuth} from '../navigation/RootNavigator';
 
-/** بديل مرسوم عند غياب الصورة — سهم أول الاسم داخل إطار ناعم. */
-function PhotoPlaceholder({name, tint, border, inkColor, width}: {name: string; tint: string; border: string; inkColor: string; width: number}) {
+/** بديل مرسوم عند غياب الصورة — حرف أول الاسم داخل إطار ناعم. */
+function PhotoPlaceholder({
+  name,
+  tint,
+  border,
+  inkColor,
+  width,
+  height,
+}: {
+  name: string;
+  tint: string;
+  border: string;
+  inkColor: string;
+  width: number;
+  height: number;
+}) {
   const initial = name.trim().charAt(0) || '؟';
   return (
-    <View style={[styles.photo, {backgroundColor: tint, borderColor: border, width}]}>
+    <View style={[styles.photo, {backgroundColor: tint, borderColor: border, width, height}]}>
       <Text style={{fontSize: 40, fontFamily: fonts.black, color: inkColor, opacity: 0.35}}>
         {initial}
       </Text>
@@ -40,6 +72,7 @@ export function ProductCard({
   storeRef,
   onPress,
   photoWidth: photoWidthProp,
+  photoHeight = 138,
 }: {
   product: CrossProduct | Product;
   storeName?: string;
@@ -47,14 +80,13 @@ export function ProductCard({
   onPress: () => void;
   /** عرض الصورة للأشرطة ذات العرض الثابت (المشابهة/المقترحات). */
   photoWidth?: number;
+  /** v3.2: ارتفاع الصورة — نسخة مضغوطة (110) لشبكات الكاروسيل 2×2. */
+  photoHeight?: number;
 }) {
   const {palette} = useTheme();
-  /* v3.1 (الجولة 61): أبعاد رقمية دقيقة + resizeMethod="resize" —
-   * الشكوى: «يظهر نتيجة البحث ثم يحدث خلل في التطبيق فيغلق مباشرة».
-   * الجذر: عرض الصورة % (غير رقمي) يمنع Fresco من أخذ عيّنة مصغرة
-   * فيفك ترميز صور الـ800px كاملة (‎2.5MB لكل صورة) — شبكة من ٢٤
-   * بطاقة تستهلك 60MB+ ذاكرة فيقتل أندرويد التطبيق (OOM). الأبعاد
-   * الرقمية + resize تُنزل كل صورة إلى حجم البطاقة الفعلي (~95KB). */
+  /* v3.1: أبعاد رقمية دقيقة + resizeMethod="resize" — حجم الصورة
+   * الفعلي للبطاقة (~95KB) بدل فك ترميز الأصل (2.5MB) الذي كان
+   * يقتل التطبيق بالذاكرة (OOM) في شبكات البحث الكبيرة. */
   const {width: screenWidth} = useWindowDimensions();
   const photoWidth =
     photoWidthProp ??
@@ -88,21 +120,26 @@ export function ProductCard({
   return (
     <Pressable
       onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={product.name}
+      android_ripple={{color: palette.ripple, borderless: false, foreground: true}}
       style={({pressed}) => [
         styles.card,
         {
           backgroundColor: palette.surface,
-          borderColor: palette.line,
+          /* v3.2: حدود البطاقات — ‎#2A2A2A في الداكن (طلب التاجر)،
+           * حدود الثيم + ظل ناعم في الفاتح. */
+          borderColor: cardBorderFor(palette.isDark),
           opacity: pressed ? 0.92 : 1,
         },
         shadowFor(palette.isDark),
       ]}>
-      {/* الصورة + الشارات */}
+      {/* الصورة — نظيفة ومعزولة تماماً: زر المفضلة فقط فوقها */}
       <View style={styles.photoWrap}>
         {firstImage != null ? (
           <Image
             source={{uri: firstImage}}
-            style={[styles.photo, {width: photoWidth}]}
+            style={[styles.photo, {width: photoWidth, height: photoHeight}]}
             resizeMode="cover"
             resizeMethod="resize"
             progressiveRenderingEnabled
@@ -114,41 +151,23 @@ export function ProductCard({
             border={palette.brandBorder}
             inkColor={palette.brandDark}
             width={photoWidth}
+            height={photoHeight}
           />
         )}
 
-        {/* شارة الوحدة أعلى الصورة */}
-        <View
-          style={[styles.unitChip, {backgroundColor: palette.overlay}]}>
-          <Icon
-            name={soldByWeight ? 'scale' : 'box'}
-            size={12}
-            color="#FFFFFF"
-          />
-          <Text style={{fontSize: 10, color: '#FFFFFF', fontFamily: fonts.medium}}>
-            {soldByWeight ? 'بالوزن' : (product.unit_label ?? 'قطعة')}
-          </Text>
-        </View>
-
-        {/* شارة خيارات (مقاس/لون) — المنتج يحتاج اختيار مواصفة */}
-        {hasOptions ? (
-          <View style={[styles.optionsChip, {backgroundColor: palette.brand}]}>
-            <Icon name="sliders" size={11} color="#FFFFFF" />
-            <Text style={{fontSize: 9.5, color: '#FFFFFF', fontFamily: fonts.bold}}>
-              خيارات
-            </Text>
-          </View>
-        ) : null}
-
-        {/* قلب المفضلة */}
+        {/* قلب المفضلة — الفعل الوحيد فوق الصورة (بلا نص) */}
         <Pressable
           onPress={() =>
             requireAuth(() => {
+              hapticLight();
               const added = toggleWishlist(product, displayName);
               toast(added ? 'أُضيف إلى المفضلة' : 'أُزيل من المفضلة', 'info');
             })
           }
           hitSlop={10}
+          accessibilityRole="button"
+          accessibilityLabel={wishlisted ? 'إزالة من المفضلة' : 'إضافة إلى المفضلة'}
+          android_ripple={{color: palette.ripple, borderless: true, foreground: true}}
           style={[styles.heartBtn, {backgroundColor: palette.surface}]}>
           <Icon
             name={wishlisted ? 'heartFilled' : 'heart'}
@@ -156,45 +175,6 @@ export function ProductCard({
             color={wishlisted ? palette.danger : palette.muted}
           />
         </Pressable>
-
-        {/* شارات حالة على الصورة */}
-        {discounted ? (
-          <View style={[styles.discountBadge, {backgroundColor: palette.danger}]}>
-            <Icon name="tag" size={10} color="#FFFFFF" />
-            <Text style={styles.stockBadgeText}>
-              خصم {Math.round(product.discount_pct ?? 0)}%
-            </Text>
-          </View>
-        ) : null}
-        {outOfStock ? (
-          <View style={[styles.stockBadge, {backgroundColor: palette.danger}]}>
-            <Text style={styles.stockBadgeText}>نفدت</Text>
-          </View>
-        ) : lowStock ? (
-          <View style={[styles.stockBadge, {backgroundColor: palette.warning}]}>
-            <Text style={styles.stockBadgeText}>بقي القليل</Text>
-          </View>
-        ) : null}
-
-        {/* شارة «في السلة» — معلوماتية، والتعديل من صفحة المنتج */}
-        {inCart ? (
-          <View style={[styles.cartBadge, {backgroundColor: palette.brand}]}>
-            <Icon name="cart" size={10} color="#FFFFFF" />
-            <Text style={{fontSize: 9.5, color: '#FFFFFF', fontFamily: fonts.bold}}>
-              في السلة
-            </Text>
-          </View>
-        ) : null}
-
-        {/* عدّاد الصور */}
-        {imageCount > 1 ? (
-          <View style={[styles.countChip, {backgroundColor: palette.overlay}]}>
-            <Icon name="photo" size={10} color="#FFFFFF" />
-            <Text style={{fontSize: 9.5, color: '#FFFFFF', fontFamily: fonts.medium}}>
-              {imageCount}
-            </Text>
-          </View>
-        ) : null}
       </View>
 
       {/* النصوص */}
@@ -203,9 +183,70 @@ export function ProductCard({
           {product.name}
         </Text>
         {displayName ? (
-          <Text style={[{fontSize: 10.5, color: palette.muted, fontFamily: fonts.medium}]} numberOfLines={1}>
+          <Text
+            style={[{fontSize: 10.5, color: palette.muted, fontFamily: fonts.medium}]}
+            numberOfLines={1}>
             من {displayName}
           </Text>
+        ) : null}
+      </View>
+
+      {/* v3.2: صف الرقائق المعلوماتية — كل ما كان محفوراً فوق الصورة
+       * (وحدة/خيارات/خصم/توفر/في السلة/عدد الصور) صار هنا، فوق
+       * السعر، بلا حجب للتصوير ولا تكرار مع بطاقة السعر. */}
+      <View style={styles.chipsRow}>
+        <View style={[styles.chip, {backgroundColor: palette.surfaceAlt}]}>
+          <Icon
+            name={soldByWeight ? 'scale' : 'box'}
+            size={11}
+            color={palette.inkSoft}
+          />
+          <Text style={[styles.chipText, {color: palette.inkSoft}]}>
+            {soldByWeight ? 'بالوزن' : (product.unit_label ?? 'قطعة')}
+          </Text>
+        </View>
+        {hasOptions ? (
+          <View style={[styles.chip, {backgroundColor: palette.brandSoft}]}>
+            <Icon name="sliders" size={11} color={palette.brandDark} />
+            <Text style={[styles.chipText, {color: palette.brandDark, fontFamily: fonts.bold}]}>
+              خيارات
+            </Text>
+          </View>
+        ) : null}
+        {discounted ? (
+          <View style={[styles.chip, {backgroundColor: palette.dangerSoft}]}>
+            <Icon name="tag" size={11} color={palette.danger} />
+            <Text style={[styles.chipText, {color: palette.danger, fontFamily: fonts.bold}]}>
+              خصم {Math.round(product.discount_pct ?? 0)}%
+            </Text>
+          </View>
+        ) : null}
+        {outOfStock ? (
+          <View style={[styles.chip, {backgroundColor: palette.dangerSoft}]}>
+            <Text style={[styles.chipText, {color: palette.danger, fontFamily: fonts.bold}]}>
+              نفدت
+            </Text>
+          </View>
+        ) : lowStock ? (
+          <View style={[styles.chip, {backgroundColor: palette.warningSoft}]}>
+            <Text style={[styles.chipText, {color: palette.warning, fontFamily: fonts.bold}]}>
+              بقي القليل
+            </Text>
+          </View>
+        ) : null}
+        {inCart ? (
+          <View style={[styles.chip, {backgroundColor: palette.brandSoft}]}>
+            <Icon name="cart" size={11} color={palette.brandDark} />
+            <Text style={[styles.chipText, {color: palette.brandDark, fontFamily: fonts.bold}]}>
+              في السلة
+            </Text>
+          </View>
+        ) : null}
+        {imageCount > 1 ? (
+          <View style={[styles.chip, {backgroundColor: palette.surfaceAlt}]}>
+            <Icon name="photo" size={11} color={palette.inkSoft} />
+            <Text style={[styles.chipText, {color: palette.inkSoft}]}>{imageCount}</Text>
+          </View>
         ) : null}
       </View>
 
@@ -231,19 +272,8 @@ export function ProductCard({
             </Text>
           )}
         </View>
-        {/* v2.8: زر الإضافة حُذف من البطاقة (طلب التاجر) — سهم صغير
-         * يوحى بأن اللمسة تفتح صفحة المنتج للاختيار والطلب. */}
-        <View style={styles.openHint}>
-          {hasOptions ? (
-            <View style={[styles.optionsHintChip, {backgroundColor: palette.brandSoft}]}>
-              <Icon name="sliders" size={11} color={palette.brandDark} />
-              <Text style={{fontSize: 9.5, color: palette.brandDark, fontFamily: fonts.bold}}>
-                خيارات
-              </Text>
-            </View>
-          ) : null}
-          <Icon name="chevronLeft" size={16} color={palette.muted} />
-        </View>
+        {/* سهم «‹» — لمسة تفتح صفحة المنتج لاختيار الكمية والمواصفة */}
+        <Icon name="chevronLeft" size={16} color={palette.muted} />
       </View>
     </Pressable>
   );
@@ -269,17 +299,6 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     overflow: 'hidden',
   },
-  unitChip: {
-    position: 'absolute',
-    top: 7,
-    right: 7,
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    gap: 3,
-    borderRadius: radius.pill,
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-  },
   heartBtn: {
     position: 'absolute',
     top: 7,
@@ -290,79 +309,32 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  stockBadge: {
-    position: 'absolute',
-    bottom: 7,
-    right: 7,
-    borderRadius: radius.pill,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-  },
-  stockBadgeText: {fontSize: 10, color: '#FFFFFF', fontFamily: fonts.bold},
-  discountBadge: {
-    position: 'absolute',
-    bottom: 7,
-    left: 7,
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    gap: 3,
-    borderRadius: radius.pill,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-  },
-  optionsChip: {
-    position: 'absolute',
-    top: 7,
-    left: 44,
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    gap: 3,
-    borderRadius: radius.pill,
-    paddingHorizontal: 6,
-    paddingVertical: 3,
-  },
-  countChip: {
-    position: 'absolute',
-    bottom: 7,
-    left: 7,
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    gap: 3,
-    borderRadius: radius.pill,
-    paddingHorizontal: 6,
-    paddingVertical: 3,
-  },
   texts: {gap: 2, minHeight: 38},
+  /* v3.2: صف الرقائق المعلوماتية أسفل الصورة. */
+  chipsRow: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 4,
+    minHeight: 20,
+  },
+  chip: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 3,
+    borderRadius: radius.pill,
+    paddingHorizontal: 6,
+    paddingVertical: 2.5,
+  },
+  chipText: {
+    fontSize: 9.5,
+    fontFamily: fonts.medium,
+  },
   bottomRow: {
     flexDirection: 'row-reverse',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
   price: {fontSize: 16.5, fontFamily: fonts.bold},
-  /* v2.8: إحالة بصرية صغيرة — لا زر إضافة في البطاقة. */
-  openHint: {
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    gap: 5,
-  },
-  optionsHintChip: {
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    gap: 3,
-    borderRadius: radius.pill,
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-  },
-  cartBadge: {
-    position: 'absolute',
-    top: 7,
-    right: 64,
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    gap: 3,
-    borderRadius: radius.pill,
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-  },
   photoIconWrap: {position: 'absolute', bottom: 8, left: 8},
 });

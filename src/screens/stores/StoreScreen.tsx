@@ -1,19 +1,47 @@
 /**
- * StoreScreen.tsx — صفحة المتجر (v2.0 — إعادة تصميم احترافية):
- * ترويسة بطولية بتدرج الهوية + دائرة المتجر المتداخلة + التقييم
- * بنجومه + شارات النشاط والمنطقة، شريط إجراءات (اتصال/واتساب)،
- * شريط إحصاءات (منتج/مناطق/تقييم)، مناطق التوصيل بأسعارها، بحث
- * داخل المتجر، شبكة المنتجات، وقسم مراجعات المتجر الحقيقية من
- * المشترين (خادم 4.4) — بأسلوب متاجر التجزئة العالمية.
+ * StoreScreen.tsx — صفحة المتجر (v3.2 — الجولة 62):
+ * ─────────────────────────────────────────────────────────────────
+ *  • شريط علوي لاصق ذكي: ينسلّ بحركة ناعمة (Animated أصلية) عند
+ *    تجاوز التروسة البطولية — فيه زر الرجوع «‹» + اسم المتجر +
+ *    أيقونة بحث تركّز حقل البحث فوراً. الزائر أبداً لا يعلق بلا
+ *    زر رجوع مهما نزل في الكتالوج (شكوى الجولة 14: «أبقى عالقاً
+ *    في الصفحة المفتوحة»).
+ *  • رقائق فلترة سريعة أفقية داخل المتجر (طلب التاجر): الكل /
+ *    عروض / تصنيفات المتجر + ترتيب (الأحدث/الأرخص/الأغلى) —
+ *    فلترة محلية فورية فوق الكتالوج المُحمّل بلا أي نداء شبكة.
+ *  • مراجعات المشترين: كاروسيل أفقي مدمج مقضم (Snap) — بطاقة
+ *    الملخص (متوسط + عدد) ثم مقتطفات المراجعات — إثبات اجتماعي
+ *    مرئي فوراً بلا تضخيم عمودي للصفحة (كانت قائمة رأسية متزاحمة).
+ *  • بحث داخل المتجر: محلي فوري فوق النتائج + خادمي مؤجل (400ms)
+ *    بحارس تسلسل + قفز لأعلى القائمة عند كل استعلام جديد.
+ *  • زر الرجوع في التروسة: يسار الشاشة بسهم «‹» (توحيد RTL كامل).
  */
-import React, {useCallback, useEffect, useMemo, useState} from 'react';
-import {FlatList, I18nManager, Linking, Pressable, ScrollView, StyleSheet, Text, View} from 'react-native';
+import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
+import {
+  Animated,
+  FlatList,
+  Linking,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
+import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {useTheme} from '../../theme/ThemeProvider';
-import {radius, shadowFor, spacing, type, fonts} from '../../theme/tokens';
+import {
+  radius,
+  shadowFor,
+  shadowRaised,
+  spacing,
+  type,
+  fonts,
+  cardBorderFor,
+} from '../../theme/tokens';
 import {Icon} from '../../components/Icon';
 import {
-  Button,
   EmptyState,
   EndOfList,
   ErrorState,
@@ -31,11 +59,12 @@ import {PRODUCTS_PAGE_SIZE} from '../../core/config';
 import {formatMoney} from '../../core/money';
 import {relativeTime} from '../../core/time';
 import {hasDiscount, effectiveMinor} from '../../core/discount';
-import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import type {DeliveryRegion, Product, StoreDetail, StoreRatings} from '../../core/types';
 import type {ShopStackParamList} from '../../navigation/RootNavigator';
 
 type Props = NativeStackScreenProps<ShopStackParamList, 'Store'>;
+
+type SortKey = 'newest' | 'priceAsc' | 'priceDesc';
 
 export function StoreScreen({navigation, route}: Props) {
   const {palette} = useTheme();
@@ -51,16 +80,30 @@ export function StoreScreen({navigation, route}: Props) {
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  /* v2.1: خطأ المنتجات لم يعد يُبتلع — كان يظهر «0+» بلا سبب. */
   const [productsError, setProductsError] = useState<string | null>(null);
-  /* v3.0 (الجولة 60): علم استنفاد الكتالوج — الشكوى الحرفية:
-   * «يبقى في أسفل الصفحة لودر التحميل يعمل ويحاول جلب المزيد حتى
-   * دون وجود المزيد». المنطق القديم كان يعيد النداء عند كل وصول
-   * للنهاية ما دام الطول متساوياً (لا جديد لكن لا توقف أيضاً) —
-   * لودر يدور للأبد + طلبات بلا نهاية تحرق محدد المعدل. الآن:
-   * جلبة لا تُضيف جديدًا = قائمة مستنفدة نهائياً → تذييل «وصلت
-   * إلى كل المنتجات» ولا يُرسل طلب واحد بعدها. */
   const [exhausted, setExhausted] = useState(false);
+
+  /* v3.2: الفلترة السريعة المحلية داخل المتجر. */
+  const [offersOnly, setOffersOnly] = useState(false);
+  const [filterCategory, setFilterCategory] = useState<string | null>(null);
+  const [sort, setSort] = useState<SortKey>('newest');
+
+  const listRef = useRef<FlatList<Product>>(null);
+  const searchInputRef = useRef<TextInput>(null);
+
+  /* v3.2: الشريط العلوي اللاصق — حركة أصلية سلسة بلا أي إعادة
+   * رندر لكل إطار: interpolate على إزاحة التمرير نفسها. */
+  const scrollY = useRef(new Animated.Value(0)).current;
+  const stickyTranslateY = scrollY.interpolate({
+    inputRange: [130, 200],
+    outputRange: [-70, 0],
+    extrapolate: 'clamp',
+  });
+  const stickyOpacity = scrollY.interpolate({
+    inputRange: [150, 200],
+    outputRange: [0, 1],
+    extrapolate: 'clamp',
+  });
 
   const load = useCallback(async () => {
     setError(null);
@@ -81,14 +124,12 @@ export function StoreScreen({navigation, route}: Props) {
     } finally {
       setLoading(false);
     }
-    // المنتجات بجلب متدرج (سلم 12→6 عند تعثر الشبكة) — وخطأها
-    // يظهر داخل قسم المنتجات مع زر إعادة محاولة بدل عدّاد 0+ صامت.
+    // المنتجات بجلب متدرج (سلم 12→6 عند تعثر الشبكة)
     try {
       const p = await getStoreProductsAdaptive(storeId, PRODUCTS_PAGE_SIZE);
       setProducts(p);
       setPage(1);
       setProductsError(null);
-      /* الاستنفاد الفوري: كتالوج أقصر من صفحة كاملة = لا «المزيد». */
       setExhausted(p.length < PRODUCTS_PAGE_SIZE);
     } catch (e) {
       setProducts([]);
@@ -102,11 +143,9 @@ export function StoreScreen({navigation, route}: Props) {
     void load();
   }, [load]);
 
-  /* بحث داخل المتجر (q على الخادم — دقيق ومفهرس). v3.0: حارس
-   * تسلسل يمنع الاستجابات القديمة من الكتابة فوق الأحدث عند
-   * الكتابة السريعة، والنتائج الفارغة تعلن الاستنفاد (لا لودر
-   * أبدياً أسفل نتائج البحث القصيرة). */
-  const searchSeq = React.useRef(0);
+  /* بحث داخل المتجر: خادمي مؤجل (400ms) بحارس تسلسل يمنع الردود
+   * المتقادمة + قفز لأعلى القائمة عند كل استعلام فعلي. */
+  const searchSeq = useRef(0);
   useEffect(() => {
     const mySeq = ++searchSeq.current;
     const t = setTimeout(async () => {
@@ -128,16 +167,62 @@ export function StoreScreen({navigation, route}: Props) {
     return () => clearTimeout(t);
   }, [query, storeId]);
 
+  /* v3.2: عند كتابة استعلام جديد — عد لأعلى القائمة كي تُرى النتائج
+   * فوراً (كان المستخدم يكتب من عمق الكتالوج فلا يلاحظ التغيير). */
+  useEffect(() => {
+    if (query.trim().length > 0) {
+      listRef.current?.scrollToOffset({offset: 0, animated: true});
+    }
+  }, [query]);
+
+  /* v3.2: تصنيفات المتجر الحقيقية من كتالوجه المُحمّل — رقائق فلاتر. */
+  const storeCategories = useMemo(() => {
+    const set = new Set<string>();
+    products.forEach(p => {
+      if (p.category != null && p.category.trim().length > 0) {
+        set.add(p.category.trim());
+      }
+    });
+    return Array.from(set).slice(0, 10);
+  }, [products]);
+
+  /* v3.2: القائمة المرئية — فلترة محلية فورية (استعلام/عروض/
+   * تصنيف) + ترتيب، فوق الكتالوج المُحمّل بلا أي نداء شبكة.
+   * أثناء نافذة الـ400ms المؤجلة تُرشّح المنتجات المعروضة محلياً
+   * فيبدو البحث لحظياً. */
+  const visible = useMemo(() => {
+    let list = products;
+    const q = query.trim();
+    if (q.length > 0) {
+      list = list.filter(p => p.name.includes(q));
+    }
+    if (offersOnly) {
+      list = list.filter(p => hasDiscount(p));
+    }
+    if (filterCategory != null) {
+      list = list.filter(p => (p.category ?? '').trim() === filterCategory);
+    }
+    switch (sort) {
+      case 'priceAsc':
+        return [...list].sort((a, b) => effectiveMinor(a) - effectiveMinor(b));
+      case 'priceDesc':
+        return [...list].sort((a, b) => effectiveMinor(b) - effectiveMinor(a));
+      default:
+        return list;
+    }
+  }, [products, query, offersOnly, filterCategory, sort]);
+
+  /* أي فلاتر نشطة توقف الجلب التدريجي (يعمل على الكتالوج الكامل). */
+  const filtersActive = offersOnly || filterCategory != null;
+
   const loadMore = useCallback(async () => {
-    if (loadingMore || loading || query.trim().length > 0) {
+    if (loadingMore || loading || query.trim().length > 0 || filtersActive) {
       return;
     }
-    /* v3.0: القائمة مستنفدة — لا محاولة إطلاقاً (قتل اللودر الأبدي). */
     if (exhausted) {
       return;
     }
     if (productsError != null) {
-      // الجلب الأول تعثر — زر «المزيد» يعيد المحاولة بدل التكرار الأعمى
       try {
         const p = await getStoreProductsAdaptive(storeId, PRODUCTS_PAGE_SIZE);
         setProducts(p);
@@ -154,8 +239,6 @@ export function StoreScreen({navigation, route}: Props) {
     }
     setLoadingMore(true);
     try {
-      // جلب شامل بجلب متدرج — يعيد القائمة الموسعة كاملة (idempotent)
-      // بدل حساب الإزاحات مع أحجام per متغيرة.
       const next = await getStoreProductsAdaptive(
         storeId,
         products.length + PRODUCTS_PAGE_SIZE,
@@ -163,18 +246,16 @@ export function StoreScreen({navigation, route}: Props) {
       if (next.length > products.length) {
         setProducts(next);
         setPage(p => p + 1);
-        /* صفحة غير مكتملة = نهاية الكتالوج — توقف نهائي. */
         setExhausted(next.length < products.length + PRODUCTS_PAGE_SIZE);
       } else {
-        /* لا جديد إطلاقاً — استنفاد نهائي، لن نعيد المحاولة. */
         setExhausted(true);
       }
     } catch {
-      /* فشل مؤقت — إسكات اللودر فقط، المحاولة القادمة عند تمرير جديد */
+      /* فشل مؤقت — إسكات اللودر فقط */
     } finally {
       setLoadingMore(false);
     }
-  }, [loadingMore, loading, query, products, productsError, storeId, exhausted]);
+  }, [loadingMore, loading, query, products, productsError, storeId, exhausted, filtersActive]);
 
   const store = detail?.store;
   const regions: DeliveryRegion[] = detail?.deliveryRegions ?? [];
@@ -189,16 +270,65 @@ export function StoreScreen({navigation, route}: Props) {
     [storeId, store, storeName],
   );
 
-  /* v3.1: خلفية التروسة — برتقالي العلامة في الفاتح، وأعمق في الداكن. */
   const heroBg = palette.isDark ? '#C2410C' : '#EA580C';
   const reviewsWithText = (ratings?.reviews ?? []).filter(
     r => r.comment != null && r.comment.length > 0,
   );
+  const hasRating = ratings != null && ratings.ratingCount > 0;
 
   return (
     <Screen>
+      {/* ═══ الشريط العلوي اللاصق (v3.2) ═══
+       * ينسلّ بحركة أصلية ناعمة عند تجاوز التروسة — رجوع + اسم
+       * المتجر + بحث فوري. طبقة مطلقة فوق المحتوى: صفر قفزات تخطيط. */}
+      <Animated.View
+        style={[
+          stickyStyles.bar,
+          {
+            paddingTop: 6,
+            backgroundColor: palette.surface,
+            borderBottomColor: palette.line,
+            opacity: stickyOpacity,
+            transform: [{translateY: stickyTranslateY}],
+          },
+          shadowRaised(palette.isDark),
+        ]}>
+        <Pressable
+          onPress={() => navigation.goBack()}
+          hitSlop={10}
+          accessibilityRole="button"
+          accessibilityLabel="رجوع"
+          android_ripple={{color: palette.ripple, borderless: true, foreground: true}}
+          style={[stickyStyles.backBtn, {borderColor: palette.line}]}>
+          <Icon name="chevronLeft" size={20} color={palette.ink} strokeWidth={2.4} />
+        </Pressable>
+        <StoreAvatar
+          name={store?.name ?? storeName ?? 'س'}
+          logoUrl={store?.logo_url}
+          size={32}
+        />
+        <Text
+          style={[type.h3, {color: palette.ink, flex: 1}]}
+          numberOfLines={1}>
+          {store?.name ?? storeName ?? 'المتجر'}
+        </Text>
+        <Pressable
+          onPress={() => {
+            listRef.current?.scrollToOffset({offset: 0, animated: true});
+            searchInputRef.current?.focus();
+          }}
+          hitSlop={10}
+          accessibilityRole="button"
+          accessibilityLabel="بحث داخل المتجر"
+          android_ripple={{color: palette.ripple, borderless: true, foreground: true}}
+          style={[stickyStyles.searchBtn, {borderColor: palette.line}]}>
+          <Icon name="search" size={18} color={palette.ink} />
+        </Pressable>
+      </Animated.View>
+
       <FlatList
-        data={products}
+        ref={listRef}
+        data={visible}
         keyExtractor={item => String(item.id)}
         numColumns={2}
         columnWrapperStyle={{gap: spacing.md, width: '100%'}}
@@ -206,31 +336,31 @@ export function StoreScreen({navigation, route}: Props) {
           paddingBottom: Math.max(insets.bottom + 24, 96),
         }}
         showsVerticalScrollIndicator={false}
+        onScroll={Animated.event(
+          [{nativeEvent: {contentOffset: {y: scrollY}}}],
+          {useNativeDriver: true},
+        )}
+        scrollEventThrottle={16}
         onEndReached={loadMore}
         onEndReachedThreshold={0.6}
         ListHeaderComponent={
           <View>
-            {/* ─── الترويسة البطولية — v3.1: مدمجة بلون العلامة ───
-             * كانت الترويسة فاتحة مزدحمة (تقييم في صندوق + شرح + شارات
-             * + شريط إحصاءات مكرر) — طلب التاجر: «صفحة التاجر مقرفة
-             * ومتداخلة ومتزاحمة خصوصاً عند وجود تقييمات». الآن: ترويسة
-             * واحدة ملوّنة، التقييم سطر واحد، والإحصاءات حُذفت (مكررة
-             * في عناوين الأقسام). */}
+            {/* ─── الترويسة البطولية ─── */}
             <View
               style={[
                 heroStyles.wrap,
                 {backgroundColor: heroBg, paddingTop: spacing.xl},
               ]}>
               <View style={heroStyles.ring} />
+              {/* v3.2: زر الرجوع يسار الشاشة بسهم «‹» — توحيد RTL. */}
               <Pressable
                 onPress={() => navigation.goBack()}
                 hitSlop={10}
+                accessibilityRole="button"
+                accessibilityLabel="رجوع"
+                android_ripple={{color: 'rgba(255,255,255,0.25)', borderless: true, foreground: true}}
                 style={heroStyles.backBtn}>
-                <Icon
-                  name={I18nManager.isRTL ? 'back' : 'forward'}
-                  size={20}
-                  color="#FFFFFF"
-                />
+                <Icon name="chevronLeft" size={20} color="#FFFFFF" strokeWidth={2.4} />
               </Pressable>
               <StoreAvatar name={store?.name ?? storeName ?? 'س'} logoUrl={store?.logo_url} size={84} />
               <Text style={[type.h1, {color: '#FFFFFF', fontFamily: fonts.black}]}>
@@ -257,7 +387,7 @@ export function StoreScreen({navigation, route}: Props) {
                   </View>
                 ) : null}
               </View>
-              {/* التقييم — سطر واحد مدمج بدل صندوق كامل */}
+              {/* التقييم — سطر واحد مدمج */}
               {store?.rating != null && store.rating > 0 ? (
                 <View style={heroStyles.ratingRow}>
                   <Stars rating={store.rating} size={14} />
@@ -282,35 +412,128 @@ export function StoreScreen({navigation, route}: Props) {
                 {store?.phone || store?.whatsapp ? (
                   <View style={{flexDirection: 'row-reverse', gap: spacing.md}}>
                     {store?.phone ? (
-                      <Button
-                        label="اتصال"
-                        variant="soft"
-                        small
-                        icon="phone"
-                        style={{flex: 1}}
+                      <Pressable
                         onPress={() => Linking.openURL(`tel:${store.phone}`)}
-                      />
+                        android_ripple={{color: palette.ripple, borderless: false, foreground: true}}
+                        style={({pressed}) => [
+                          actionStyles.btn,
+                          {
+                            backgroundColor: palette.brandSoft,
+                            borderColor: palette.brandBorder,
+                            opacity: pressed ? 0.85 : 1,
+                          },
+                        ]}>
+                        <Icon name="phone" size={16} color={palette.brandDark} />
+                        <Text style={[actionStyles.btnText, {color: palette.brandDark}]}>اتصال</Text>
+                      </Pressable>
                     ) : null}
                     {store?.whatsapp ? (
-                      <Button
-                        label="واتساب"
-                        variant="outline"
-                        small
-                        icon="whatsapp"
-                        style={{flex: 1}}
+                      <Pressable
                         onPress={() =>
                           Linking.openURL(
                             `https://wa.me/${store.whatsapp!.replace(/[^\d]/g, '')}`,
                           )
                         }
-                      />
+                        android_ripple={{color: palette.ripple, borderless: false, foreground: true}}
+                        style={({pressed}) => [
+                          actionStyles.btn,
+                          {
+                            backgroundColor: palette.surface,
+                            borderColor: palette.line,
+                            opacity: pressed ? 0.85 : 1,
+                          },
+                        ]}>
+                        <Icon name="whatsapp" size={16} color={palette.ink} />
+                        <Text style={[actionStyles.btnText, {color: palette.ink}]}>واتساب</Text>
+                      </Pressable>
                     ) : null}
                   </View>
                 ) : null}
 
-                {/* v3.1: شريط الإحصاءات حُذف — كان تكراراً بصرياً (عدد
-                 * المنتجات في عنوان القسم، التقييم في الترويسة، عدد
-                 * المناطق في قسمها) يزحم أعلى الصفحة بلا معلومة جديدة. */}
+                {/* ─── آراء المشترين — كاروسيل أفقي مدمج (v3.2) ───
+                 * طلب التاجر: «ملخص التقييم + أهم مراجعتين في كاروسيل
+                 * أفقي مقضم — إثبات اجتماعي مرئي فوراً بلا تضخيم رأسي».
+                 * البطاقة الأولى: الملخص (الرقم الكبير + النجوم + العدد)،
+                 * وبعدها مقتطفات المراجعات بعرض ثابت وsnap ناعم. */}
+                {hasRating ? (
+                  <View style={{gap: spacing.md}}>
+                    <SectionTitle
+                      title="آراء المشترين"
+                      subtitle={`${ratings!.ratingCount} تقييماً موثقاً من مشترين حقيقيين`}
+                    />
+                    <FlatList
+                      horizontal
+                      data={reviewsWithText.slice(0, 10)}
+                      keyExtractor={(_, i) => `rev${i}`}
+                      showsHorizontalScrollIndicator={false}
+                      snapToInterval={264 + spacing.md}
+                      decelerationRate="fast"
+                      contentContainerStyle={{gap: spacing.md, paddingVertical: 4}}
+                      ListHeaderComponent={
+                        <View
+                          style={[
+                            reviewStyles.summary,
+                            {
+                              backgroundColor: palette.surface,
+                              borderColor: cardBorderFor(palette.isDark),
+                            },
+                            shadowFor(palette.isDark),
+                          ]}>
+                          <Text style={[reviewStyles.summaryNum, {color: palette.ink}]}>
+                            {ratings!.rating != null
+                              ? ratings!.rating % 1 === 0
+                                ? ratings!.rating.toFixed(0)
+                                : ratings!.rating.toFixed(1)
+                              : '—'}
+                          </Text>
+                          <Stars rating={ratings!.rating} size={13} />
+                          <Text style={reviewStyles.summaryCount}>
+                            من {ratings!.ratingCount} تقييماً
+                          </Text>
+                          <View style={[reviewStyles.verifiedChip, {backgroundColor: palette.successSoft}]}>
+                            <Icon name="checkCircle" size={10} color={palette.success} />
+                            <Text style={{fontSize: 9, color: palette.success, fontFamily: fonts.bold}}>
+                              مشتريات موثقة
+                            </Text>
+                          </View>
+                        </View>
+                      }
+                      renderItem={({item: r}) => (
+                        <View
+                          style={[
+                            reviewStyles.card,
+                            {
+                              backgroundColor: palette.surface,
+                              borderColor: cardBorderFor(palette.isDark),
+                            },
+                          ]}>
+                          <View style={{flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.sm}}>
+                            <Text
+                              style={{fontSize: 12.5, color: palette.ink, fontFamily: fonts.bold, flex: 1}}
+                              numberOfLines={1}>
+                              {r.userName}
+                            </Text>
+                            <View style={[reviewStyles.verifiedChip, {backgroundColor: palette.successSoft}]}>
+                              <Icon name="checkCircle" size={10} color={palette.success} />
+                              <Text style={{fontSize: 9, color: palette.success, fontFamily: fonts.bold}}>
+                                شراء موثّق
+                              </Text>
+                            </View>
+                          </View>
+                          <View style={{flexDirection: 'row-reverse', alignItems: 'center', gap: 4}}>
+                            <Stars rating={r.stars} size={11} compact />
+                            <Text style={{fontSize: 10.5, color: palette.muted}}>
+                              · {relativeTime(r.createdAt)}
+                            </Text>
+                          </View>
+                          <Text style={[type.small, {color: palette.inkSoft, lineHeight: 19}]} numberOfLines={4}>
+                            {r.comment}
+                          </Text>
+                        </View>
+                      )}
+                    />
+                  </View>
+                ) : null}
 
                 {/* ─── مناطق التوصيل — سطر أفقي واحد مدمج ─── */}
                 {regions.length > 0 ? (
@@ -319,13 +542,18 @@ export function StoreScreen({navigation, route}: Props) {
                     <ScrollView
                       horizontal
                       showsHorizontalScrollIndicator={false}
+                      snapToInterval={150}
+                      decelerationRate="fast"
                       contentContainerStyle={{gap: spacing.sm, paddingVertical: 2}}>
                       {regions.map(r => (
                         <View
                           key={r.name}
                           style={[
                             regionStyles.chip,
-                            {backgroundColor: palette.surfaceAlt, borderColor: palette.line},
+                            {
+                              backgroundColor: palette.surfaceAlt,
+                              borderColor: palette.line,
+                            },
                           ]}>
                           <Icon name="truck" size={13} color={palette.brandDark} />
                           <Text style={[{fontSize: 12, color: palette.ink, fontFamily: fonts.medium}]}>
@@ -340,18 +568,21 @@ export function StoreScreen({navigation, route}: Props) {
                   </View>
                 ) : null}
 
-                {/* ─── عروض المتجر (v2.1 — تخفيضات التاجر من POS) ─── */}
+                {/* ─── عروض المتجر (تخفيضات التاجر من POS) ─── */}
                 {offers.length > 0 ? (
                   <View style={{gap: spacing.sm}}>
                     <SectionTitle title={`عروض المتجر (${offers.length})`} />
                     <ScrollView
                       horizontal
                       showsHorizontalScrollIndicator={false}
+                      snapToInterval={132 + spacing.md}
+                      decelerationRate="fast"
                       contentContainerStyle={{gap: spacing.md, paddingBottom: 2}}>
                       {offers.map(p => (
                         <Pressable
                           key={`offer-${p.id}`}
                           onPress={() => navigation.navigate('Product', {product: p, storeRef})}
+                          android_ripple={{color: palette.ripple, borderless: false, foreground: true}}
                           style={({pressed}) => [
                             offerStyles.card,
                             {
@@ -388,13 +619,85 @@ export function StoreScreen({navigation, route}: Props) {
                   </View>
                 ) : null}
 
-                {/* ─── بحث داخل المتجر ─── */}
-                <SearchBar
-                  value={query}
-                  onChangeText={setQuery}
-                  placeholder={`ابحث داخل ${store?.name ?? 'المتجر'}…`}
+                {/* ─── بحث داخل المتجر + رقائق الفلترة السريعة ─── */}
+                <View style={{gap: spacing.md}}>
+                  <SearchBar
+                    value={query}
+                    onChangeText={setQuery}
+                    inputRef={searchInputRef}
+                    placeholder={`ابحث داخل ${store?.name ?? 'المتجر'}…`}
+                  />
+
+                  {/* v3.2: رقائق فلترة أفقية سريعة (طلب التاجر):
+                   * الكل / عروض / تصنيفات المتجر + ترتيب بالسعر —
+                   * كلها محلية فورية فوق الكتالوج المُحمّل. */}
+                  {storeCategories.length + (offers.length > 0 ? 1 : 0) > 0 ? (
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={{gap: spacing.sm, paddingVertical: 2}}>
+                      <FilterChip
+                        label="الكل"
+                        active={!offersOnly && filterCategory == null}
+                        onPress={() => {
+                          setOffersOnly(false);
+                          setFilterCategory(null);
+                        }}
+                      />
+                      {offers.length > 0 ? (
+                        <FilterChip
+                          label="عروض"
+                          icon="tag"
+                          active={offersOnly}
+                          onPress={() => {
+                            setOffersOnly(v => !v);
+                            setFilterCategory(null);
+                          }}
+                        />
+                      ) : null}
+                      {storeCategories.map(c => (
+                        <FilterChip
+                          key={c}
+                          label={c}
+                          active={filterCategory === c}
+                          onPress={() => {
+                            setFilterCategory(filterCategory === c ? null : c);
+                            setOffersOnly(false);
+                          }}
+                        />
+                      ))}
+                      {/* فاصل بصري قبل الترتيب */}
+                      <View style={[filterStyles.divider, {backgroundColor: palette.lineStrong}]} />
+                      <FilterChip
+                        label="الأحدث"
+                        icon="clock"
+                        active={sort === 'newest'}
+                        onPress={() => setSort('newest')}
+                      />
+                      <FilterChip
+                        label="الأرخص"
+                        icon="sort"
+                        active={sort === 'priceAsc'}
+                        onPress={() => setSort(sort === 'priceAsc' ? 'newest' : 'priceAsc')}
+                      />
+                      <FilterChip
+                        label="الأغلى"
+                        icon="sort"
+                        active={sort === 'priceDesc'}
+                        onPress={() => setSort(sort === 'priceDesc' ? 'newest' : 'priceDesc')}
+                      />
+                    </ScrollView>
+                  ) : null}
+                </View>
+
+                <SectionTitle
+                  title={`المنتجات (${visible.length})`}
+                  subtitle={
+                    filtersActive || query.trim().length > 0
+                      ? `من ${products.length} منتجاً في المتجر`
+                      : undefined
+                  }
                 />
-                <SectionTitle title={`المنتجات (${products.length})`} />
 
                 {productsError != null && query.trim().length === 0 ? (
                   <ErrorState
@@ -442,57 +745,12 @@ export function StoreScreen({navigation, route}: Props) {
               <View style={{paddingVertical: spacing.lg}}>
                 <Loader label="نجلب المزيد…" />
               </View>
-            ) : /* v3.0: تذييل نهاية القائمة — إشعار واضح أن الكتالوج
-             * انتهى (لا لودر يدور بلا نهاية). */
-            !loading && !productsError && products.length >= PRODUCTS_PAGE_SIZE && exhausted ? (
+            ) : !loading && !productsError && !filtersActive && query.trim().length === 0 && products.length >= PRODUCTS_PAGE_SIZE && exhausted ? (
               <EndOfList label={`وصلت إلى كل منتجات ${store?.name ?? 'المتجر'}`} />
             ) : null}
-
-            {/* ─── مراجعات المتجر — v3.1: انتقلت إلى أسفل المنتجات ───
-             * كانت تُحقن بين عنوان «المنتجات» وشبكة المنتجات فتبدو
-             * الصفحة «متداخلة ومتزاحمة خصوصاً عند وجود تقييمات».
-             * الآن: المنتجات أولاً كأي متجر عالمي، والآراء أسفلها
-             * ببطاقات مدمجة (سطر تعريف + سطر تعليق) بلا شرح مطوّل. */}
-            {ratings != null && ratings.ratingCount > 0 && products.length > 0 ? (
-              <View style={{padding: spacing.lg, gap: spacing.md, paddingTop: spacing.xl}}>
-                <SectionTitle title={`آراء المشترين (${ratings.ratingCount})`} />
-                <View
-                  style={[
-                    reviewStyles.summary,
-                    {backgroundColor: palette.surface, borderColor: palette.line},
-                  ]}>
-                  <Stars rating={ratings.rating} count={ratings.ratingCount} size={15} />
-                </View>
-                {reviewsWithText.slice(0, 5).map((r, i) => (
-                  <View
-                    key={i}
-                    style={[
-                      reviewStyles.card,
-                      {backgroundColor: palette.surface, borderColor: palette.line},
-                    ]}>
-                    <View style={{flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.sm}}>
-                      <Text style={{fontSize: 12.5, color: palette.ink, fontFamily: fonts.bold, flex: 1}} numberOfLines={1}>
-                        {r.userName}
-                      </Text>
-                      <View style={[reviewStyles.verifiedChip, {backgroundColor: palette.successSoft}]}>
-                        <Icon name="checkCircle" size={10} color={palette.success} />
-                        <Text style={{fontSize: 9.5, color: palette.success, fontFamily: fonts.bold}}>
-                          شراء موثّق
-                        </Text>
-                      </View>
-                    </View>
-                    <View style={{flexDirection: 'row-reverse', alignItems: 'center', gap: 4}}>
-                      <Stars rating={r.stars} size={11} compact />
-                      <Text style={{fontSize: 10.5, color: palette.muted}}>
-                        · {relativeTime(r.createdAt)}
-                      </Text>
-                    </View>
-                    <Text style={[type.small, {color: palette.inkSoft, lineHeight: 19}]}>
-                      {r.comment}
-                    </Text>
-                  </View>
-                ))}
-              </View>
+            {/* v3.2: تذييل واضح حين تُرشّح القائمة — لا لودر بلا نهاية */}
+            {!loading && !loadingMore && (filtersActive || query.trim().length > 0) && visible.length > 0 ? (
+              <EndOfList label="كل نتائج هذه الفلترة" />
             ) : null}
           </View>
         }
@@ -509,6 +767,87 @@ export function StoreScreen({navigation, route}: Props) {
   );
 }
 
+/* v3.2: رقاقة فلترة سريعة — نفس لغة الرقائق مع لمسة ripple. */
+function FilterChip({
+  label,
+  active,
+  onPress,
+  icon,
+}: {
+  label: string;
+  active: boolean;
+  onPress: () => void;
+  icon?: 'tag' | 'clock' | 'sort';
+}) {
+  const {palette} = useTheme();
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{selected: active}}
+      android_ripple={{color: palette.ripple, borderless: false, foreground: true}}
+      style={[
+        filterStyles.chip,
+        {
+          backgroundColor: active ? palette.brand : palette.surface,
+          borderColor: active ? palette.brand : palette.line,
+        },
+      ]}>
+      {icon ? (
+        <Icon
+          name={icon}
+          size={12}
+          color={active ? palette.onBrand : palette.brandDark}
+        />
+      ) : null}
+      <Text
+        style={[
+          {fontSize: 11.5, fontFamily: active ? fonts.bold : fonts.medium},
+          {color: active ? palette.onBrand : palette.inkSoft},
+        ]}>
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
+const stickyStyles = StyleSheet.create({
+  /* v3.2: الشريط اللاصق — طبقة مطلقة أعلى الشاشة تنسلل بحركة أصلية. */
+  bar: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 20,
+    elevation: 20,
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+  },
+  backBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.03)',
+  },
+  searchBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.03)',
+  },
+});
+
 const heroStyles = StyleSheet.create({
   wrap: {
     alignItems: 'center',
@@ -516,10 +855,7 @@ const heroStyles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.xl,
     paddingBottom: spacing.xxl,
-    borderBottomRightRadius: radius.xl,
-    borderBottomLeftRadius: radius.xl,
   },
-  /* v3.1: حلقة زخرفية بيضاء شفافة فوق لون العلامة. */
   ring: {
     position: 'absolute',
     top: -40,
@@ -530,10 +866,11 @@ const heroStyles = StyleSheet.create({
     borderWidth: 26,
     borderColor: 'rgba(255,255,255,0.18)',
   },
+  /* v3.2: زر الرجوع يسار الشاشة (اتجاه سهم «‹»). */
   backBtn: {
     position: 'absolute',
     top: spacing.lg,
-    right: spacing.lg,
+    left: spacing.lg,
     width: 40,
     height: 40,
     borderRadius: 999,
@@ -573,6 +910,25 @@ const heroStyles = StyleSheet.create({
   },
 });
 
+/* v3.2: أزرار الاتصال/واتساب — 38px مدمجة بدل أزرار 44 الكبيرة
+ * التي كانت تزاحم أعلى الصفحة. */
+const actionStyles = StyleSheet.create({
+  btn: {
+    flex: 1,
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    height: 38,
+    borderRadius: radius.md,
+    borderWidth: 1,
+  },
+  btnText: {
+    fontSize: 13,
+    fontFamily: fonts.bold,
+  },
+});
+
 const regionStyles = StyleSheet.create({
   chip: {
     flexDirection: 'row-reverse',
@@ -585,7 +941,6 @@ const regionStyles = StyleSheet.create({
   },
 });
 
-/* v2.1: بطاقة عرض داخل شريط «عروض المتجر» الأفقي */
 const offerStyles = StyleSheet.create({
   card: {
     width: 132,
@@ -605,15 +960,29 @@ const offerStyles = StyleSheet.create({
   },
 });
 
+/* v3.2: كاروسيل المراجعات المدمج. */
 const reviewStyles = StyleSheet.create({
   summary: {
+    width: 168,
     alignItems: 'center',
-    gap: spacing.sm,
+    justifyContent: 'center',
+    gap: spacing.xs,
     borderRadius: radius.lg,
     borderWidth: 1,
-    padding: spacing.lg,
+    padding: spacing.md,
+  },
+  summaryNum: {
+    fontSize: 34,
+    lineHeight: 40,
+    fontFamily: fonts.black,
+  },
+  summaryCount: {
+    fontSize: 11,
+    color: '#78716C',
+    fontFamily: fonts.medium,
   },
   card: {
+    width: 264,
     gap: spacing.sm,
     borderRadius: radius.lg,
     borderWidth: 1,
@@ -626,5 +995,22 @@ const reviewStyles = StyleSheet.create({
     borderRadius: radius.pill,
     paddingHorizontal: 7,
     paddingVertical: 3,
+  },
+});
+
+const filterStyles = StyleSheet.create({
+  chip: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 5,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  divider: {
+    width: 1,
+    height: 18,
+    alignSelf: 'center',
   },
 });

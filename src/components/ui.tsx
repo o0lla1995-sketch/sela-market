@@ -6,7 +6,6 @@
 import React, {useMemo, useState} from 'react';
 import {
   ActivityIndicator,
-  I18nManager,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -18,7 +17,15 @@ import {
 } from 'react-native';
 import {SafeAreaView, useSafeAreaInsets} from 'react-native-safe-area-context';
 import {useTheme} from '../theme/ThemeProvider';
-import {radius, shadowFor, spacing, type, fonts, type Palette} from '../theme/tokens';
+import {
+  radius,
+  shadowFor,
+  spacing,
+  type,
+  fonts,
+  type Palette,
+} from '../theme/tokens';
+import {hapticLight, hapticSuccess} from '../core/haptics';
 import {Icon, type IconName} from './Icon';
 import {useToastStore} from '../stores/toastStore';
 
@@ -100,12 +107,14 @@ export function AppHeader({
         <Pressable
           onPress={onBack}
           hitSlop={10}
+          accessibilityRole="button"
+          accessibilityLabel="رجوع"
+          android_ripple={{color: palette.ripple, borderless: true, foreground: true}}
           style={[headerStyles.backBtn, {backgroundColor: palette.surface, borderColor: palette.line}]}>
-          <Icon
-            name={I18nManager.isRTL ? 'back' : 'forward'}
-            size={20}
-            color={palette.ink}
-          />
+          {/* v3.2 (الجولة 62): سهم الرجوع يشير يساراً «‹» دائماً —
+           * طلب التاجر بالنص: «back chevron must point to the left
+           * in RTL headers». كان يشير يميناً فيظهر كأنه «تقدّم». */}
+          <Icon name="chevronLeft" size={20} color={palette.ink} strokeWidth={2.4} />
         </Pressable>
       ) : null}
       <View style={headerStyles.titles}>
@@ -159,6 +168,7 @@ export function Button({
   loading = false,
   small = false,
   style,
+  haptic = 'none',
 }: {
   label: string;
   onPress?: () => void;
@@ -168,6 +178,9 @@ export function Button({
   loading?: boolean;
   small?: boolean;
   style?: ViewStyle;
+  /** v3.2 (الجولة 62): اهتزاز لمسي عند الضغط — للأفعال الحرجة
+   * فقط (إضافة للسلة/إتمام الطلب) كما تطبيقات التجزئة العالمية. */
+  haptic?: 'none' | 'light' | 'success';
 }) {
   const {palette} = useTheme();
 
@@ -196,8 +209,22 @@ export function Button({
 
   return (
     <Pressable
-      onPress={onPress}
+      onPress={() => {
+        if (disabled || loading) {
+          return;
+        }
+        if (haptic === 'success') {
+          hapticSuccess();
+        } else if (haptic === 'light') {
+          hapticLight();
+        }
+        onPress?.();
+      }}
       disabled={disabled || loading}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{disabled: disabled || loading, busy: loading}}
+      android_ripple={{color: palette.ripple, borderless: false, foreground: true}}
       style={({pressed: p}) => [
         btnStyles.base,
         {
@@ -265,7 +292,11 @@ export function Card({
   ];
   if (onPress != null) {
     return (
-      <Pressable onPress={onPress} style={({pressed}) => [base, pressed ? {opacity: 0.85} : null]}>
+      <Pressable
+        onPress={onPress}
+        accessibilityRole="button"
+        android_ripple={{color: palette.ripple, borderless: false, foreground: true}}
+        style={({pressed}) => [base, pressed ? {opacity: 0.9} : null]}>
         {children}
       </Pressable>
     );
@@ -291,6 +322,14 @@ export function Chip({
     <Pressable
       onPress={onPress}
       disabled={onPress == null}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{selected: active}}
+      android_ripple={
+        onPress != null
+          ? {color: palette.ripple, borderless: false, foreground: true}
+          : undefined
+      }
       style={[
         chipStyles.base,
         {
@@ -461,12 +500,15 @@ export function SearchBar({
   placeholder = 'ابحث عن منتج أو متجر…',
   onSubmit,
   autoFocus = false,
+  inputRef,
 }: {
   value: string;
   onChangeText: (t: string) => void;
   placeholder?: string;
   onSubmit?: () => void;
   autoFocus?: boolean;
+  /** v3.2: مرجع الحقل — تركيز البحث من الشريط اللاصق في صفحة المتجر. */
+  inputRef?: React.RefObject<TextInput>;
 }) {
   const {palette} = useTheme();
   return (
@@ -477,6 +519,7 @@ export function SearchBar({
       ]}>
       <Icon name="search" size={19} color={palette.muted} />
       <TextInput
+        ref={inputRef}
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}
@@ -484,6 +527,7 @@ export function SearchBar({
         onSubmitEditing={onSubmit}
         autoFocus={autoFocus}
         returnKeyType="search"
+        accessibilityLabel="حقل البحث"
         style={[type.body, searchStyles.input, {color: palette.ink}]}
       />
       {value.length > 0 ? (
@@ -678,6 +722,9 @@ export function QtyStepper({
         onPress={atMax ? undefined : onIncrease}
         hitSlop={8}
         disabled={atMax}
+        accessibilityRole="button"
+        accessibilityLabel="زيادة الكمية"
+        android_ripple={{color: palette.ripple, borderless: true, foreground: true}}
         style={stepperStyles.btn}>
         <Icon
           name="plus"
@@ -696,7 +743,13 @@ export function QtyStepper({
           </Text>
         ) : null}
       </View>
-      <Pressable onPress={onDecrease} hitSlop={8} style={stepperStyles.btn}>
+      <Pressable
+        onPress={onDecrease}
+        hitSlop={8}
+        accessibilityRole="button"
+        accessibilityLabel="إنقاص الكمية"
+        android_ripple={{color: palette.ripple, borderless: true, foreground: true}}
+        style={stepperStyles.btn}>
         <Icon name="minus" size={compact ? 15 : 17} color={palette.brandDark} strokeWidth={2.4} />
       </Pressable>
     </View>
@@ -983,6 +1036,15 @@ function strengthColor(level: 0 | 1 | 2 | 3, palette: Palette): string {
 
 /* ═══════════════ SectionTitle ═══════════════ */
 
+/* v3.2 (الجولة 62): إعادة بناء كاملة لرأس القسم — طلب التاجر
+ * بالنص: «عرض الكل كان يقع على نفس سطر العنوان ويزاحمه ويكسر
+ * مسافات RTL». القواعد الجديدة:
+ *  • صف Flexbox صارم: justify-content: space-between +
+ *    align-items: center — العنوان يقود من اليمين (RTL) ويأخذ
+ *    الأولوية بمرونة flexShrink + numberOfLines، وزر «عرض الكل»
+ *    يتذيل يساراً ولا يتداخل أبداً حتى على أصغر الشاشات.
+ *  • «عرض الكل» يُرقّى لرابط ثانوي حقيقي: خط أصغر بلون العلامة
+ *    داخل كبسولة ناعمة + سهم «‹» في اتجاه الاستمرار RTL. */
 export function SectionTitle({
   title,
   subtitle,
@@ -998,20 +1060,41 @@ export function SectionTitle({
   const {palette} = useTheme();
   return (
     <View style={sectionStyles.row}>
-      {/* v3.1: شريط لوني صغير قبل العنوان — بصمة بصرية موحدة لكل
-       * أقسام التطبيق (نمط متاجر التجزئة العالمية). */}
-      <View style={[sectionStyles.accentBar, {backgroundColor: palette.brand}]} />
-      <View style={{gap: 1, flex: 1, alignItems: 'flex-start'}}>
-        <Text style={[type.h2, {color: palette.ink}]}>{title}</Text>
+      {/* كتلة العنوان — تقود يميناً (RTL) وتنكمش بأمان عند الضيق */}
+      <View style={sectionStyles.titleBlock}>
+        <View style={sectionStyles.titleLine}>
+          <View style={[sectionStyles.accentBar, {backgroundColor: palette.brand}]} />
+          <Text style={[type.h2, {color: palette.ink}]} numberOfLines={1}>
+            {title}
+          </Text>
+        </View>
         {subtitle ? (
-          <Text style={{fontSize: 10.5, color: palette.muted}} numberOfLines={1}>
+          <Text style={[sectionStyles.subtitle, {color: palette.muted}]} numberOfLines={1}>
             {subtitle}
           </Text>
         ) : null}
       </View>
       {actionLabel && onAction ? (
-        <Pressable onPress={onAction} hitSlop={8}>
-          <Text style={[type.smallMedium, {color: palette.brandDark}]}>{actionLabel}</Text>
+        <Pressable
+          onPress={onAction}
+          hitSlop={10}
+          accessibilityRole="button"
+          accessibilityLabel={actionLabel}
+          android_ripple={{color: palette.ripple, borderless: true, foreground: true}}
+          style={({pressed}) => [
+            sectionStyles.action,
+            {backgroundColor: palette.brandSoft, opacity: pressed ? 0.7 : 1},
+          ]}>
+          <Text
+            style={[
+              type.smallMedium,
+              {color: palette.brandDark, fontFamily: fonts.bold},
+            ]}
+            numberOfLines={1}>
+            {actionLabel}
+          </Text>
+          {/* سهم يسار «‹» — اتجاه الاستمرار في RTL */}
+          <Icon name="chevronLeft" size={14} color={palette.brandDark} strokeWidth={2.4} />
         </Pressable>
       ) : null}
     </View>
@@ -1023,13 +1106,39 @@ const sectionStyles = StyleSheet.create({
     flexDirection: 'row-reverse',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: spacing.md,
+    minHeight: 34,
     marginBottom: spacing.md,
+  },
+  titleBlock: {
+    flex: 1,
+    alignItems: 'flex-start',
+    gap: 2,
+  },
+  titleLine: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: spacing.sm,
   },
   accentBar: {
     width: 4,
-    height: 20,
+    height: 18,
     borderRadius: 999,
-    marginLeft: 0,
+  },
+  subtitle: {
+    fontSize: 10.5,
+    fontFamily: fonts.regular,
+    marginRight: spacing.sm + spacing.sm,
+  },
+  /* زر «عرض الكل» — كبسولة رابط ثانوي أنيق بلا تزاحم. */
+  action: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 3,
+    borderRadius: radius.pill,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 6,
+    flexShrink: 0,
   },
 });
 

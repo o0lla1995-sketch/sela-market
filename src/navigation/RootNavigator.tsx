@@ -61,7 +61,7 @@ export type ShopStackParamList = {
   Stores: undefined;
   Store: {storeId: number; storeName?: string};
   Product: {product: Product; storeRef: StoreRef; storeName?: string};
-  Search: {initialQuery?: string} | undefined;
+  Search: {initialQuery?: string; browse?: boolean} | undefined;
   Category: {category: string};
   Notifications: undefined;
   Wishlist: undefined;
@@ -308,16 +308,18 @@ function StoresTab() {
 
 function MainTabs() {
   const {palette} = useTheme();
+  /* v3.2 (الجولة 62): تباين أيقونات الشريط السفلي — طلب التاجر:
+   * «الأيقونات غير النشطة باهتة أكثر من اللازم». غير النشط يرتقي
+   * من muted الباهت إلى inkSoft الواضح (‎#44403C فاتح / ‎#D6D3D1
+   * داكن)، والنشط بلون العلامة العميق مع الكبسولة الناعمة. */
   return (
     <Tabs.Navigator
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: palette.brandDark,
-        tabBarInactiveTintColor: palette.muted,
+        tabBarActiveTintColor: palette.brandDeep,
+        tabBarInactiveTintColor: palette.inkSoft,
         // ارتفاع الشريط تلقائي: 49 للمحتوى + insets.bottom للنظام
-        // (edge-to-edge على Android 15). الارتفاع الثابت 62 كان يبتلع
-        // مساحة الأيقونات والنصوص على أجهزة أزرار التنقل الثلاثة
-        // فتختفي التسميات أسفل الشريط — بلا ارتفاع مخصص لا يحدث أبداً.
+        // (edge-to-edge على Android 15).
         tabBarStyle: {
           backgroundColor: palette.surface,
           borderTopColor: palette.line,
@@ -325,9 +327,14 @@ function MainTabs() {
         },
         // لوحة المفاتيح تغطي الشريط في نماذج الإدخال — تجربة أوسع.
         tabBarHideOnKeyboard: true,
+        /* v3.2: ارتفاع ثابت للتسمية يمنع أي انزياح تخطيطي عند
+         * التبديل + خط متوسط واضح بحجم مقروء. */
         tabBarLabelStyle: {
           fontFamily: fonts.medium,
           fontSize: 11,
+          lineHeight: 14,
+          height: 14,
+          marginTop: 1,
         },
         tabBarLabelPosition: 'below-icon',
       }}>
@@ -336,6 +343,7 @@ function MainTabs() {
         component={ShopTab}
         options={{
           title: 'الرئيسية',
+          tabBarAccessibilityLabel: 'الرئيسية',
           tabBarIcon: ({color, focused}) => (
             <TabIconWrap focused={focused}>
               <Icon name="home" size={23} color={color} />
@@ -348,6 +356,7 @@ function MainTabs() {
         component={StoresTab}
         options={{
           title: 'المتاجر',
+          tabBarAccessibilityLabel: 'دليل المتاجر',
           tabBarIcon: ({color, focused}) => (
             <TabIconWrap focused={focused}>
               <Icon name="store" size={23} color={color} />
@@ -360,6 +369,7 @@ function MainTabs() {
         component={CartStackScreens}
         options={{
           title: 'السلة',
+          tabBarAccessibilityLabel: 'سلة المشتريات',
           tabBarIcon: CartTabIcon,
         }}
       />
@@ -368,6 +378,7 @@ function MainTabs() {
         component={OrdersStackScreens}
         options={{
           title: 'طلباتي',
+          tabBarAccessibilityLabel: 'طلباتي',
           tabBarIcon: OrdersTabIcon,
         }}
       />
@@ -376,6 +387,7 @@ function MainTabs() {
         component={AccountStackScreens}
         options={{
           title: 'حسابي',
+          tabBarAccessibilityLabel: 'حسابي',
           tabBarIcon: ({color, focused}) => (
             <TabIconWrap focused={focused}>
               <Icon name="user" size={23} color={color} />

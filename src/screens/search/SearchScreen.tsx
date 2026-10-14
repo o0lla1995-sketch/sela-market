@@ -89,6 +89,10 @@ export function SearchScreen({navigation, route}: Props) {
   const stackClearance = useStackBottomClearance();
   const insets = useSafeAreaInsets();
   const initialQuery = route.params?.initialQuery ?? '';
+  /* v3.2 (الجولة 62): وضع التصفح — «عرض الكل» من الرئيسية يفتح
+   * كامل منتجات المول (بلا استعلام) مع نفس الفلاتر والترتيب
+   * والجلب التدريجي. */
+  const browse = route.params?.browse === true;
   const [query, setQuery] = useState(initialQuery);
   const [submittedQuery, setSubmittedQuery] = useState(initialQuery);
   const [results, setResults] = useState<CrossProduct[]>([]);
@@ -131,7 +135,8 @@ export function SearchScreen({navigation, route}: Props) {
 
   const search = useCallback(async (q: string, f: Filters, pageNo = 1, seq?: number) => {
     const clean = q.trim();
-    if (clean.length < 2 && f.category == null) {
+    /* v3.2: في وضع التصفح يُجلب كل شيء بلا استعلام — «عرض الكل». */
+    if (clean.length < 2 && f.category == null && !browse) {
       setResults([]);
       setSubmittedQuery('');
       setHasMore(false);
@@ -168,7 +173,7 @@ export function SearchScreen({navigation, route}: Props) {
     } finally {
       setSearching(false);
     }
-  }, [addRecent]);
+  }, [addRecent, browse]);
 
   /* v3.0 (الجولة 60): debounce أطول (500ms) + حارس تسلسل صارم.
    * الشكوى: «عند البحث تظهر خطأ محاولات كثيرة وكأنه يرسل طلبات
@@ -213,9 +218,17 @@ export function SearchScreen({navigation, route}: Props) {
     }
   }, [loadingMore, searching, hasMore, error, page, submittedQuery, filters.category]);
 
-  /** الفلاتر المحلية + الترتيب على النتائج المجلبة. */
+  /** الفلاتر المحلية + الترتيب على النتائج المجلبة.
+   * v3.2: فلترة محلية فورية بالاستعلام الحالي (قبل رد الخادم
+   * المؤجل 500ms) — البحث يبدو لحظياً كما طلب التاجر، ثم يصحّحه
+   * رد الخادم الدقيق عند وصوله. */
   const visible = useMemo(() => {
     let list = results;
+    const qNow = query.trim();
+    if (qNow.length > 0) {
+      const ql = qNow.toLowerCase();
+      list = list.filter(p => p.name.toLowerCase().includes(ql));
+    }
     const minMinor = filters.minPrice !== '' ? Math.round(Number(filters.minPrice) * 100) || 0 : null;
     const maxMinor = filters.maxPrice !== '' ? Math.round(Number(filters.maxPrice) * 100) || 0 : null;
     if (filters.storeId != null) {
@@ -243,7 +256,7 @@ export function SearchScreen({navigation, route}: Props) {
       default:
         return list;
     }
-  }, [results, filters, sort]);
+  }, [results, filters, sort, query]);
 
   const filterCount = activeFilterCount(filters);
   const storeName = filters.storeId != null
@@ -293,6 +306,15 @@ export function SearchScreen({navigation, route}: Props) {
               </View>
             ) : null}
           </Pressable>
+        </View>
+
+        {/* v3.2: وسم نطاق البحث — يوضح أن البحث عابر لكل متاجر
+         * المول من هذا المسار (وفي صفحة المتجر يكون scoped هناك). */}
+        <View style={{flexDirection: 'row-reverse', alignItems: 'center', gap: 5}}>
+          <Icon name="store" size={12} color={palette.muted} />
+          <Text style={{fontSize: 11, color: palette.muted, fontFamily: fonts.medium}}>
+            {browse ? 'تصفح كل منتجات المول — رتّبها وصفّها كما تريد' : 'البحث يشمل كل متاجر المول'}
+          </Text>
         </View>
 
         {/* الترتيب السريع */}
@@ -364,7 +386,7 @@ export function SearchScreen({navigation, route}: Props) {
         <View style={{padding: spacing.lg}}>
           <ErrorState message={error} onRetry={() => void search(query, filters, 1)} />
         </View>
-      ) : submittedQuery.length < 2 && filters.category == null ? (
+      ) : submittedQuery.length < 2 && filters.category == null && !browse ? (
         /* الحالة الابتدائية: سجل البحث + تصنيفات مقترحة */
         <FlatList
           data={[]}
@@ -437,8 +459,12 @@ export function SearchScreen({navigation, route}: Props) {
           ListEmptyComponent={
             <EmptyState
               icon="search"
-              title="لا نتائج مطابقة"
-              body="جرّب كلمة أعم، أو خفّف الفلاتر — ربما تكون محدودة جداً."
+              title="لا توجد منتجات مطابقة لبحثك"
+              body={
+                submittedQuery.trim().length >= 2
+                  ? `لم نجد «${submittedQuery.trim()}» في أي متجر — جرّب كلمة أعم أو خفّف الفلاتر`
+                  : 'جرّب تعديل الفلاتر — ربما تكون محدودة أكثر من اللازم'
+              }
             />
           }
           ListHeaderComponent={

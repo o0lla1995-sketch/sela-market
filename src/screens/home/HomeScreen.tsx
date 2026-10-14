@@ -1,36 +1,55 @@
 /**
- * HomeScreen.tsx — رئيسية المول (v2.0 — ذكية ومتجاوبة):
- *  • «متاجر تخدم منطقتك» — دائري مختصر (طلب المستخدم صراحة) مرتب
- *    برسم التوصيل لمنطقتك، مع مساعد اختيار المنطقة للزائر.
- *  • «مقترحات لك» — من تصنيفات اهتماماتك (مشاهدة/مفضلة/طلبات —
- *    بيانات محلية لا تغادر جهازك).
- *  • أحدث المنتجات مع شبكة أمان ذكية: إذا تعذّر المنتج العابر
- *    تُجلب منتجات كل متجر على حدة (نقطة نهاية مختلفة أصغر حجماً)
- *    فلا تختفي المنتجات أبداً لمشكلة نقطة واحدة.
- *  • كاش أولاً + شريط «تعذّر التحديث» بزر إعادة محاولة فوري.
+ * HomeScreen.tsx — رئيسية المول (v3.2 — الجولة 62):
+ * ─────────────────────────────────────────────────────────────────
+ * طلب التاجر: «ادمج التحية ومنطقة التوصيل والبحث في تروسة واحدة
+ * متماسكة بنفس الانحناءات وظل ناعم» + «تروسة لاصقة تتحرك بسلاسة
+ * بلا قفزات» + «أحدث ما وصل المول كاروسيل شبكي بانتقال صفحات
+ * ناعم (Snap)» + «عرض الكل بلا تزاحم مع العنوان».
+ *
+ *  • التروسة اللاصقة: كتلة واحدة بلون العلامة فوق منطقة التمرير
+ *    (خارجها هندسياً) — ثابتة دائماً بلا أي قفزة إطلاقاً، فيها:
+ *    التحية + الاسم + المفضلة/الإشعارات، شريط المنطقة بعرض كامل
+ *    (لا تختفي أيقونته عند حافة الشاشة — شكوى الجولة 14)، ومدخل
+ *    البحث. انحناء موحّد + ظل ناعم مرفوع.
+ *  • «أحدث ما وصل المول»: كاروسيل أفقي بصفحات شبكية 2×2 مع
+ *    snap-to-grid — كل صفحة 4 منتجات مقضمة قفزاً ناعماً، والجلب
+ *    التدريجي يستمر عند آخر صفحة. «عرض الكل» يفتح كامل منتجات
+ *    المول (وضع التصفح في شاشة البحث).
+ *  • «مقترحات لك» وشرائط المتاجر: نفس نظام snap الناعم.
+ *  • شبكة أمان البيانات: نداء /home المجمّع + كاش محلي + شريط
+ *    «تعذّر التحديث» بزر إعادة محاولة.
  */
 import React, {useCallback, useEffect, useMemo, useState} from 'react';
 import {
   FlatList,
   Modal,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 import {useTheme} from '../../theme/ThemeProvider';
-import {radius, shadowFor, spacing, type, fonts, tileFor} from '../../theme/tokens';
+import {
+  radius,
+  shadowRaised,
+  shadowFor,
+  spacing,
+  type,
+  fonts,
+  tileFor,
+} from '../../theme/tokens';
 import {Icon, type IconName} from '../../components/Icon';
 import {
   Badge,
   Button,
-  EndOfList,
+  EmptyState,
   ErrorState,
   Loader,
-  ProductGridSkeleton,
   RowSkeleton,
   Screen,
   SectionTitle,
@@ -72,13 +91,14 @@ const CATEGORY_ICONS: Record<string, IconName> = {
   'ملابس': 'tag',
 };
 
+/** عدد المنتجات في صفحة الكاروسيل الشبكي (2×2). */
+const GRID_PAGE = 4;
+
 export function HomeScreen({navigation}: Props) {
   const {palette} = useTheme();
-  /* v2.6: هوك الإخلاء مرفوع لقمة المكون — استدعاؤه داخل
-   * فروع JSX شرطية كان يغيّر عدد الـ hooks بين الرندرات ويحطم
-   * الشاشة (Rendered more hooks). */
   const tabClearance = useTabBottomClearance();
   const insets = useSafeAreaInsets();
+  const {width: screenWidth} = useWindowDimensions();
   const user = useAuthStore(s => s.user);
   const unread = useNotificationsStore(s => s.unread);
   const myRegion = useLocationStore(s => s.myRegion);
@@ -100,13 +120,7 @@ export function HomeScreen({navigation}: Props) {
   const [regionPickerOpen, setRegionPickerOpen] = useState(false);
   const [regionChoices, setRegionChoices] = useState<string[]>([]);
 
-  /* ── تحميل الرئيسية — v3.0: نداء واحد مجمّع (خادم 5.5) ──
-   * كانت أربع نداءات متوازية (متاجر + تصنيفات + أحدث منتجات +
-   * متاجر المنطقة) فوقها مروحة «شبكة أمان» تضرب كل متجر على حدة
-   * (حتى 12 نداءً إضافياً) — فتح التطبيق وحده كان يستهلك ثلث
-   * ميزانية محدد المعدل فتظهر «محاولات كثيرة» بعد ثوانٍ من التصفح.
-   * الآن: /api/market/home يعيد كل شيء في نداء واحد (مع متاجر
-   * المنطقة إذا حُددت) — والكاش المحلي يحمي عند التعثر. */
+  /* ── تحميل الرئيسية — نداء واحد مجمّع (خادم 5.5) ── */
   const loadHome = useCallback(async () => {
     setError(null);
     setLoading(true);
@@ -123,8 +137,6 @@ export function HomeScreen({navigation}: Props) {
       setHasMore(feedRes.data.latest.length >= PRODUCTS_PAGE_SIZE);
       setPage(1);
     } else if (feedRes.error != null) {
-      /* فشل التحديث + لا كاش — شبكة الأمان القديمة كانت تضرب كل
-       * متجر على حدة (مروحة طلبات)؛ الآن نكتفي بالكاش إن وُجد. */
       setError(feedRes.error);
       setStale(true);
     }
@@ -155,8 +167,7 @@ export function HomeScreen({navigation}: Props) {
     };
   }, [myRegion]);
 
-  /* ── مقترحات لك: من تصنيفات اهتماماتك المحلية ──
-   *  الاشتراك في entries يضمن إعادة الحساب فور كل إشارة جديدة. */
+  /* ── مقترحات لك: من تصنيفات اهتماماتك المحلية ── */
   const interestCats = useMemo(
     () => useInterestStore.getState().topCategories(2),
     [interestEntries],
@@ -198,6 +209,7 @@ export function HomeScreen({navigation}: Props) {
     };
   }, [interestCats]);
 
+  /* ── جلب صفحات إضافية لصفحات كاروسيل «أحدث ما وصل» ── */
   const loadMore = useCallback(async () => {
     if (loadingMore || loading || error != null || !hasMore || stale) {
       return;
@@ -238,339 +250,370 @@ export function HomeScreen({navigation}: Props) {
    * في الداكن لتبقى القراءة البيضاء مريحة (تباين 5:1). */
   const heroBg = palette.isDark ? '#C2410C' : '#EA580C';
 
-  return (
-    <Screen>
-      <FlatList
-        data={products}
-        keyExtractor={item => `${item.store_id}:${item.id}`}
-        numColumns={2}
-        columnWrapperStyle={gridStyles.row}
-        contentContainerStyle={{paddingBottom: tabClearance}}
-        showsVerticalScrollIndicator={false}
-        refreshing={refreshing}
-        onRefresh={async () => {
-          setRefreshing(true);
-          await loadHome();
-          setRefreshing(false);
-        }}
-        onEndReached={loadMore}
-        onEndReachedThreshold={0.6}
-        ListHeaderComponent={
-          <View style={{paddingBottom: spacing.lg}}>
-            {/* ─── التروسة البطولية — v3.1: بلون العلامة الصريح ─── */}
-            <View
-              style={[
-                heroStyles.wrap,
-                {backgroundColor: heroBg, paddingTop: spacing.md},
-              ]}>
-              <View style={heroStyles.topRow}>
-                <View style={heroStyles.greetingCol}>
-                  <Text style={[type.small, {color: 'rgba(255,255,255,0.85)'}]}>
-                    {greeting()}
-                  </Text>
-                  <Text style={[type.h2, {color: '#FFFFFF', fontFamily: fonts.black}]}>
-                    {user != null ? user.name.split(' ')[0] : 'متسوّق سيلا'}
-                  </Text>
-                </View>
-                <View style={{flexDirection: 'row-reverse', gap: spacing.md}}>
-                  <Pressable
-                    onPress={() => navigation.navigate('Wishlist')}
-                    hitSlop={8}
-                    style={heroStyles.iconBtnOnBrand}>
-                    <Icon name="heart" size={19} color="#FFFFFF" />
-                  </Pressable>
-                  <Pressable
-                    onPress={() => navigation.navigate('Notifications')}
-                    hitSlop={8}
-                    style={heroStyles.iconBtnOnBrand}>
-                    <Icon name="bell" size={19} color="#FFFFFF" />
-                    {unread > 0 ? (
-                      <View style={heroStyles.badgeSlot}>
-                        <Badge count={unread} />
-                      </View>
-                    ) : null}
-                  </Pressable>
-                </View>
-              </View>
+  /* ── هندسة كاروسيل «أحدث ما وصل المول» ──
+   * كل صفحة: شبكة 2×2 بعرض الشاشة متناقصاً الحواشي + فجوة بين
+   * الصفحات. snapToInterval يضمن قفزاً ناعماً صفحةً صفحة. */
+  const carouselInset = spacing.lg;
+  const pageGap = spacing.md;
+  const pageWidth = screenWidth - carouselInset * 2;
+  const snapInterval = pageWidth + pageGap;
+  const gridPages = Math.ceil(products.length / GRID_PAGE);
+  const cardPhotoWidth = Math.floor((pageWidth - pageGap) / 2 - spacing.sm * 2);
 
-              {/* v3.1: شريط المنطقة داخل التروسة — كان رقاقة صغيرة
-               * تلتصق بحافة الشاشة فتبدو مخفية؛ الآن بعرض كامل بنمط
-               * طلبات/أمازون: دبوس + اسم المنطقة + سهم، دائماً ظاهر. */}
-              <Pressable
-                onPress={openRegionPicker}
-                style={({pressed}) => [
-                  heroStyles.regionBar,
-                  {opacity: pressed ? 0.85 : 1},
-                ]}>
-                <Icon name="pin" size={16} color="#FFFFFF" />
-                <View style={{flex: 1, alignItems: 'flex-start'}}>
-                  <Text
-                    style={{
-                      fontSize: 10,
-                      color: 'rgba(255,255,255,0.8)',
-                      fontFamily: fonts.medium,
-                    }}>
-                    التوصيل إلى
-                  </Text>
-                  <Text
-                    style={{
-                      fontSize: 13.5,
-                      color: '#FFFFFF',
-                      fontFamily: fonts.bold,
-                    }}
-                    numberOfLines={1}>
-                    {myRegion ?? 'حدّد منطقتك'}
-                  </Text>
-                </View>
-                <Icon name="chevronDown" size={16} color="#FFFFFF" />
-              </Pressable>
-
-              {/* مدخل البحث — أبيض فوق لون العلامة */}
-              <Pressable
-                onPress={() => navigation.navigate('Search')}
-                style={({pressed}) => [
-                  heroStyles.searchEntry,
-                  {opacity: pressed ? 0.85 : 1},
-                ]}>
-                <Icon name="search" size={19} color={palette.muted} />
-                <Text style={[type.body, {color: palette.muted, flex: 1, textAlign: 'right'}]}>
-                  ابحث عن منتج في كل متاجر المول…
-                </Text>
-                <View style={[heroStyles.searchChip, {backgroundColor: palette.brand}]}>
-                  <Icon name="sliders" size={14} color="#FFFFFF" />
-                </View>
-              </Pressable>
-            </View>
-
-            {/* شريط البيانات المحفوظة + إعادة محاولة فورية */}
-            {stale ? (
-              <View
-                style={[
-                  staleStyles.banner,
-                  {backgroundColor: palette.warningSoft, borderColor: palette.warning},
-                ]}>
-                <Icon name="wifiOff" size={15} color={palette.warning} />
-                <Text style={[type.tiny, {color: palette.inkSoft, flex: 1}]}>
-                  تعذّر التحديث الآن — تعرض الصفحة آخر لقطة متاحة
-                </Text>
-                <Pressable onPress={() => void loadHome()} hitSlop={6}>
-                  <Text style={{fontSize: 11.5, color: palette.warning, fontFamily: fonts.bold}}>
-                    إعادة المحاولة
-                  </Text>
-                </Pressable>
-              </View>
-            ) : null}
-
-            {error != null && stores.length === 0 && products.length === 0 ? (
-              <View style={{padding: spacing.lg}}>
-                <ErrorState message={error} onRetry={loadHome} />
-              </View>
-            ) : (
-              <View style={{paddingHorizontal: spacing.lg, gap: spacing.xl, paddingTop: spacing.lg}}>
-                {/* ─── متاجر تخدم منطقتك ─── v3.1: الاختيار صار من
-                 * شريط التروسة أعلاه — هنا العرض فقط، بلا رقاقة
-                 * جانبية كانت تختفي بحافة الشاشة وبلا شرح مطوّل. */}
-                <View style={{gap: spacing.md}}>
-                  {myRegion == null ? (
-                    <Pressable
-                      onPress={openRegionPicker}
-                      style={({pressed}) => [
-                        regionStyles.emptyCard,
-                        {
-                          backgroundColor: palette.brandSoft,
-                          borderColor: palette.brandBorder,
-                          opacity: pressed ? 0.85 : 1,
-                        },
-                      ]}>
-                      <View style={[regionStyles.pinCircle, {backgroundColor: palette.brand}]}>
-                        <Icon name="pin" size={18} color="#FFFFFF" />
-                      </View>
-                      <Text style={{flex: 1, fontSize: 12.5, color: palette.ink, fontFamily: fonts.medium}}>
-                        حدّد منطقتك لتظهر المتاجر التي توصّل إليك
-                      </Text>
-                      <Icon name="forward" size={16} color={palette.brandDark} />
-                    </Pressable>
-                  ) : regionStores.length > 0 ? (
-                    <>
-                      <SectionTitle title={`متاجر تخدم ${myRegion}`} />
-                      <FlatList
-                        horizontal
-                        data={regionStores.slice(0, 10)}
-                        keyExtractor={s => `r${s.id}`}
-                        showsHorizontalScrollIndicator={false}
-                        contentContainerStyle={{gap: spacing.md, paddingVertical: 2}}
-                        renderItem={({item}) => (
-                          <CircleStoreCard
-                            store={item}
-                            onPress={() =>
-                              navigation.navigate('Store', {storeId: item.id, storeName: item.name})
-                            }
-                          />
-                        )}
-                      />
-                    </>
-                  ) : (
-                    <Text style={[type.tiny, {color: palette.muted}]}>
-                      لا متاجر تخدم «{myRegion}» حالياً — غيّر المنطقة من أعلى الصفحة
-                    </Text>
-                  )}
-                </View>
-
-                {/* ─── مقترحات لك (اهتماماتك) ─── */}
-                {recommended.length > 0 ? (
-                  <View style={{gap: spacing.md}}>
-                    <SectionTitle title="مقترحات لك" />
-                    <FlatList
-                      horizontal
-                      data={recommended}
-                      keyExtractor={item => `rec${item.store_id}:${item.id}`}
-                      showsHorizontalScrollIndicator={false}
-                      contentContainerStyle={{gap: spacing.md, paddingVertical: 2}}
-                      renderItem={({item}) => (
-                        <View style={recStyles.card}>
-                          <ProductCard
-                            product={item}
-                            photoWidth={160}
-                            storeRef={{
-                              id: item.store_id,
-                              name: item.store_name,
-                              storeNumber: item.store_number,
-                            }}
-                            onPress={() =>
-                              navigation.navigate('Product', {
-                                product: item,
-                                storeRef: {
-                                  id: item.store_id,
-                                  name: item.store_name,
-                                  storeNumber: item.store_number,
-                                },
-                              })
-                            }
-                          />
-                        </View>
-                      )}
-                    />
-                  </View>
-                ) : null}
-
-                {/* ─── التصنيفات — بلاطات ملونة عمودية (نمط نون) ─── */}
-                {firstEverLoad ? (
-                  <RowSkeleton />
-                ) : categories.length > 0 ? (
-                  <View style={{gap: spacing.md}}>
-                    <SectionTitle title="تسوّق حسب التصنيف" />
-                    <FlatList
-                      horizontal
-                      data={categories.slice(0, 12)}
-                      keyExtractor={c => c.category}
-                      showsHorizontalScrollIndicator={false}
-                      contentContainerStyle={{gap: spacing.md, paddingVertical: 4}}
-                      renderItem={({item}) => {
-                        /* v3.0: لكل تصنيف لونه الثابت المخصص — نظام
-                         * الألوان الغني الجديد (شكوى «مفتقد للألوان
-                         * الأخرى»): نفس التصنيف يتلوّن بنفس اللون في
-                         * الرئيسية وصفحة المنتج والتصنيف كله. */
-                        const tile = tileFor(item.category, palette.isDark);
-                        return (
-                          <Pressable
-                            onPress={() => navigation.navigate('Category', {category: item.category})}
-                            style={({pressed}) => [
-                              catStyles.tile,
-                              {
-                                backgroundColor: tile.soft,
-                                borderColor: tile.solid + '33',
-                                opacity: pressed ? 0.85 : 1,
-                              },
-                            ]}>
-                            <View style={[catStyles.iconWrap, {backgroundColor: tile.solid}]}>
-                              <Icon
-                                name={CATEGORY_ICONS[item.category] ?? 'tag'}
-                                size={22}
-                                color="#FFFFFF"
-                              />
-                            </View>
-                            <Text
-                              style={{
-                                fontSize: 12.5,
-                                color: tile.ink,
-                                fontFamily: fonts.bold,
-                                textAlign: 'center',
-                              }}
-                              numberOfLines={1}>
-                              {item.category}
-                            </Text>
-                            <Text style={{fontSize: 10, color: tile.solid, fontFamily: fonts.medium}}>
-                              {item.n} منتجاً
-                            </Text>
-                          </Pressable>
-                        );
-                      }}
-                    />
-                  </View>
-                ) : null}
-
-                {/* v2.6: قُسم «متاجر المول» محذوف بطلب صريح من
-                 * المستخدم — كان تكراراً بصرياً لقسم «متاجر تخدم
-                 * منطقتك» أعلاه (القسمان يعرضان المتاجر أنفسها
-                 * ببطاقات دائرية متطابقة فوق بعضهما). قائمة المتاجر
-                 * الكاملة تبقى متاحة من تبويب «المتاجر» السفلي. */}
-
-                {/* ─── أحدث المنتجات ─── */}
-                <View style={{gap: spacing.xs}}>
-                  <SectionTitle
-                    title="أحدث ما وصل المول"
-                    actionLabel="عرض الكل"
-                    onAction={() => navigation.navigate('Search')}
-                  />
-                  {firstEverLoad ? (
-                    <View style={{marginTop: spacing.md}}>
-                      <ProductGridSkeleton count={6} />
-                    </View>
-                  ) : null}
-                </View>
-              </View>
-            )}
-          </View>
-        }
-        ListEmptyComponent={
-          !firstEverLoad && error == null && !stale ? (
-            <View style={{paddingHorizontal: spacing.lg, paddingTop: spacing.xxxl}}>
-              <ErrorState
-                message="لا توجد منتجات منشورة بعد — تُزامن المتاجر منتجاتها كل 15 دقيقة"
-                onRetry={loadHome}
-              />
-            </View>
-          ) : null
-        }
-        ListFooterComponent={
-          loadingMore ? (
-            <View style={{paddingVertical: spacing.lg}}>
-              <Loader label="نجلب المزيد…" />
-            </View>
-          ) : !hasMore && products.length >= PRODUCTS_PAGE_SIZE ? (
-            <EndOfList label="وصلت إلى كل منتجات المول" />
-          ) : null
-        }
-        renderItem={({item}) => (
-          <View style={{flex: 1}}>
-            <ProductCard
-              product={item}
-              storeRef={{id: item.store_id, name: item.store_name, storeNumber: item.store_number}}
-              onPress={() =>
-                navigation.navigate('Product', {
-                  product: item,
-                  storeRef: {
+  /* صف كاروسيل واحد: عمودان من بطاقتين (شبكة 2×2). */
+  const renderGridPage = (pageIndex: number) => {
+    const start = pageIndex * GRID_PAGE;
+    const items = products.slice(start, start + GRID_PAGE);
+    return (
+      <View key={`p${pageIndex}`} style={[gridPageStyles.page, {width: pageWidth}]}>
+        {[0, 1].map(row => (
+          <View key={row} style={gridPageStyles.row}>
+            {items.slice(row * 2, row * 2 + 2).map(item => (
+              <View key={`${item.store_id}:${item.id}`} style={{flex: 1}}>
+                <ProductCard
+                  product={item}
+                  photoWidth={cardPhotoWidth}
+                  photoHeight={104}
+                  storeRef={{
                     id: item.store_id,
                     name: item.store_name,
                     storeNumber: item.store_number,
+                  }}
+                  onPress={() =>
+                    navigation.navigate('Product', {
+                      product: item,
+                      storeRef: {
+                        id: item.store_id,
+                        name: item.store_name,
+                        storeNumber: item.store_number,
+                      },
+                    })
+                  }
+                />
+              </View>
+            ))}
+            {/* عمود فارغ عند صفحة غير مكتملة — يحفظ عرض الأعمدة */}
+            {items.length % 2 === 1 && row === Math.ceil(items.length / 2) - 1 ? (
+              <View style={{flex: 1}} />
+            ) : null}
+          </View>
+        ))}
+      </View>
+    );
+  };
+
+  return (
+    <Screen>
+      {/* ═══ التروسة اللاصقة المدمجة (v3.2) ═══
+       * خارج منطقة التمرير هندسياً — ثابتة بلا قفزات، تدمج التحية
+       * والمنطقة والبحث في كتلة واحدة متماسكة بانحناء وظل موحّدين. */}
+      <View style={[heroStyles.wrap, {backgroundColor: heroBg}, shadowRaised(palette.isDark)]}>
+        <View style={heroStyles.inner}>
+          <View style={heroStyles.topRow}>
+            <View style={heroStyles.greetingCol}>
+              <Text style={heroStyles.greetingText}>{greeting()}</Text>
+              <Text style={heroStyles.greetingName}>
+                {user != null ? user.name.split(' ')[0] : 'متسوّق سيلا'}
+              </Text>
+            </View>
+            <View style={{flexDirection: 'row-reverse', gap: spacing.md}}>
+              <Pressable
+                onPress={() => navigation.navigate('Wishlist')}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="المفضلة"
+                android_ripple={{color: 'rgba(255,255,255,0.25)', borderless: true, foreground: true}}
+                style={heroStyles.iconBtnOnBrand}>
+                <Icon name="heart" size={19} color="#FFFFFF" />
+              </Pressable>
+              <Pressable
+                onPress={() => navigation.navigate('Notifications')}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="الإشعارات"
+                android_ripple={{color: 'rgba(255,255,255,0.25)', borderless: true, foreground: true}}
+                style={heroStyles.iconBtnOnBrand}>
+                <Icon name="bell" size={19} color="#FFFFFF" />
+                {unread > 0 ? (
+                  <View style={heroStyles.badgeSlot}>
+                    <Badge count={unread} />
+                  </View>
+                ) : null}
+              </Pressable>
+            </View>
+          </View>
+
+          {/* شريط المنطقة — بعرض كامل داخل التروسة، دائماً ظاهر
+           * (شكوى الجولة 14: الأيقونة كانت تُدفَع خارج حافة الشاشة). */}
+          <Pressable
+            onPress={openRegionPicker}
+            accessibilityRole="button"
+            accessibilityLabel={`منطقة التوصيل: ${myRegion ?? 'غير محددة'}`}
+            android_ripple={{color: 'rgba(255,255,255,0.2)', borderless: false, foreground: true}}
+            style={heroStyles.regionBar}>
+            <Icon name="pin" size={16} color="#FFFFFF" />
+            <View style={{flex: 1, alignItems: 'flex-start'}}>
+              <Text style={heroStyles.regionLabel}>التوصيل إلى</Text>
+              <Text style={heroStyles.regionValue} numberOfLines={1}>
+                {myRegion ?? 'حدّد منطقتك'}
+              </Text>
+            </View>
+            <Icon name="chevronDown" size={16} color="#FFFFFF" />
+          </Pressable>
+
+          {/* مدخل البحث — أبيض فوق لون العلامة بنفس انحناء شريط المنطقة */}
+          <Pressable
+            onPress={() => navigation.navigate('Search')}
+            accessibilityRole="button"
+            accessibilityLabel="البحث في المول"
+            android_ripple={{color: palette.ripple, borderless: false, foreground: true}}
+            style={[heroStyles.searchEntry, shadowFor(palette.isDark)]}>
+            <Icon name="search" size={19} color={palette.muted} />
+            <Text style={[type.body, {color: palette.muted, flex: 1, textAlign: 'right'}]}>
+              ابحث عن منتج في كل متاجر المول…
+            </Text>
+            <View style={[heroStyles.searchChip, {backgroundColor: palette.brand}]}>
+              <Icon name="sliders" size={14} color="#FFFFFF" />
+            </View>
+          </Pressable>
+        </View>
+      </View>
+
+      {/* ═══ محتوى الصفحة القابل للتمرير تحت التروسة الثابتة ═══ */}
+      <ScrollView
+        style={{flex: 1}}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{paddingBottom: tabClearance}}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={async () => {
+              setRefreshing(true);
+              await loadHome();
+              setRefreshing(false);
+            }}
+            tintColor={palette.brand}
+            colors={[palette.brand]}
+          />
+        }>
+        {/* شريط البيانات المحفوظة + إعادة محاولة فورية */}
+        {stale ? (
+          <View
+            style={[
+              staleStyles.banner,
+              {backgroundColor: palette.warningSoft, borderColor: palette.warning},
+            ]}>
+            <Icon name="wifiOff" size={15} color={palette.warning} />
+            <Text style={[type.tiny, {color: palette.inkSoft, flex: 1}]}>
+              تعذّر التحديث الآن — تعرض الصفحة آخر لقطة متاحة
+            </Text>
+            <Pressable onPress={() => void loadHome()} hitSlop={6}>
+              <Text style={{fontSize: 11.5, color: palette.warning, fontFamily: fonts.bold}}>
+                إعادة المحاولة
+              </Text>
+            </Pressable>
+          </View>
+        ) : null}
+
+        {error != null && stores.length === 0 && products.length === 0 ? (
+          <View style={{padding: spacing.lg}}>
+            <ErrorState message={error} onRetry={loadHome} />
+          </View>
+        ) : (
+          <View style={{paddingHorizontal: spacing.lg, gap: spacing.xl, paddingTop: spacing.lg}}>
+            {/* ─── متاجر تخدم منطقتك ─── */}
+            {myRegion == null ? (
+              <Pressable
+                onPress={openRegionPicker}
+                accessibilityRole="button"
+                android_ripple={{color: palette.ripple, borderless: false, foreground: true}}
+                style={({pressed}) => [
+                  regionStyles.emptyCard,
+                  {
+                    backgroundColor: palette.brandSoft,
+                    borderColor: palette.brandBorder,
+                    opacity: pressed ? 0.85 : 1,
                   },
-                })
-              }
-            />
+                ]}>
+                <View style={[regionStyles.pinCircle, {backgroundColor: palette.brand}]}>
+                  <Icon name="pin" size={18} color="#FFFFFF" />
+                </View>
+                <Text style={{flex: 1, fontSize: 12.5, color: palette.ink, fontFamily: fonts.medium}}>
+                  حدّد منطقتك لتظهر المتاجر التي توصّل إليك
+                </Text>
+                <Icon name="chevronLeft" size={16} color={palette.brandDark} />
+              </Pressable>
+            ) : regionStores.length > 0 ? (
+              <View style={{gap: spacing.md}}>
+                <SectionTitle title={`متاجر تخدم ${myRegion}`} />
+                <FlatList
+                  horizontal
+                  data={regionStores.slice(0, 10)}
+                  keyExtractor={s => `r${s.id}`}
+                  showsHorizontalScrollIndicator={false}
+                  /* v3.2: snap ناعم على عرض البطاقة — استمرار تصفح مريح */
+                  snapToInterval={112}
+                  decelerationRate="fast"
+                  contentContainerStyle={{gap: spacing.md, paddingVertical: 2}}
+                  renderItem={({item}) => (
+                    <CircleStoreCard
+                      store={item}
+                      onPress={() =>
+                        navigation.navigate('Store', {storeId: item.id, storeName: item.name})
+                      }
+                    />
+                  )}
+                />
+              </View>
+            ) : (
+              <Text style={[type.tiny, {color: palette.muted}]}>
+                لا متاجر تخدم «{myRegion}» حالياً — غيّر المنطقة من أعلى الصفحة
+              </Text>
+            )}
+
+            {/* ─── مقترحات لك (اهتماماتك) — كاروسيل snap ─── */}
+            {recommended.length > 0 ? (
+              <View style={{gap: spacing.md}}>
+                <SectionTitle title="مقترحات لك" subtitle="من تصنيفات شاهدتها وعجبتك" />
+                <FlatList
+                  horizontal
+                  data={recommended}
+                  keyExtractor={item => `rec${item.store_id}:${item.id}`}
+                  showsHorizontalScrollIndicator={false}
+                  snapToInterval={176 + spacing.md}
+                  decelerationRate="fast"
+                  contentContainerStyle={{gap: spacing.md, paddingVertical: 2}}
+                  renderItem={({item}) => (
+                    <View style={recStyles.card}>
+                      <ProductCard
+                        product={item}
+                        photoWidth={152}
+                        photoHeight={120}
+                        storeRef={{
+                          id: item.store_id,
+                          name: item.store_name,
+                          storeNumber: item.store_number,
+                        }}
+                        onPress={() =>
+                          navigation.navigate('Product', {
+                            product: item,
+                            storeRef: {
+                              id: item.store_id,
+                              name: item.store_name,
+                              storeNumber: item.store_number,
+                            },
+                          })
+                        }
+                      />
+                    </View>
+                  )}
+                />
+              </View>
+            ) : null}
+
+            {/* ─── التصنيفات — بلاطات ملونة عمودية (نمط نون) ─── */}
+            {firstEverLoad ? (
+              <View style={{gap: spacing.md}}>
+                <RowSkeleton />
+              </View>
+            ) : categories.length > 0 ? (
+              <View style={{gap: spacing.md}}>
+                <SectionTitle title="تسوّق حسب التصنيف" />
+                <FlatList
+                  horizontal
+                  data={categories.slice(0, 12)}
+                  keyExtractor={c => c.category}
+                  showsHorizontalScrollIndicator={false}
+                  snapToInterval={104}
+                  decelerationRate="fast"
+                  contentContainerStyle={{gap: spacing.md, paddingVertical: 4}}
+                  renderItem={({item}) => {
+                    const tile = tileFor(item.category, palette.isDark);
+                    return (
+                      <Pressable
+                        onPress={() => navigation.navigate('Category', {category: item.category})}
+                        accessibilityRole="button"
+                        accessibilityLabel={item.category}
+                        android_ripple={{color: palette.ripple, borderless: false, foreground: true}}
+                        style={({pressed}) => [
+                          catStyles.tile,
+                          {
+                            backgroundColor: tile.soft,
+                            borderColor: tile.solid + '33',
+                            opacity: pressed ? 0.85 : 1,
+                          },
+                        ]}>
+                        <View style={[catStyles.iconWrap, {backgroundColor: tile.solid}]}>
+                          <Icon
+                            name={CATEGORY_ICONS[item.category] ?? 'tag'}
+                            size={22}
+                            color="#FFFFFF"
+                          />
+                        </View>
+                        <Text
+                          style={{
+                            fontSize: 12.5,
+                            color: tile.ink,
+                            fontFamily: fonts.bold,
+                            textAlign: 'center',
+                          }}
+                          numberOfLines={1}>
+                          {item.category}
+                        </Text>
+                        <Text style={{fontSize: 10, color: tile.solid, fontFamily: fonts.medium}}>
+                          {item.n} منتجاً
+                        </Text>
+                      </Pressable>
+                    );
+                  }}
+                />
+              </View>
+            ) : null}
+
+            {/* ─── أحدث ما وصل المول — كاروسيل شبكي 2×2 بانتقال صفحات ───
+             * v3.2: طلب التاجر «snap-to-grid pagination» — كانت شبكة
+             * تمرير رأسية لا نهائية؛ الآن صفحات مقضمة من 4 منتجات،
+             * والجلب التدريجي يستمر عند بلوغ آخر صفحة. */}
+            <View style={{gap: spacing.md}}>
+              <SectionTitle
+                title="أحدث ما وصل المول"
+                subtitle="صفّح الصفحات — منتجات جديدة كل مزامنة"
+                actionLabel="عرض الكل"
+                onAction={() => navigation.navigate('Search', {browse: true})}
+              />
+              {firstEverLoad ? (
+                <RowSkeleton />
+              ) : products.length === 0 ? (
+                <EmptyState
+                  icon="emptyBag"
+                  title="لا منتجات منشورة بعد"
+                  body="تُزامن المتاجر منتجاتها كل 15 دقيقة — عد لاحقاً"
+                />
+              ) : (
+                <View>
+                  <FlatList
+                    horizontal
+                    data={Array.from({length: gridPages}, (_, i) => i)}
+                    keyExtractor={i => `page${i}`}
+                    showsHorizontalScrollIndicator={false}
+                    snapToInterval={snapInterval}
+                    decelerationRate="fast"
+                    onEndReached={loadMore}
+                    onEndReachedThreshold={0.5}
+                    contentContainerStyle={{gap: pageGap}}
+                    renderItem={({item}) => renderGridPage(item)}
+                  />
+                  {loadingMore ? (
+                    <View style={{paddingVertical: spacing.sm}}>
+                      <Loader label="نجلب المزيد…" />
+                    </View>
+                  ) : null}
+                </View>
+              )}
+            </View>
           </View>
         )}
-        style={{backgroundColor: palette.bg}}
-      />
+      </ScrollView>
 
       {/* ── مساعد اختيار المنطقة ── */}
       <Modal
@@ -670,12 +713,15 @@ export function HomeScreen({navigation}: Props) {
 }
 
 const heroStyles = StyleSheet.create({
+  /* v3.2: كتلة التروسة اللاصقة — بلا انحناءات سفلية (تلتصق بأعلى
+   * الشاشة فوق التمرير) بظل مرفوع يفصلها بصرياً عن المحتوى. */
   wrap: {
+    paddingBottom: spacing.md,
+  },
+  inner: {
     paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.xl,
-    gap: spacing.md,
-    borderBottomRightRadius: radius.xl,
-    borderBottomLeftRadius: radius.xl,
+    paddingTop: spacing.sm,
+    gap: spacing.sm,
   },
   topRow: {
     flexDirection: 'row-reverse',
@@ -683,17 +729,27 @@ const heroStyles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   greetingCol: {gap: 1, alignItems: 'flex-start'},
-  /* v3.1: أزرار فوق لون العلامة — أبيض شفاف بنمط التروسات الملونة. */
+  greetingText: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.85)',
+    fontFamily: fonts.regular,
+  },
+  greetingName: {
+    fontSize: 19,
+    lineHeight: 27,
+    color: '#FFFFFF',
+    fontFamily: fonts.black,
+  },
   iconBtnOnBrand: {
     width: 42,
     height: 42,
-    borderRadius: 14,
+    borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(255,255,255,0.22)',
   },
   badgeSlot: {position: 'absolute', top: -5, left: -5},
-  /* v3.1: شريط المنطقة — بعرض كامل داخل التروسة، دائماً ظاهر. */
+  /* شريط المنطقة — نفس انحناء مدخل البحث (كتلة متماسكة موحّدة). */
   regionBar: {
     flexDirection: 'row-reverse',
     alignItems: 'center',
@@ -705,12 +761,22 @@ const heroStyles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: 8,
   },
+  regionLabel: {
+    fontSize: 10,
+    color: 'rgba(255,255,255,0.8)',
+    fontFamily: fonts.medium,
+  },
+  regionValue: {
+    fontSize: 13.5,
+    color: '#FFFFFF',
+    fontFamily: fonts.bold,
+  },
   searchEntry: {
     flexDirection: 'row-reverse',
     alignItems: 'center',
     gap: spacing.sm,
-    height: 52,
-    borderRadius: radius.pill,
+    height: 50,
+    borderRadius: radius.md,
     backgroundColor: '#FFFFFF',
     paddingHorizontal: spacing.lg,
   },
@@ -732,14 +798,12 @@ const staleStyles = StyleSheet.create({
     borderWidth: 1,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
-    marginTop: spacing.lg,
+    marginTop: spacing.md,
     marginHorizontal: spacing.lg,
   },
 });
 
 const catStyles = StyleSheet.create({
-  /* v3.0: بلاطة عمودية ملونة كاملة (نمط نون) — لون التصنيف الثابت
-   * نفسه من tileFor يملأ الخلفية والأيقونة الدائرية الصلبة. */
   tile: {
     alignItems: 'center',
     gap: 6,
@@ -808,11 +872,14 @@ const recStyles = StyleSheet.create({
   card: {width: 176},
 });
 
-const gridStyles = StyleSheet.create({
-  row: {
+/* v3.2: صفحة الكاروسيل الشبكي 2×2. */
+const gridPageStyles = StyleSheet.create({
+  page: {
     gap: spacing.md,
-    paddingHorizontal: spacing.lg,
+  },
+  row: {
+    flexDirection: 'row-reverse',
+    gap: spacing.md,
     width: '100%',
-    marginBottom: spacing.md,
   },
 });
