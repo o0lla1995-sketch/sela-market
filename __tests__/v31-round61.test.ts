@@ -27,9 +27,13 @@ const root = join(__dirname, '..');
 const read = (p: string) => readFileSync(join(root, p), 'utf8');
 
 describe('الجولة 61 — v3.1.0', () => {
-  test('① صور البطاقات: أبعاد رقمية + resize (قاتل الانهيار OOM)', () => {
+  test('① صور البطاقات: أبعاد محدودة + resize (قاتل الانهيار OOM)', () => {
     const card = read('src/components/ProductCard.tsx');
-    expect(card).toContain('useWindowDimensions');
+    // v3.5: المعادلة التقريبية (useWindowDimensions + Math.floor)
+    // استُبدلت بوضع الملء داخل خلايا مسقوفة 50% — البعد ما زال
+    // محدداً ومحدوداً بعرض البطاقة لا بفك ترميز الأصل (نفس حماية OOM).
+    expect(card).not.toContain('useWindowDimensions');
+    expect(card).toContain("photoWidth: number | '100%' = photoWidthProp ?? '100%'");
     expect(card).toContain('resizeMethod="resize"');
     expect(card).toContain('photoWidth');
     // عارض المنتج كذلك (المعرض + ملء الشاشة)
@@ -117,11 +121,11 @@ describe('الجولة 61 — v3.1.0', () => {
     expect(nav).toContain('brandSoft');
   });
 
-  test('⑨ الإصدار: 3.4.0 (18)', () => {
+  test('⑨ الإصدار: 3.5.0 (19)', () => {
     const config = read('src/core/config.ts');
-    expect(config).toContain("APP_VERSION = '3.4.0'");
+    expect(config).toContain("APP_VERSION = '3.5.0'");
     const gradle = read('android/app/build.gradle');
-    expect(gradle).toContain('versionName "3.4.0"');
-    expect(gradle).toContain('versionCode 18');
+    expect(gradle).toContain('versionName "3.5.0"');
+    expect(gradle).toContain('versionCode 19');
   });
 });

@@ -15,9 +15,16 @@
  *  • الوضع الداكن: حدود ‎#2A2A2A + ظل خافت؛ الفاتح: ظل ناعم.
  *  • v3.3: أُزيل android_ripple كلياً — كان يفجّر انهياراً فورياً عند كل
  *    لمسة على أندرويد (السلوك المطابق لـ v3.1.0 المُجرّب والشغّال).
+ *  • v3.5 (الجولة 65 — إصلاح «البطاقة الضخمة لمنتج واحد» في شبكات
+ *    المتجر): البطاقة لم تعد تتمدد بـ flex:1 داخل صفوف الشبكة —
+ *    كان ذلك يجعل المنتج الوحيد في صفه يفتح شريطاً بكامل عرض
+ *    الشاشة بينما صورته بنصف العرض (شكل مقرف). الآن كل شبكة تضع
+ *    البطاقة داخل خلية مسقوفة 50%، والصورة بلا photoWidth صريح
+ *    تملأ عرض البطاقة كاملاً (وضع الملء) بدل معادلة العرض التقريبية —
+ *    البطاقات متطابقة العرض تماماً كصفوف التجارة الحديثة.
  */
 import React from 'react';
-import {Image, Pressable, StyleSheet, Text, useWindowDimensions, View} from 'react-native';
+import {Image, Pressable, StyleSheet, Text, View} from 'react-native';
 import {useTheme} from '../theme/ThemeProvider';
 import {
   radius,
@@ -51,7 +58,7 @@ function PhotoPlaceholder({
   tint: string;
   border: string;
   inkColor: string;
-  width: number;
+  width: number | '100%';
   height: number;
 }) {
   const initial = name.trim().charAt(0) || '؟';
@@ -79,19 +86,19 @@ export function ProductCard({
   storeName?: string;
   storeRef: StoreRef;
   onPress: () => void;
-  /** عرض الصورة للأشرطة ذات العرض الثابت (المشابهة/المقترحات). */
+  /** عرض الصورة للأشرطة ذات العرض الثابت (المشابهة/المقترحات) —
+   *  بلا قيمة تدخل البطاقة «وضع الملء»: الصورة بعرض البطاقة كاملاً،
+   *  والبطاقة بعرض خليتها في الشبكة (v3.5). */
   photoWidth?: number;
   /** v3.2: ارتفاع الصورة — نسخة مضغوطة (110) لشبكات الكاروسيل 2×2. */
   photoHeight?: number;
 }) {
   const {palette} = useTheme();
-  /* v3.1: أبعاد رقمية دقيقة + resizeMethod="resize" — حجم الصورة
-   * الفعلي للبطاقة (~95KB) بدل فك ترميز الأصل (2.5MB) الذي كان
-   * يقتل التطبيق بالذاكرة (OOM) في شبكات البحث الكبيرة. */
-  const {width: screenWidth} = useWindowDimensions();
-  const photoWidth =
-    photoWidthProp ??
-    Math.floor((screenWidth - spacing.lg * 2 - spacing.md) / 2 - spacing.sm * 2);
+  /* v3.5: وضع الملء — بلا photoWidth صريح تملأ الصورة عرض البطاقة
+   * كاملاً؛ عرض البطاقة نفسه تحدده خلية الشبكة التي تحتويها، فتنتهي
+   * معضلة «صورة بنصف العرض داخل بطاقة ضخمة بكامل العرض» التي
+   * كانت تجعل بطاقة المنتج الوحيد في صفه شكلًا مقرفًا (شكوى الجولة 65). */
+  const photoWidth: number | '100%' = photoWidthProp ?? '100%';
   /* v2.8: لا إضافة سريعة من البطاقة — عدّاد السلة معلوماتي فقط
    * (شارة «في السلة»)، والطلب كله من صفحة المنتج. */
   const cartQtyForProduct = useCartStore(
@@ -279,8 +286,10 @@ export function ProductCard({
 }
 
 const styles = StyleSheet.create({
+  /* v3.5: لا flex:1 بعد اليوم — البطاقة تملأ عرض الخلية الأم (تمدد
+   * افتراضي في الحاويات العمودية)، فلا تتمدد وحدها بكامل الصف حين
+   * تكون عنصراً وحيداً في صف شبكة ذي عدد فردي. */
   card: {
-    flex: 1,
     borderRadius: radius.lg,
     borderWidth: 1,
     padding: spacing.sm,

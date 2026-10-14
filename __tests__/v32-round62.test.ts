@@ -165,12 +165,12 @@ describe('الجولة 62 — v3.2.0: التطوير الشامل UX/UI', () => 
     expect(home).toContain('snapToInterval={176 + spacing.md}');
   });
 
-  test('⑩ الإصدار: 3.4.0 (18)', () => {
+  test('⑩ الإصدار: 3.5.0 (19)', () => {
     const config = read('src/core/config.ts');
-    expect(config).toContain("APP_VERSION = '3.4.0'");
-    expect(config).toContain('APP_BUILD_CODE = 18');
+    expect(config).toContain("APP_VERSION = '3.5.0'");
+    expect(config).toContain('APP_BUILD_CODE = 19');
     const gradle = read('android/app/build.gradle');
-    expect(gradle).toContain('versionName "3.4.0"');
-    expect(gradle).toContain('versionCode 18');
+    expect(gradle).toContain('versionName "3.5.0"');
+    expect(gradle).toContain('versionCode 19');
   });
 });

@@ -21,6 +21,14 @@
  *  • بحث داخل المتجر: محلي فوري فوق النتائج + خادمي مؤجل (400ms)
  *    بحارس تسلسل + قفز لأعلى القائمة عند كل استعلام جديد.
  *  • زر الرجوع في التروسة: يسار الشاشة بسهم «‹» (توحيد RTL كامل).
+ *  • v3.5 (الجولة 65 — إصلاح «البطاقة الضخمة لمنتج واحد»): شبكة
+ *    منتجات المتجر كانت تعرض البطاقة عارية داخل صف numColumns —
+ *    flex:1 على جذر البطاقة كان يتمدد وحده بكامل عرض الشاشة حين
+ *    يكون هو المنتج الوحيد في صفه (عدد فردي/فلترة/بحث بمائع واحد)
+ *    بينما صورته بقيت بنصف العرض — شكل مقرف. الآن كل بطاقة داخل
+ *    خلية مسقوفة 50% (نمط الجولة 63 المُجرّب في البحث) + الصورة
+ *    تملأ البطاقة (وضع الملء) + صفوف الشبكة أخيراً بهامش جانبي 16
+ *    مثل باقي أقسام الصفحة — كانت الصفوف ملاصقة لحرفي الشاشة.
  */
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {
@@ -328,7 +336,15 @@ export function StoreScreen({navigation, route}: Props) {
         data={visible}
         keyExtractor={item => String(item.id)}
         numColumns={2}
-        columnWrapperStyle={{gap: spacing.md, width: '100%'}}
+        /* v3.5: الخلية مسقوفة 50% — المنتج الوحيد في صفه يبقى بنصف
+         * العرض كبقية بطاقات الشبكة، لا شريطاً ضخماً بكامل السطر
+         * (شكوى الجولة 65: «في الصف الواحد تصبح كبيرة لمنتج واحد
+         * وشكلها مقرف»). + هامش جانبي للصفوف كان الصفر. */
+        columnWrapperStyle={{
+          gap: spacing.md,
+          width: '100%',
+          paddingHorizontal: spacing.lg,
+        }}
         contentContainerStyle={{
           paddingBottom: Math.max(insets.bottom + 24, 96),
         }}
@@ -751,11 +767,13 @@ export function StoreScreen({navigation, route}: Props) {
           </View>
         }
         renderItem={({item}) => (
-          <ProductCard
-            product={item}
-            storeRef={storeRef}
-            onPress={() => navigation.navigate('Product', {product: item, storeRef})}
-          />
+          <View style={gridStyles.cell}>
+            <ProductCard
+              product={item}
+              storeRef={storeRef}
+              onPress={() => navigation.navigate('Product', {product: item, storeRef})}
+            />
+          </View>
         )}
         style={{backgroundColor: palette.bg}}
       />
@@ -1010,4 +1028,13 @@ const filterStyles = StyleSheet.create({
     height: 18,
     alignSelf: 'center',
   },
+});
+
+/* v3.5 (الجولة 65): هندسة شبكة منتجات المتجر — نفس نمط الجولة 63
+ * المُجرّب على جهاز المستخدم في شاشة البحث: الخلية مسقوفة بنصف
+ * العرض، فالبطاقة الوحيدة في صفها تبقى بنفس عرض بطاقات الشبكة
+ * ولا تتمدد شريطاً ضخماً بكامل السطر (شكوى: «بطاقة المنتجات غير
+ * صحيحة وفي الصف الواحد تصبح كبيرة لمنتج واحد وشكلها مقرف»). */
+const gridStyles = StyleSheet.create({
+  cell: {flex: 1, maxWidth: '50%'},
 });

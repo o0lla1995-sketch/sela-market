@@ -10,6 +10,9 @@
  *    بين المتاجر بدل كتلة متجر واحد ثم كتلة آخر)، حتى استنفاد
  *    كل متاجر القسم بتذييل واضح.
  *  • لا أي منظومة أصلية خاصة: نفس آليات v3.1.0 المُثبتة فقط.
+ *  • v3.5 (الجولة 65): البطاقة داخل خلية مسقوفة 50% — المنتج الوحيد
+ *    في صفه يبقى بنصف العرض كبقية البطاقات ولا يفتح شريطاً ضخماً
+ *    بكامل السطر (نفس إصلاح شبكة صفحة المتجر والبحث).
  */
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {FlatList, StyleSheet, View} from 'react-native';
@@ -258,24 +261,26 @@ export function StoreTypeScreen({navigation, route}: Props) {
             </View>
           }
           renderItem={({item}) => (
-            <ProductCard
-              product={item.product}
-              storeRef={{
-                id: item.store.id,
-                name: item.store.name,
-                storeNumber: item.store.store_number,
-              }}
-              onPress={() =>
-                navigation.navigate('Product', {
-                  product: item.product,
-                  storeRef: {
-                    id: item.store.id,
-                    name: item.store.name,
-                    storeNumber: item.store.store_number,
-                  },
-                })
-              }
-            />
+            <View style={gridStyles.cell}>
+              <ProductCard
+                product={item.product}
+                storeRef={{
+                  id: item.store.id,
+                  name: item.store.name,
+                  storeNumber: item.store.store_number,
+                }}
+                onPress={() =>
+                  navigation.navigate('Product', {
+                    product: item.product,
+                    storeRef: {
+                      id: item.store.id,
+                      name: item.store.name,
+                      storeNumber: item.store.store_number,
+                    },
+                  })
+                }
+              />
+            </View>
           )}
           style={{backgroundColor: palette.bg}}
         />
@@ -283,3 +288,8 @@ export function StoreTypeScreen({navigation, route}: Props) {
     </Screen>
   );
 }
+
+/* v3.5 (الجولة 65): خلية مسقوفة 50% — نفس نمط صفحة المتجر والبحث. */
+const gridStyles = StyleSheet.create({
+  cell: {flex: 1, maxWidth: '50%'},
+});

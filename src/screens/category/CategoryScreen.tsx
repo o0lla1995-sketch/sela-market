@@ -219,7 +219,9 @@ export function CategoryScreen({navigation, route}: Props) {
             ) : null
           }
           renderItem={({item}) => (
-            <View style={{flex: 1, paddingHorizontal: 0}}>
+            /* v3.5: خلية مسقوفة 50% — المنتج الوحيد في صفه يبقى بنصف
+             * العرض ولا يتمدد شريطاً ضخماً بكامل السطر. */
+            <View style={{flex: 1, maxWidth: '50%'}}>
               <ProductCard
                 product={item}
                 storeRef={{id: item.store_id, name: item.store_name, storeNumber: item.store_number}}

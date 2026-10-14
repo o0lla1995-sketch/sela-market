@@ -14,7 +14,7 @@
  *     + «عرض الكل» أيقونة دائرية مضغوطة 30px في أقصى يسار العناوين.
  *  ⑤ شاشات الدخول/التسجيل/البصمة: علامة علامة + عناوين ضخمة، صفر
  *     ملاحظات ثانوية (hint) في التسجيل، أيقونة بصمة مخصصة جديدة.
- *  ⑥ الإصدار: 3.4.0 (18).
+ *  ⑥ الإصدار: 3.5.0 (19).
  */
 import {readFileSync} from 'fs';
 import {join} from 'path';
@@ -130,12 +130,12 @@ describe('الجولة 64 — v3.4.0: الإصلاح الجذري + أقسام �
     expect(icon).toContain("case 'fingerprint':");
   });
 
-  test('⑥ الإصدار: 3.4.0 (18)', () => {
+  test('⑥ الإصدار: 3.5.0 (19)', () => {
     const config = read('src/core/config.ts');
-    expect(config).toContain("APP_VERSION = '3.4.0'");
-    expect(config).toContain('APP_BUILD_CODE = 18');
+    expect(config).toContain("APP_VERSION = '3.5.0'");
+    expect(config).toContain('APP_BUILD_CODE = 19');
     const gradle = read('android/app/build.gradle');
-    expect(gradle).toContain('versionCode 18');
-    expect(gradle).toContain('versionName "3.4.0"');
+    expect(gradle).toContain('versionCode 19');
+    expect(gradle).toContain('versionName "3.5.0"');
   });
 });

@@ -133,10 +133,10 @@ describe('v2.7 — تنظيف المفضلة من المنتجات غير الم
 
   test('⑤ الإصدار: محدّث في الجولة 62 (3.2.0)', () => {
     const config = read('src/core/config.ts');
-    expect(config).toContain("APP_VERSION = '3.4.0'");
-    expect(config).toContain('APP_BUILD_CODE = 18');
+    expect(config).toContain("APP_VERSION = '3.5.0'");
+    expect(config).toContain('APP_BUILD_CODE = 19');
     const gradle = read('android/app/build.gradle');
-    expect(gradle).toContain('versionCode 18');
-    expect(gradle).toContain('versionName "3.4.0"');
+    expect(gradle).toContain('versionCode 19');
+    expect(gradle).toContain('versionName "3.5.0"');
   });
 });

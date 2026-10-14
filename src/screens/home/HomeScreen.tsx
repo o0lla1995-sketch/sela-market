@@ -329,7 +329,8 @@ export function HomeScreen({navigation}: Props) {
   const pageWidth = screenWidth - carouselInset * 2;
   const snapInterval = pageWidth + pageGap;
   const gridPages = Math.ceil(products.length / GRID_PAGE);
-  const cardPhotoWidth = Math.floor((pageWidth - pageGap) / 2 - spacing.sm * 2);
+  /* v3.5: بطاقات صفحات 2×2 تنتقل لوضع الملء — الصورة تملأ عرض
+   * البطاقة والخلية مسقوفة 50%، فلا معادلة تقريبية بعد الآن. */
 
   /* صف كاروسيل واحد: عمودان من بطاقتين (شبكة 2×2). */
   const renderGridPage = (pageIndex: number) => {
@@ -340,10 +341,9 @@ export function HomeScreen({navigation}: Props) {
         {[0, 1].map(row => (
           <View key={row} style={gridPageStyles.row}>
             {items.slice(row * 2, row * 2 + 2).map(item => (
-              <View key={`${item.store_id}:${item.id}`} style={{flex: 1}}>
+              <View key={`${item.store_id}:${item.id}`} style={{flex: 1, maxWidth: '50%'}}>
                 <ProductCard
                   product={item}
-                  photoWidth={cardPhotoWidth}
                   photoHeight={104}
                   storeRef={{
                     id: item.store_id,
