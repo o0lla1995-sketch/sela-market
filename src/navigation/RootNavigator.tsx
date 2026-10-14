@@ -36,6 +36,7 @@ import {RegisterScreen} from '../screens/auth/RegisterScreen';
 import {HomeScreen} from '../screens/home/HomeScreen';
 import {StoresScreen} from '../screens/stores/StoresScreen';
 import {StoreScreen} from '../screens/stores/StoreScreen';
+import {StoreTypeScreen} from '../screens/stores/StoreTypeScreen';
 import {SearchScreen} from '../screens/search/SearchScreen';
 import {CategoryScreen} from '../screens/category/CategoryScreen';
 import {ProductScreen} from '../screens/product/ProductScreen';
@@ -60,6 +61,9 @@ export type ShopStackParamList = {
   Home: undefined;
   Stores: undefined;
   Store: {storeId: number; storeName?: string};
+  /* v3.4 (الجولة 64): تصفح منتجات قسم كامل حسب نوع المتجر —
+   * «مطاعم، بقالة، ملابس…» من الرئيسية. */
+  StoreType: {type: string};
   Product: {product: Product; storeRef: StoreRef; storeName?: string};
   Search: {initialQuery?: string; browse?: boolean} | undefined;
   Category: {category: string};
@@ -99,6 +103,7 @@ export type AccountStackParamList = {
   Terms: undefined;
   NetworkDiagnostics: undefined;
   Store: {storeId: number; storeName?: string};
+  StoreType: {type: string};
   Product: {product: Product; storeRef: StoreRef; storeName?: string};
   AddressBook: undefined;
   AddressForm: {address?: Address} | undefined;
@@ -168,6 +173,7 @@ function ShopStackScreens({initial = 'Home'}: {initial?: 'Home' | 'Stores'}) {
       <ShopStack.Screen name="Home" component={HomeScreen} />
       <ShopStack.Screen name="Stores" component={StoresScreen} />
       <ShopStack.Screen name="Store" component={StoreScreen} />
+      <ShopStack.Screen name="StoreType" component={StoreTypeScreen} />
       <ShopStack.Screen name="Product" component={ProductScreen} />
       <ShopStack.Screen name="Search" component={SearchScreen} />
       <ShopStack.Screen name="Category" component={CategoryScreen} />
@@ -226,6 +232,7 @@ function AccountStackScreens() {
       <AccountStack.Screen name="Terms" component={TermsScreen} />
       <AccountStack.Screen name="NetworkDiagnostics" component={NetworkDiagnosticsScreen} />
       <AccountStack.Screen name="Store" component={StoreScreen} />
+      <AccountStack.Screen name="StoreType" component={StoreTypeScreen} />
       <AccountStack.Screen name="Product" component={ProductScreen} />
       <AccountStack.Screen name="AddressBook" component={AddressBookScreen} />
       <AccountStack.Screen name="AddressForm" component={AddressFormScreen} />

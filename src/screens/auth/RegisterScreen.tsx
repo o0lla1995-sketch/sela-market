@@ -1,12 +1,20 @@
 /**
  * RegisterScreen.tsx — إنشاء حساب: رقم هوية فريد + الاسم + الجوال +
- * كلمة مرور (v1.1 — كل حساب محمي). مؤشر قوة كلمة المرور والتأكيد
- * يمنعان الأخطاء قبل الإرسال، والتحقق المسبق يطابق قواعد الخادم.
+ * كلمة مرور (v1.1 — كل حساب محمي).
+ * ─────────────────────────────────────────────────────────────────
+ *  • v3.4 (الجولة 64): إعادة تصميم عصرية بطلب المستخدم — حُذفت كل
+ *    الملاحظات الثانوية المزعزة تحت الحقول (رقم الهوية معرّفك،
+ *    الجوال للتوصيل، لا تشارك كلمة المرور…) وبقي التحقق الفعلي
+ *    عند اللمس فقط. سطر واحد مختصر للشروط بدل الفقرة الطويلة،
+ *    وعلامة علامة + عنوان ضخم مثل شاشة الدخول. المنطق لم يُمس.
+ *  • مؤشر قوة كلمة المرور والتأكيد يمنعان الأخطاء قبل الإرسال،
+ *    والتحقق المسبق يطابق قواعد الخادم.
  */
 import React, {useEffect, useRef, useState} from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -16,14 +24,9 @@ import {
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {useTheme} from '../../theme/ThemeProvider';
-import {spacing, type} from '../../theme/tokens';
-import {
-  AppHeader,
-  Button,
-  Field,
-  Screen,
-  SecureField,
-} from '../../components/ui';
+import {radius, spacing, type, fonts} from '../../theme/tokens';
+import {Icon} from '../../components/Icon';
+import {Button, Field, Screen, SecureField} from '../../components/ui';
 import {useAuthStore} from '../../stores/authStore';
 import {useToastStore} from '../../stores/toastStore';
 import {passwordProblem, passwordStrength} from '../../api/endpoints';
@@ -113,13 +116,43 @@ export function RegisterScreen({navigation}: Props) {
 
   return (
     <Screen style={{paddingBottom: insets.bottom}}>
-      <AppHeader
-        title="حساب جديد"
-        subtitle="هوية واحدة تكفي للتسوق من كل المتاجر"
-        onBack={() => navigation.goBack()}
-      />
       <KeyboardAvoidingView behavior={Platform.OS === 'android' ? undefined : 'padding'} style={{flex: 1}}>
-        <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
+        <ScrollView contentContainerStyle={regStyles.body} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+          {/* ── شريط علوي: مقبض النافذة + زر الإغلاق ── */}
+          <View style={regStyles.topRow}>
+            <View style={{width: 36}} />
+            <View style={[regStyles.grab, {backgroundColor: palette.lineStrong}]} />
+            <Pressable
+              onPress={() => {
+                if (navigation.canGoBack()) {
+                  navigation.goBack();
+                }
+              }}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="إغلاق"
+              style={({pressed}) => [
+                regStyles.closeBtn,
+                {backgroundColor: palette.surfaceAlt, opacity: pressed ? 0.7 : 1},
+              ]}>
+              <Icon name="close" size={17} color={palette.ink} strokeWidth={2.4} />
+            </Pressable>
+          </View>
+
+          {/* ── علامة العلامة + عنوان ── */}
+          <View style={regStyles.markWrap}>
+            <View style={[regStyles.markBadge, {backgroundColor: palette.brand}]}>
+              <Icon name="user" size={26} color="#FFFFFF" strokeWidth={2} />
+            </View>
+            <Text style={[type.h1, {color: palette.ink, fontFamily: fonts.black}]}>
+              حساب جديد
+            </Text>
+            <Text style={[type.small, {color: palette.muted, textAlign: 'center'}]}>
+              دقيقة واحدة وتتسوق من كل متاجر المول
+            </Text>
+          </View>
+
+          {/* ── الحقول — بلا ملاحظات ثانوية (v3.4) ── */}
           <View style={{gap: spacing.lg}}>
             <Field
               label="الاسم الكامل"
@@ -137,19 +170,18 @@ export function RegisterScreen({navigation}: Props) {
               onSubmitEditing={() => idRef.current?.focus()}
             />
             <Field
-              label="رقم الهوية (9 أرقام)"
+              label="رقم الهوية"
               value={idNumber}
               onChangeText={t => {
                 setIdNumber(t);
                 clearError();
               }}
-              placeholder="401234567"
+              placeholder="9 أرقام"
               keyboardType="numeric"
               numericOnly
               maxLength={9}
               icon="doc"
               error={idError}
-              hint="رقم الهوية هو معرّفك الوحيد على المنصة — مستخدم واحد لكل هوية"
               inputRef={idRef}
               returnKeyType="next"
               onSubmitEditing={() => phoneRef.current?.focus()}
@@ -161,13 +193,12 @@ export function RegisterScreen({navigation}: Props) {
                 setPhone(t);
                 clearError();
               }}
-              placeholder="0598765432"
+              placeholder="05xxxxxxxx"
               keyboardType="phone-pad"
               numericOnly
               maxLength={15}
               icon="phone"
               error={phoneError}
-              hint="يستخدمه المتجر للتواصل معك عند التوصيل واستعادة كلمة المرور"
               inputRef={phoneRef}
               returnKeyType="next"
               onSubmitEditing={() => pwRef.current?.focus()}
@@ -183,7 +214,6 @@ export function RegisterScreen({navigation}: Props) {
               error={pwProblem}
               showStrength
               strength={strength}
-              hint="تحمي حسابك وطلباتك — لا تشاركها مع أحد"
               inputRef={pwRef}
               returnKeyType="next"
               onSubmitEditing={() => confirmRef.current?.focus()}
@@ -199,19 +229,21 @@ export function RegisterScreen({navigation}: Props) {
               onSubmitEditing={() => void submit()}
             />
             {error ? (
-              <Text style={[type.small, {color: palette.danger, textAlign: 'center'}]}>
-                {error}
-              </Text>
+              <View style={[regStyles.errorCard, {backgroundColor: palette.dangerSoft}]}>
+                <Icon name="warning" size={15} color={palette.danger} />
+                <Text style={{fontSize: 12.5, color: palette.danger, flex: 1, fontFamily: fonts.medium}}>
+                  {error}
+                </Text>
+              </View>
             ) : null}
             <Button
               label={busy ? 'جارٍ إنشاء الحساب…' : 'إنشاء الحساب'}
               onPress={submit}
               loading={busy}
-              icon="user"
             />
-            <Text style={[{fontSize: 11, color: palette.muted, textAlign: 'center', lineHeight: 17}]}>
-              بإنشائك الحساب فأنت توافق على شروط الاستخدام وسياسة الخصوصية —
-              لا نطلب أي بطاقات دفع، والسداد نقداً عند الاستلام.
+            {/* v3.4: سطر واحد مختصر بدل فقرة الشروط الطويلة */}
+            <Text style={{fontSize: 11, color: palette.muted, textAlign: 'center', lineHeight: 17}}>
+              بإنشاء الحساب توافق على شروط الاستخدام وسياسة الخصوصية
             </Text>
           </View>
         </ScrollView>
@@ -220,6 +252,38 @@ export function RegisterScreen({navigation}: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  body: {padding: spacing.lg, gap: spacing.xxxl},
+/* ═══ v3.4: لغة التصميم الموحدة لشاشات الدخول ═══ */
+const regStyles = StyleSheet.create({
+  body: {padding: spacing.lg, gap: spacing.xl},
+  topRow: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.sm,
+  },
+  grab: {width: 44, height: 5, borderRadius: 999},
+  closeBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  markWrap: {alignItems: 'center', gap: spacing.sm},
+  markBadge: {
+    width: 64,
+    height: 64,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.xs,
+  },
+  errorCard: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: spacing.sm,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 10,
+  },
 });

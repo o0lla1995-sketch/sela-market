@@ -158,11 +158,11 @@ describe('الجولة 59 — v2.8.0: منطق الشراء العالمي وس�
 
   test('⑥ الإصدار: محدّث في الجولة 62 (3.2.0)', () => {
     const config = read('src/core/config.ts');
-    expect(config).toContain("APP_VERSION = '3.3.0'");
-    expect(config).toContain('APP_BUILD_CODE = 17');
+    expect(config).toContain("APP_VERSION = '3.4.0'");
+    expect(config).toContain('APP_BUILD_CODE = 18');
     const gradle = read('android/app/build.gradle');
-    expect(gradle).toContain('versionCode 17');
-    expect(gradle).toContain('versionName "3.3.0"');
+    expect(gradle).toContain('versionCode 18');
+    expect(gradle).toContain('versionName "3.4.0"');
   });
 
   test('⑦ المفضلة تتسق مع المنطق الجديد: زر واحد يفتح صفحة المنتج', () => {

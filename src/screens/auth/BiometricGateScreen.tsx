@@ -1,9 +1,13 @@
 /**
  * BiometricGateScreen.tsx — بوابة الدخول بالبصمة (v2.1).
  * ─────────────────────────────────────────────────────────────────
- * تظهر عند بدء التطبيق عندما توجد جلسة محفوظة (token) وفُعّل خيار
- * «الدخول بالبصمة» من الإعدادات. بصمة واحدة تفتح التطبيق على جلسة
- * المستخدم — أو «استخدام كلمة المرور» يسقط إلى شاشة الدخول.
+ *  • تظهر عند بدء التطبيق عندما توجد جلسة محفوظة (token) وفُعّل خيار
+ *    «الدخول بالبصمة» من الإعدادات. بصمة واحدة تفتح التطبيق على جلسة
+ *    المستخدم — أو «الدخول بدون بصمة» يدخل مباشرة.
+ *  • v3.4 (الجولة 64): إعادة تصميم عصرية بطلب المستخدم — دائرة بصمة
+ *    كبيرة بأيقونة مخصصة جديدة، نصوص مختصرة بلا ملاحظات ثانوية،
+ *    وزر أساسي واضح. المنطق (الفتح التلقائي وحارس إعادة القفل)
+ *    لم يُمس إطلاقاً.
  */
 import React, {useCallback, useEffect, useRef, useState} from 'react';
 import {Pressable, StyleSheet, Text, View} from 'react-native';
@@ -81,24 +85,24 @@ export function BiometricGateScreen({navigation}: Props) {
   return (
     <SafeAreaView style={[gateStyles.wrap, {backgroundColor: palette.bg}]}>
       <View style={[gateStyles.card, {backgroundColor: palette.surface, borderColor: palette.line}]}>
+        {/* v3.4: دائرة البصمة الكبيرة — أيقونة مخصصة بلون العلامة */}
         <View style={[gateStyles.printCircle, {backgroundColor: palette.brandSoft, borderColor: palette.brandBorder}]}>
-          <Icon name="shield" size={40} color={palette.brandDark} />
+          <Icon name="fingerprint" size={44} color={palette.brandDark} strokeWidth={1.7} />
         </View>
-        <Text style={[type.h2, {color: palette.ink, fontFamily: fonts.black}]}>
+        <Text style={[type.h2, {color: palette.ink, fontFamily: fonts.black, textAlign: 'center'}]}>
           الدخول بالبصمة
         </Text>
         <Text style={[type.small, {color: palette.muted, textAlign: 'center', lineHeight: 21}]}>
-          جلسة حسابك محفوظة على هذا الجهاز. افتحها ببصمتك مباشرة — أسرع
-          من كتابة كلمة المرور في كل مرة.
+          جلسة حسابك محفوظة على هذا الجهاز — افتحها بلمسة واحدة
         </Text>
         {hasPrint === false ? (
           <Text style={{fontSize: 11, color: palette.warning, fontFamily: fonts.medium, textAlign: 'center'}}>
-            لم نجد بصمة مسجلة — سجّل بصمة من إعدادات جهازك أولاً؛ يعمل الخيار أيضاً برمز القفل
+            لا توجد بصمة مسجلة في الجهاز — سجّلها من إعدادات الجهاز أو استخدم رمز القفل
           </Text>
         ) : null}
         <Button
-          label={busy ? 'جارٍ الفتح…' : 'إعادة المحاولة بالبصمة'}
-          icon="shield"
+          label={busy ? 'جارٍ الفتح…' : 'فتح بالبصمة'}
+          icon="fingerprint"
           onPress={run}
           disabled={busy}
         />
@@ -107,15 +111,11 @@ export function BiometricGateScreen({navigation}: Props) {
           hitSlop={8}
           style={{paddingVertical: 6}}>
           <Text style={{fontSize: 12.5, color: palette.brandDark, fontFamily: fonts.medium}}>
-            الدخول لاحقاً بدون بصمة
+            الدخول بدون بصمة
           </Text>
         </Pressable>
       </View>
-      <View style={{paddingBottom: insets.bottom + 12}}>
-        <Text style={{fontSize: 11, color: palette.muted, textAlign: 'center'}}>
-          يمكنك تعطيل البوابة من الإعدادات · الأمان
-        </Text>
-      </View>
+      <View style={{paddingBottom: insets.bottom + 12}} />
     </SafeAreaView>
   );
 }
@@ -137,8 +137,8 @@ const gateStyles = StyleSheet.create({
     alignItems: 'center',
   },
   printCircle: {
-    width: 86,
-    height: 86,
+    width: 96,
+    height: 96,
     borderRadius: 999,
     borderWidth: 2,
     alignItems: 'center',

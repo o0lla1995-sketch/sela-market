@@ -1,21 +1,17 @@
 /**
- * HomeScreen.tsx — رئيسية المول (v3.2 — الجولة 62):
+ * HomeScreen.tsx — رئيسية المول (v3.4 — الجولة 64):
  * ─────────────────────────────────────────────────────────────────
- * طلب التاجر: «ادمج التحية ومنطقة التوصيل والبحث في تروسة واحدة
- * متماسكة بنفس الانحناءات وظل ناعم» + «تروسة لاصقة تتحرك بسلاسة
- * بلا قفزات» + «أحدث ما وصل المول كاروسيل شبكي بانتقال صفحات
- * ناعم (Snap)» + «عرض الكل بلا تزاحم مع العنوان».
- *
- *  • التروسة اللاصقة: كتلة واحدة بلون العلامة فوق منطقة التمرير
- *    (خارجها هندسياً) — ثابتة دائماً بلا أي قفزة إطلاقاً، فيها:
- *    التحية + الاسم + المفضلة/الإشعارات، شريط المنطقة بعرض كامل
- *    (لا تختفي أيقونته عند حافة الشاشة — شكوى الجولة 14)، ومدخل
- *    البحث. انحناء موحّد + ظل ناعم مرفوع.
- *  • «أحدث ما وصل المول»: كاروسيل أفقي بصفحات شبكية 2×2 مع
- *    snap-to-grid — كل صفحة 4 منتجات مقضمة قفزاً ناعماً، والجلب
- *    التدريجي يستمر عند آخر صفحة. «عرض الكل» يفتح كامل منتجات
- *    المول (وضع التصفح في شاشة البحث).
- *  • «مقترحات لك» وشرائط المتاجر: نفس نظام snap الناعم.
+ *  • طلب المستخدم الأهم: «تقسيم لأنواع المتاجر — كل قسم يعرض عدداً
+ *    من أحدث وأفضل المنتجات + الانتقال لتصفح منتجات القسم بالكامل».
+ *    أقسام ديناميكية من تصنيفات المتاجر الفعلية (مطاعم/بقالة/ملابس…)
+ *    — لكل نوع شريط منتجات من أفضل متاجره (الأعلى تقييماً بتدوير
+ *    دائري)، وأيقونة «عرض الكل» تفتح شاشة القسم الكاملة الجديدة.
+ *  • التروسة: عادت الزوايا الدائرية السفلية (طلب صريح — كانت
+ *    مسطحة منذ v3.2)، وحُذف شريط «توصيل إلى» منها — انتقل رقاقة
+ *    منطقة لطيفة ومضغوطة إلى أقصى يسار عنوان قسم «متاجر تخدم»
+ *    حيث سياقه الحقيقي، و«عرض الكل» لباقي الأقسام أيقونة مضغوطة
+ *    في أقصى يسار العنوان (طلب صريح بالنص).
+ *  • «أحدث ما وصل المول»: كاروسيل شبكي 2×2 بجلب تدريجي مستمر.
  *  • شبكة أمان البيانات: نداء /home المجمّع + كاش محلي + شريط
  *    «تعذّر التحديث» بزر إعادة محاولة.
  */
@@ -55,17 +51,18 @@ import {
   SectionTitle,
 } from '../../components/ui';
 import {ProductCard} from '../../components/ProductCard';
-import {CircleStoreCard} from '../../components/StoreCard';
+import {CircleStoreCard, storeTypeInfo} from '../../components/StoreCard';
 import {
   getCrossProducts,
   getDeliveryRegions,
   getHomeFeed,
+  getStoreProducts,
   getStores,
 } from '../../api/endpoints';
 import {cachedFetch} from '../../api/cached';
 import {PRODUCTS_PAGE_SIZE} from '../../core/config';
 import {greeting} from '../../core/time';
-import type {CategoryCount, CrossProduct, Store} from '../../core/types';
+import type {CategoryCount, CrossProduct, Product, Store} from '../../core/types';
 import {useAuthStore} from '../../stores/authStore';
 import {useLocationStore} from '../../stores/locationStore';
 import {useInterestStore} from '../../stores/interestStore';
@@ -110,6 +107,10 @@ export function HomeScreen({navigation}: Props) {
   const [categories, setCategories] = useState<CategoryCount[]>([]);
   const [products, setProducts] = useState<CrossProduct[]>([]);
   const [recommended, setRecommended] = useState<CrossProduct[]>([]);
+  /* v3.4: شريط منتجات كل نوع متجر — {product, store} لبناء storeRef. */
+  const [typeProducts, setTypeProducts] = useState<
+    Record<string, {product: Product; store: Store}[]>
+  >({});
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -208,6 +209,76 @@ export function HomeScreen({navigation}: Props) {
       alive = false;
     };
   }, [interestCats]);
+
+  /* ── v3.4: أقسام أنواع المتاجر — طلب المستخدم الأهم ──
+   * تصنيف المتاجر الفعلي (مطاعم/بقالة/ملابس/صيدلية…) عبر
+   * storeTypeInfo نفسها المستخدمة في كل بطاقات التطبيق — أعلى
+   * أربعة أنواع بعدد المتاجر، ولكل نوع شريط من أحدث وأفضل
+   * منتجات أفضل متجريه (الأعلى تقييماً) بتدوير دائري بينهما. */
+  const typeSections = useMemo(() => {
+    const groups = new Map<string, {icon: IconName; stores: Store[]}>();
+    for (const s of stores) {
+      const info = storeTypeInfo(s.category);
+      const g = groups.get(info.label);
+      if (g != null) {
+        g.stores.push(s);
+      } else {
+        groups.set(info.label, {icon: info.icon, stores: [s]});
+      }
+    }
+    return Array.from(groups.entries())
+      .map(([label, g]) => ({label, icon: g.icon, stores: g.stores}))
+      .sort((a, b) => b.stores.length - a.stores.length)
+      .slice(0, 4);
+  }, [stores]);
+
+  useEffect(() => {
+    let alive = true;
+    if (typeSections.length === 0) {
+      setTypeProducts({});
+      return;
+    }
+    (async () => {
+      for (const sec of typeSections) {
+        const top = [...sec.stores]
+          .sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0))
+          .slice(0, 2);
+        const batches = await Promise.all(
+          top.map(s =>
+            cachedFetch(`typeprods:v1:${s.id}`, () =>
+              getStoreProducts(s.id, {per: 6}),
+            ),
+          ),
+        );
+        if (!alive) {
+          return;
+        }
+        /* تدوير دائري بين المتجرين — تنويع بصري بدل كتلة متجر واحد */
+        const seenKeys = new Set<string>();
+        const rail: {product: Product; store: Store}[] = [];
+        const maxLen = Math.max(...batches.map(b => b.data?.length ?? 0));
+        for (let i = 0; i < maxLen; i += 1) {
+          top.forEach((store, si) => {
+            const p = batches[si].data?.[i];
+            if (p != null) {
+              const key = `${store.id}:${p.id}`;
+              if (!seenKeys.has(key)) {
+                seenKeys.add(key);
+                rail.push({product: p, store});
+              }
+            }
+          });
+        }
+        if (!alive) {
+          return;
+        }
+        setTypeProducts(prev => ({...prev, [sec.label]: rail.slice(0, 6)}));
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [typeSections]);
 
   /* ── جلب صفحات إضافية لصفحات كاروسيل «أحدث ما وصل» ── */
   const loadMore = useCallback(async () => {
@@ -341,24 +412,11 @@ export function HomeScreen({navigation}: Props) {
             </View>
           </View>
 
-          {/* شريط المنطقة — بعرض كامل داخل التروسة، دائماً ظاهر
-           * (شكوى الجولة 14: الأيقونة كانت تُدفَع خارج حافة الشاشة). */}
-          <Pressable
-            onPress={openRegionPicker}
-            accessibilityRole="button"
-            accessibilityLabel={`منطقة التوصيل: ${myRegion ?? 'غير محددة'}`}
-            style={heroStyles.regionBar}>
-            <Icon name="pin" size={16} color="#FFFFFF" />
-            <View style={{flex: 1, alignItems: 'flex-start'}}>
-              <Text style={heroStyles.regionLabel}>التوصيل إلى</Text>
-              <Text style={heroStyles.regionValue} numberOfLines={1}>
-                {myRegion ?? 'حدّد منطقتك'}
-              </Text>
-            </View>
-            <Icon name="chevronDown" size={16} color="#FFFFFF" />
-          </Pressable>
+          {/* v3.4 (الجولة 64): شريط «توصيل إلى» حُذف من الهيدر بطلب
+           * المستخدم — رقاقة المنطقة اللطيفة انتقلت إلى أقصى يسار
+           * عنوان قسم «متاجر تخدم» أدناه حيث سياقها الحقيقي. */}
 
-          {/* مدخل البحث — أبيض فوق لون العلامة بنفس انحناء شريط المنطقة */}
+          {/* مدخل البحث — أبيض فوق لون العلامة بنفس انحناء القسم */}
           <Pressable
             onPress={() => navigation.navigate('Search')}
             accessibilityRole="button"
@@ -417,30 +475,35 @@ export function HomeScreen({navigation}: Props) {
           </View>
         ) : (
           <View style={{paddingHorizontal: spacing.lg, gap: spacing.xl, paddingTop: spacing.lg}}>
-            {/* ─── متاجر تخدم منطقتك ─── */}
-            {myRegion == null ? (
-              <Pressable
-                onPress={openRegionPicker}
-                accessibilityRole="button"
-                style={({pressed}) => [
-                  regionStyles.emptyCard,
-                  {
-                    backgroundColor: palette.brandSoft,
-                    borderColor: palette.brandBorder,
-                    opacity: pressed ? 0.85 : 1,
-                  },
-                ]}>
-                <View style={[regionStyles.pinCircle, {backgroundColor: palette.brand}]}>
-                  <Icon name="pin" size={18} color="#FFFFFF" />
-                </View>
-                <Text style={{flex: 1, fontSize: 12.5, color: palette.ink, fontFamily: fonts.medium}}>
-                  حدّد منطقتك لتظهر المتاجر التي توصّل إليك
-                </Text>
-                <Icon name="chevronLeft" size={16} color={palette.brandDark} />
-              </Pressable>
-            ) : regionStores.length > 0 ? (
-              <View style={{gap: spacing.md}}>
-                <SectionTitle title={`متاجر تخدم ${myRegion}`} />
+            {/* ─── متاجر تخدم منطقتك — رقاقة المنطقة بأقصى يسار العنوان ─── */}
+            <View style={{gap: spacing.md}}>
+              <SectionTitle
+                title={
+                  myRegion != null ? `متاجر تخدم ${myRegion}` : 'متاجر تخدم منطقتك'
+                }
+                end={<RegionChip region={myRegion} onPress={openRegionPicker} />}
+              />
+              {myRegion == null ? (
+                <Pressable
+                  onPress={openRegionPicker}
+                  accessibilityRole="button"
+                  style={({pressed}) => [
+                    regionStyles.emptyCard,
+                    {
+                      backgroundColor: palette.brandSoft,
+                      borderColor: palette.brandBorder,
+                      opacity: pressed ? 0.85 : 1,
+                    },
+                  ]}>
+                  <View style={[regionStyles.pinCircle, {backgroundColor: palette.brand}]}>
+                    <Icon name="pin" size={18} color="#FFFFFF" />
+                  </View>
+                  <Text style={{flex: 1, fontSize: 12.5, color: palette.ink, fontFamily: fonts.medium}}>
+                    حدّد منطقتك لتظهر المتاجر التي توصّل إليك
+                  </Text>
+                  <Icon name="chevronLeft" size={16} color={palette.brandDark} />
+                </Pressable>
+              ) : regionStores.length > 0 ? (
                 <FlatList
                   horizontal
                   data={regionStores.slice(0, 10)}
@@ -460,12 +523,69 @@ export function HomeScreen({navigation}: Props) {
                     />
                   )}
                 />
-              </View>
-            ) : (
-              <Text style={[type.tiny, {color: palette.muted}]}>
-                لا متاجر تخدم «{myRegion}» حالياً — غيّر المنطقة من أعلى الصفحة
-              </Text>
-            )}
+              ) : (
+                <Text style={[type.tiny, {color: palette.muted}]}>
+                  لا متاجر تخدم «{myRegion}» حالياً — غيّر المنطقة من رقاقة القسم
+                </Text>
+              )}
+            </View>
+
+            {/* ─── أقسام حسب نوع المتجر (v3.4 — طلب المستخدم الأهم) ───
+             * لكل نوع شريط من أحدث وأفضل منتجات أفضل متاجره،
+             * وأيقونة «عرض الكل» بأقصى يسار العنوان تفتح شاشة
+             * القسم الكاملة (StoreTypeScreen) بكل متاجر القسم
+             * ومنتجاتها بجلب دوّار عادل حتى الاستنفاد. */}
+            {typeSections.map(sec => {
+              const rail = typeProducts[sec.label] ?? [];
+              if (rail.length === 0) {
+                return null;
+              }
+              return (
+                <View key={`type-${sec.label}`} style={{gap: spacing.md}}>
+                  <SectionTitle
+                    title={sec.label}
+                    subtitle={`${sec.stores.length} ${
+                      sec.stores.length === 1 ? 'متجر' : 'متاجر'
+                    } في المول`}
+                    actionLabel="عرض الكل"
+                    onAction={() => navigation.navigate('StoreType', {type: sec.label})}
+                  />
+                  <FlatList
+                    horizontal
+                    data={rail}
+                    keyExtractor={item => `t${item.store.id}:${item.product.id}`}
+                    showsHorizontalScrollIndicator={false}
+                    snapToInterval={176 + spacing.md}
+                    decelerationRate="fast"
+                    contentContainerStyle={{gap: spacing.md, paddingVertical: 2}}
+                    renderItem={({item}) => (
+                      <View style={recStyles.card}>
+                        <ProductCard
+                          product={item.product}
+                          photoWidth={152}
+                          photoHeight={120}
+                          storeRef={{
+                            id: item.store.id,
+                            name: item.store.name,
+                            storeNumber: item.store.store_number,
+                          }}
+                          onPress={() =>
+                            navigation.navigate('Product', {
+                              product: item.product,
+                              storeRef: {
+                                id: item.store.id,
+                                name: item.store.name,
+                                storeNumber: item.store.store_number,
+                              },
+                            })
+                          }
+                        />
+                      </View>
+                    )}
+                  />
+                </View>
+              );
+            })}
 
             {/* ─── مقترحات لك (اهتماماتك) — كاروسيل snap ─── */}
             {recommended.length > 0 ? (
@@ -708,10 +828,14 @@ export function HomeScreen({navigation}: Props) {
 }
 
 const heroStyles = StyleSheet.create({
-  /* v3.2: كتلة التروسة اللاصقة — بلا انحناءات سفلية (تلتصق بأعلى
-   * الشاشة فوق التمرير) بظل مرفوع يفصلها بصرياً عن المحتوى. */
+  /* v3.4: عادت الزوايا الدائرية السفلية بطلب المستخدم الصريح —
+   * التروسة كبطاقة عائمة أنيقة بظل مرفوع فوق محتوى التمرير
+   * (كانت مسطحة الحواف منذ v3.2 بلا أي انحناء سفلي). */
   wrap: {
     paddingBottom: spacing.md,
+    borderBottomLeftRadius: radius.xl,
+    borderBottomRightRadius: radius.xl,
+    overflow: 'hidden',
   },
   inner: {
     paddingHorizontal: spacing.lg,
@@ -744,28 +868,6 @@ const heroStyles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.22)',
   },
   badgeSlot: {position: 'absolute', top: -5, left: -5},
-  /* شريط المنطقة — نفس انحناء مدخل البحث (كتلة متماسكة موحّدة). */
-  regionBar: {
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    gap: spacing.sm,
-    borderRadius: radius.md,
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.28)',
-    paddingHorizontal: spacing.md,
-    paddingVertical: 8,
-  },
-  regionLabel: {
-    fontSize: 10,
-    color: 'rgba(255,255,255,0.8)',
-    fontFamily: fonts.medium,
-  },
-  regionValue: {
-    fontSize: 13.5,
-    color: '#FFFFFF',
-    fontFamily: fonts.bold,
-  },
   searchEntry: {
     flexDirection: 'row-reverse',
     alignItems: 'center',
@@ -865,6 +967,66 @@ const regionStyles = StyleSheet.create({
 
 const recStyles = StyleSheet.create({
   card: {width: 176},
+});
+
+/* ═══ v3.4: رقاقة «توصيل إلى» اللطيفة — أقصى يسار عنوان القسم ═══
+ * طلب المستخدم بالنص: «زر توصيل الي بشكل لطيف وبسيط عند تغير
+ * المنطقة يظهر في أقصي الزاوية اليسري بجانب الهيدر لقسم متاجر
+ * تخدم» — كبسولة مضغوطة: دبوس + اسم المنطقة الحالي + سهم صغير،
+ * تفتح مساعد اختيار المنطقة وتتحدث فور تغيّرها. */
+function RegionChip({
+  region,
+  onPress,
+}: {
+  region: string | null;
+  onPress: () => void;
+}) {
+  const {palette} = useTheme();
+  return (
+    <Pressable
+      onPress={onPress}
+      hitSlop={8}
+      accessibilityRole="button"
+      accessibilityLabel={
+        region != null
+          ? `منطقة التوصيل: ${region} — للتغيير`
+          : 'حدّد منطقة التوصيل'
+      }
+      style={({pressed}) => [
+        regionChipStyles.chip,
+        {
+          backgroundColor: palette.brandSoft,
+          borderColor: palette.brandBorder,
+          opacity: pressed ? 0.75 : 1,
+        },
+      ]}>
+      <Icon name="pin" size={13} color={palette.brandDark} />
+      <Text
+        style={{
+          fontSize: 12,
+          color: palette.brandDark,
+          fontFamily: fonts.bold,
+          maxWidth: 120,
+        }}
+        numberOfLines={1}>
+        {region ?? 'حدّد منطقتك'}
+      </Text>
+      <Icon name="chevronDown" size={12} color={palette.brandDark} />
+    </Pressable>
+  );
+}
+
+const regionChipStyles = StyleSheet.create({
+  chip: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 5,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    flexShrink: 0,
+  },
 });
 
 /* v3.2: صفحة الكاروسيل الشبكي 2×2. */

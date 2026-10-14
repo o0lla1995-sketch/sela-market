@@ -1,11 +1,17 @@
 /**
- * StoreScreen.tsx — صفحة المتجر (v3.2 — الجولة 62):
+ * StoreScreen.tsx — صفحة المتجر (v3.4 — الجولة 64):
  * ─────────────────────────────────────────────────────────────────
- *  • شريط علوي لاصق ذكي: ينسلّ بحركة ناعمة (Animated أصلية) عند
- *    تجاوز التروسة البطولية — فيه زر الرجوع «‹» + اسم المتجر +
- *    أيقونة بحث تركّز حقل البحث فوراً. الزائر أبداً لا يعلق بلا
- *    زر رجوع مهما نزل في الكتالوج (شكوى الجولة 14: «أبقى عالقاً
- *    في الصفحة المفتوحة»).
+ *  • إصلاح جذري لانهيار فتح صفحة المتجر: حُذفت منظومة Animated
+ *    ذات المحرك الأصلي كلياً (Animated.event + useNativeDriver على
+ *    تمرير القائمة + طبقة Animated.View بم interpolations) — كانت
+ *    الآلية الوحيدة المُدخلة بعد v3.1.0 السليمة وتُفجّر انهياراً
+ *    أصلياً فورياً على معمارية Fabric الجديدة عند فتح الصفحة من
+ *    الرئيسية أو دليل المتاجر. البديل آمن مئة بالمئة: onScroll
+ *    عادي + حالة إظهار ثنائية عند تجاوز التروسة — نفس آليات
+ *    v3.1.0 المُثبتة على جهاز المستخدم بلا أي وحدة أصلية إضافية.
+ *  • شريط علوي لاصق: يظهر عند تجاوز التروسة البطولية — فيه زر
+ *    الرجوع «‹» + اسم المتجر + أيقونة بحث تركّز حقل البحث فوراً.
+ *    الزائر أبداً لا يعلق بلا زر رجوع مهما نزل في الكتالوج.
  *  • رقائق فلترة سريعة أفقية داخل المتجر (طلب التاجر): الكل /
  *    عروض / تصنيفات المتجر + ترتيب (الأحدث/الأرخص/الأغلى) —
  *    فلترة محلية فورية فوق الكتالوج المُحمّل بلا أي نداء شبكة.
@@ -18,7 +24,6 @@
  */
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {
-  Animated,
   FlatList,
   Linking,
   Pressable,
@@ -91,19 +96,14 @@ export function StoreScreen({navigation, route}: Props) {
   const listRef = useRef<FlatList<Product>>(null);
   const searchInputRef = useRef<TextInput>(null);
 
-  /* v3.2: الشريط العلوي اللاصق — حركة أصلية سلسة بلا أي إعادة
-   * رندر لكل إطار: interpolate على إزاحة التمرير نفسها. */
-  const scrollY = useRef(new Animated.Value(0)).current;
-  const stickyTranslateY = scrollY.interpolate({
-    inputRange: [130, 200],
-    outputRange: [-70, 0],
-    extrapolate: 'clamp',
-  });
-  const stickyOpacity = scrollY.interpolate({
-    inputRange: [150, 200],
-    outputRange: [0, 1],
-    extrapolate: 'clamp',
-  });
+  /* v3.4: الشريط العلوي اللاصق — حالة إظهار ثنائية آمنة تماماً.
+   * كان تنفيذ v3.2 بمنظومة Animated ذات المحرك الأصلي (useNativeDriver
+   * على حدث التمرير) — وهي الآلية الوحيدة التي دخلت هذه الشاشة بعد
+   * v3.1.0 السليمة، وتُفجّر انهياراً فورياً عند فتح الصفحة على
+   * المعمارية الجديدة. الآن: onScroll عادي يقارن العتبة ويبدّل حالة
+   * واحدة — setState يُتخطى تلقائياً حين لا تتغير القيمة فلا أي
+   * إعادة رندر زائدة، وبلا أي وحدة أصلية في المسار. */
+  const [barShown, setBarShown] = useState(false);
 
   const load = useCallback(async () => {
     setError(null);
@@ -278,51 +278,50 @@ export function StoreScreen({navigation, route}: Props) {
 
   return (
     <Screen>
-      {/* ═══ الشريط العلوي اللاصق (v3.2) ═══
-       * ينسلّ بحركة أصلية ناعمة عند تجاوز التروسة — رجوع + اسم
-       * المتجر + بحث فوري. طبقة مطلقة فوق المحتوى: صفر قفزات تخطيط. */}
-      <Animated.View
-        style={[
-          stickyStyles.bar,
-          {
-            paddingTop: 6,
-            backgroundColor: palette.surface,
-            borderBottomColor: palette.line,
-            opacity: stickyOpacity,
-            transform: [{translateY: stickyTranslateY}],
-          },
-          shadowRaised(palette.isDark),
-        ]}>
-        <Pressable
-          onPress={() => navigation.goBack()}
-          hitSlop={10}
-          accessibilityRole="button"
-          accessibilityLabel="رجوع"
-          style={[stickyStyles.backBtn, {borderColor: palette.line}]}>
-          <Icon name="chevronLeft" size={20} color={palette.ink} strokeWidth={2.4} />
-        </Pressable>
-        <StoreAvatar
-          name={store?.name ?? storeName ?? 'س'}
-          logoUrl={store?.logo_url}
-          size={32}
-        />
-        <Text
-          style={[type.h3, {color: palette.ink, flex: 1}]}
-          numberOfLines={1}>
-          {store?.name ?? storeName ?? 'المتجر'}
-        </Text>
-        <Pressable
-          onPress={() => {
-            listRef.current?.scrollToOffset({offset: 0, animated: true});
-            searchInputRef.current?.focus();
-          }}
-          hitSlop={10}
-          accessibilityRole="button"
-          accessibilityLabel="بحث داخل المتجر"
-          style={[stickyStyles.searchBtn, {borderColor: palette.line}]}>
-          <Icon name="search" size={18} color={palette.ink} />
-        </Pressable>
-      </Animated.View>
+      {/* ═══ الشريط العلوي اللاصق (v3.4 — آمن تماماً) ═══
+       * يظهر بعد تجاوز التروسة — رجوع + اسم المتجر + بحث فوري.
+       * طبقة مطلقة فوق المحتوى: صفر قفزات تخطيط، وصفر وحدات أصلية. */}
+      {barShown ? (
+        <View
+          style={[
+            stickyStyles.bar,
+            {
+              backgroundColor: palette.surface,
+              borderBottomColor: palette.line,
+            },
+            shadowRaised(palette.isDark),
+          ]}>
+          <Pressable
+            onPress={() => navigation.goBack()}
+            hitSlop={10}
+            accessibilityRole="button"
+            accessibilityLabel="رجوع"
+            style={[stickyStyles.backBtn, {borderColor: palette.line}]}>
+            <Icon name="chevronLeft" size={20} color={palette.ink} strokeWidth={2.4} />
+          </Pressable>
+          <StoreAvatar
+            name={store?.name ?? storeName ?? 'س'}
+            logoUrl={store?.logo_url}
+            size={32}
+          />
+          <Text
+            style={[type.h3, {color: palette.ink, flex: 1}]}
+            numberOfLines={1}>
+            {store?.name ?? storeName ?? 'المتجر'}
+          </Text>
+          <Pressable
+            onPress={() => {
+              listRef.current?.scrollToOffset({offset: 0, animated: true});
+              searchInputRef.current?.focus();
+            }}
+            hitSlop={10}
+            accessibilityRole="button"
+            accessibilityLabel="بحث داخل المتجر"
+            style={[stickyStyles.searchBtn, {borderColor: palette.line}]}>
+            <Icon name="search" size={18} color={palette.ink} />
+          </Pressable>
+        </View>
+      ) : null}
 
       <FlatList
         ref={listRef}
@@ -334,10 +333,13 @@ export function StoreScreen({navigation, route}: Props) {
           paddingBottom: Math.max(insets.bottom + 24, 96),
         }}
         showsVerticalScrollIndicator={false}
-        onScroll={Animated.event(
-          [{nativeEvent: {contentOffset: {y: scrollY}}}],
-          {useNativeDriver: true},
-        )}
+        /* v3.4: onScroll عادي بلا أي محرك أصلي — مقارنة عتبة واحدة
+         * وتبديل حالة عند التغير فقط (React يتخطى setState المتطابق). */
+        onScroll={e => {
+          const y = e.nativeEvent.contentOffset.y;
+          const show = y > 150;
+          setBarShown(prev => (prev === show ? prev : show));
+        }}
         scrollEventThrottle={16}
         onEndReached={loadMore}
         onEndReachedThreshold={0.6}
@@ -806,7 +808,8 @@ function FilterChip({
 }
 
 const stickyStyles = StyleSheet.create({
-  /* v3.2: الشريط اللاصق — طبقة مطلقة أعلى الشاشة تنسلل بحركة أصلية. */
+  /* v3.4: الشريط اللاصق — طبقة مطلقة أعلى الشاشة تظهر بعد تجاوز
+   * التروسة. تنفيذ بحالة عادية بلا أي وحدات أصلية (سبب الإصلاح). */
   bar: {
     position: 'absolute',
     top: 0,
@@ -818,6 +821,7 @@ const stickyStyles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.md,
     paddingHorizontal: spacing.lg,
+    paddingTop: 6,
     paddingBottom: 8,
     borderBottomWidth: 1,
   },

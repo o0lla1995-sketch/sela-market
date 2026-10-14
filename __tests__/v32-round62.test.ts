@@ -45,12 +45,11 @@ describe('الجولة 62 — v3.2.0: التطوير الشامل UX/UI', () => 
     const home = read('src/screens/home/HomeScreen.tsx');
     // الكتلة خارج ScrollView (لاصقة هندسياً) + ظل مرفوع
     expect(home).toContain('shadowRaised');
-    // المكونات الثلاثة مدمجة: تحية + منطقة + بحث
+    // المكونات مدمجة: تحية + بحث (المنطقة انتقلت لرقاقة القسم في v3.4
+    // بطلب المستخدم الصريح — حُدّث الحرس تبعاً)
     expect(home).toContain('greeting()');
-    expect(home).toContain('التوصيل إلى');
     expect(home).toContain('ابحث عن منتج في كل متاجر المول');
-    // شريط المنطقة بعرض كامل (لا رقاقة تختفي عند الحافة)
-    expect(home).toContain('regionBar');
+    expect(home).toContain('RegionChip');
     // المحتوى القابل للتمرير منفصل تحت التروسة
     expect(home).toContain('محتوى الصفحة القابل للتمرير تحت التروسة الثابتة');
   });
@@ -89,9 +88,12 @@ describe('الجولة 62 — v3.2.0: التطوير الشامل UX/UI', () => 
 
   test('⑤ صفحة التاجر: شريط لاصق + فلاتر سريعة + كاروسيل آراء', () => {
     const store = read('src/screens/stores/StoreScreen.tsx');
-    // الشريط اللاصق بحركة أصلية (Animated) — رجوع + بحث دائماً
-    expect(store).toContain('Animated.Value');
-    expect(store).toContain('stickyTranslateY');
+    // v3.4 (الجولة 64): الشريط اللاصق أعيد تنفيذه بحالة عادية آمنة
+    // (barShown + onScroll) — منظومة Animated ذات المحرك الأصلي
+    // حُذفت كلياً لأنها كانت تُفجّر انهيار فتح الصفحة.
+    expect(store).toContain('const [barShown, setBarShown] = useState(false);');
+    expect(store).not.toContain('Animated.Value');
+    expect(store).not.toContain('stickyTranslateY');
     // رقائق الفلترة السريعة: عروض + تصنيفات + ترتيب سعر
     expect(store).toContain('FilterChip');
     expect(store).toContain('offersOnly');
@@ -163,12 +165,12 @@ describe('الجولة 62 — v3.2.0: التطوير الشامل UX/UI', () => 
     expect(home).toContain('snapToInterval={176 + spacing.md}');
   });
 
-  test('⑩ الإصدار: 3.3.0 (17)', () => {
+  test('⑩ الإصدار: 3.4.0 (18)', () => {
     const config = read('src/core/config.ts');
-    expect(config).toContain("APP_VERSION = '3.3.0'");
-    expect(config).toContain('APP_BUILD_CODE = 17');
+    expect(config).toContain("APP_VERSION = '3.4.0'");
+    expect(config).toContain('APP_BUILD_CODE = 18');
     const gradle = read('android/app/build.gradle');
-    expect(gradle).toContain('versionName "3.3.0"');
-    expect(gradle).toContain('versionCode 17');
+    expect(gradle).toContain('versionName "3.4.0"');
+    expect(gradle).toContain('versionCode 18');
   });
 });

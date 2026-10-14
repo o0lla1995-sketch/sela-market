@@ -1,12 +1,16 @@
 /**
  * LoginScreen.tsx — تسجيل الدخول: رقم الهوية + كلمة المرور.
- * v2.3: «نسيت كلمة المرور؟» صار تحت إدارة المالك:
- *  • مغيّر من اللوحة (الافتراضي): الضغط عليه يعرض «تواصل مع
- *    الإدارة» مع رقم التواصل — استعادة الحسابات تتم من اللوحة
- *    (إعادة تعيين كلمة المرور لكل مستخدم من قسم المستخدمين).
- *  • مفعّل من اللوحة: مسار رمز SMS — الهوية + الجوال المسجل
- *    يرسلان رمزاً للجوال، ثم الرمز + كلمة مرور جديدة.
- * بعد النجاح: إن كان الدخول بوابة إتمام طلب نعود للسلة مباشرة.
+ * ─────────────────────────────────────────────────────────────────
+ *  • v3.4 (الجولة 64): إعادة تصميم كاملة بطلب المستخدم — «صفحات الدخول
+ *    والتسجيل مقرفة وغير مودرن وممتلئة بالملاحظات غير المهمة». الآن:
+ *    نافذة عصرية بعلامة العلامة التجارية (شارة + عنوان ضخم + سطر واحد)،
+ *    حقول نظيفة بلا ملاحظات ثانوية، وأزرار واضحة — المنطق لم يُمس.
+ *  • v2.3: «نسيت كلمة المرور؟» تحت إدارة المالك:
+ *   • مغيّر من اللوحة (الافتراضي): الضغط عليه يعرض «تواصل مع
+ *     الإدارة» مع رقم التواصل.
+ *   • مفعّل من اللوحة: مسار رمز SMS — الهوية + الجوال المسجل
+ *     يرسلان رمزاً للجوال، ثم الرمز + كلمة مرور جديدة.
+ *  • بعد النجاح: إن كان الدخول بوابة إتمام طلب نعود للسلة مباشرة.
  */
 import React, {useEffect, useRef, useState} from 'react';
 import {
@@ -24,14 +28,9 @@ import {
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {useTheme} from '../../theme/ThemeProvider';
-import {radius, spacing, type} from '../../theme/tokens';
-import {
-  AppHeader,
-  Button,
-  Field,
-  Screen,
-  SecureField,
-} from '../../components/ui';
+import {radius, spacing, type, fonts} from '../../theme/tokens';
+import {Icon} from '../../components/Icon';
+import {Button, Field, Screen, SecureField} from '../../components/ui';
 import {useAuthStore} from '../../stores/authStore';
 import {useSettingsStore} from '../../stores/settingsStore';
 import {authenticateBiometric} from '../../services/biometrics';
@@ -180,100 +179,139 @@ export function LoginScreen({navigation, route}: Props) {
 
   return (
     <Screen style={{paddingBottom: insets.bottom}}>
-      <AppHeader
-        title="تسجيل الدخول"
-        onBack={() => {
-          if (navigation.canGoBack()) {
-            navigation.goBack();
-          }
-        }}
-        big
-      />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={{flex: 1}}>
         <ScrollView
-          contentContainerStyle={{padding: spacing.lg, gap: spacing.lg}}
+          contentContainerStyle={authStyles.body}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}>
-          <>
-              <View style={{gap: spacing.md}}>
-                <Field
-                  label="رقم الهوية"
-                  value={idNumber}
-                  onChangeText={setIdNumber}
-                  placeholder="9 أرقام"
-                  keyboardType="numeric"
-                  numericOnly
-                  icon="user"
-                  error={idError}
-                  maxLength={9}
-                  autoFocus
-                  returnKeyType="next"
-                  onSubmitEditing={() => passwordRef.current?.focus()}
-                />
-                <SecureField
-                  label="كلمة المرور"
-                  value={password}
-                  onChangeText={setPasswordField}
-                  placeholder="كلمة مرور حسابك"
-                  inputRef={passwordRef}
-                  returnKeyType="go"
-                  onSubmitEditing={() => void submit()}
-                />
-                <Pressable
-                  onPress={() => void openForgot()}
-                  hitSlop={8}
-                  style={{alignSelf: 'flex-start', paddingVertical: 4}}>
-                  <Text style={[type.smallMedium, {color: palette.brand}]}>
-                    نسيت كلمة المرور؟
-                  </Text>
-                </Pressable>
-              </View>
+          {/* ── شريط علوي: مقبض النافذة + زر الإغلاق ── */}
+          <View style={authStyles.topRow}>
+            <View style={{width: 36}} />
+            <View style={[authStyles.grab, {backgroundColor: palette.lineStrong}]} />
+            <Pressable
+              onPress={() => {
+                if (navigation.canGoBack()) {
+                  navigation.goBack();
+                }
+              }}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="إغلاق"
+              style={({pressed}) => [
+                authStyles.closeBtn,
+                {backgroundColor: palette.surfaceAlt, opacity: pressed ? 0.7 : 1},
+              ]}>
+              <Icon name="close" size={17} color={palette.ink} strokeWidth={2.4} />
+            </Pressable>
+          </View>
 
-              <Button
-                label={busy ? 'جارٍ الدخول…' : 'دخول'}
-                disabled={busy}
-                onPress={() => void submit()}
-              />
-
-              {/* v2.1: الدخول بالبصمة — جلسة محفوظة + الخيار مفعّل */}
-              {savedSessionToken != null && biometricLoginEnabled ? (
-                <View style={{gap: 6, alignItems: 'center'}}>
-                  <View style={styles.dividerRow}>
-                    <View style={[styles.dividerLine, {backgroundColor: palette.line}]} />
-                    <Text style={{fontSize: 10.5, color: palette.muted}}>أو</Text>
-                    <View style={[styles.dividerLine, {backgroundColor: palette.line}]} />
-                  </View>
-                  <Button
-                    label="الدخول بالبصمة"
-                    variant="soft"
-                    icon="shield"
-                    disabled={bioBusy}
-                    onPress={() => {
-                      setBioBusy(true);
-                      void authenticateBiometric('افتح جلسة سيلا ماركت المحفوظة')
-                        .then(ok => {
-                          if (ok) {
-                            // الجلسة المحفوظة ما زالت حية — الدخول بها مباشرة
-                            finishLogin('فتحت جلستك بالبصمة');
-                          } else {
-                            toast('أُلغي الدخول بالبصمة', 'info');
-                          }
-                        })
-                        .finally(() => setBioBusy(false));
-                    }}
-                  />
-                </View>
-              ) : null}
-
-            </>
-
-          {error != null && !busy ? (
-            <Text style={[type.small, {color: palette.danger, textAlign: 'center'}]}>
-              {error}
+          {/* ── علامة العلامة + عنوان الترحيب ── */}
+          <View style={authStyles.markWrap}>
+            <View style={[authStyles.markBadge, {backgroundColor: palette.brand}]}>
+              <Icon name="bag" size={26} color="#FFFFFF" strokeWidth={2} />
+            </View>
+            <Text style={[type.h1, {color: palette.ink, fontFamily: fonts.black}]}>
+              أهلاً بعودتك
             </Text>
+            <Text style={[type.small, {color: palette.muted, textAlign: 'center'}]}>
+              سجّل الدخول لمتابعة التسوق من متاجر المول
+            </Text>
+          </View>
+
+          {/* ── الحقول ── */}
+          <View style={{gap: spacing.md}}>
+            <Field
+              label="رقم الهوية"
+              value={idNumber}
+              onChangeText={setIdNumber}
+              placeholder="9 أرقام"
+              keyboardType="numeric"
+              numericOnly
+              icon="user"
+              error={idError}
+              maxLength={9}
+              autoFocus
+              returnKeyType="next"
+              onSubmitEditing={() => passwordRef.current?.focus()}
+            />
+            <SecureField
+              label="كلمة المرور"
+              value={password}
+              onChangeText={setPasswordField}
+              placeholder="كلمة مرور حسابك"
+              inputRef={passwordRef}
+              returnKeyType="go"
+              onSubmitEditing={() => void submit()}
+            />
+            <Pressable
+              onPress={() => void openForgot()}
+              hitSlop={8}
+              style={{alignSelf: 'flex-start', paddingVertical: 4}}>
+              <Text style={[type.smallMedium, {color: palette.brand, fontFamily: fonts.bold}]}>
+                نسيت كلمة المرور؟
+              </Text>
+            </Pressable>
+          </View>
+
+          {/* ── الزر الأساسي + الخطأ ── */}
+          {error != null && !busy ? (
+            <View style={[authStyles.errorCard, {backgroundColor: palette.dangerSoft}]}>
+              <Icon name="warning" size={15} color={palette.danger} />
+              <Text style={{fontSize: 12.5, color: palette.danger, flex: 1, fontFamily: fonts.medium}}>
+                {error}
+              </Text>
+            </View>
           ) : null}
+          <Button
+            label={busy ? 'جارٍ الدخول…' : 'دخول'}
+            disabled={busy}
+            onPress={() => void submit()}
+          />
+
+          {/* v2.1: الدخول بالبصمة — جلسة محفوظة + الخيار مفعّل */}
+          {savedSessionToken != null && biometricLoginEnabled ? (
+            <View style={{gap: 6, alignItems: 'center'}}>
+              <View style={authStyles.dividerRow}>
+                <View style={[authStyles.dividerLine, {backgroundColor: palette.line}]} />
+                <Text style={{fontSize: 10.5, color: palette.muted}}>أو</Text>
+                <View style={[authStyles.dividerLine, {backgroundColor: palette.line}]} />
+              </View>
+              <Button
+                label="الدخول بالبصمة"
+                variant="soft"
+                icon="fingerprint"
+                disabled={bioBusy}
+                onPress={() => {
+                  setBioBusy(true);
+                  void authenticateBiometric('افتح جلسة سيلا ماركت المحفوظة')
+                    .then(ok => {
+                      if (ok) {
+                        // الجلسة المحفوظة ما زالت حية — الدخول بها مباشرة
+                        finishLogin('فتحت جلستك بالبصمة');
+                      } else {
+                        toast('أُلغي الدخول بالبصمة', 'info');
+                      }
+                    })
+                    .finally(() => setBioBusy(false));
+                }}
+              />
+            </View>
+          ) : null}
+
+          {/* ── حساب جديد ── */}
+          <Pressable
+            onPress={() => navigation.navigate('Register', {reason})}
+            hitSlop={8}
+            style={{alignItems: 'center', paddingVertical: 6}}>
+            <Text style={{fontSize: 12.5, color: palette.muted, fontFamily: fonts.medium}}>
+              ليس لديك حساب؟{' '}
+              <Text style={{color: palette.brandDark, fontFamily: fonts.bold}}>
+                أنشئ حساباً جديداً
+              </Text>
+            </Text>
+          </Pressable>
         </ScrollView>
       </KeyboardAvoidingView>
 
@@ -296,8 +334,8 @@ export function LoginScreen({navigation, route}: Props) {
               <>
                 <Text style={[type.h3, {color: palette.ink}]}>استعادة الحساب</Text>
                 <Text style={[type.small, {color: palette.muted, lineHeight: 20}]}>
-                  استعادة كلمة المرور تتم عبر إدارة سيلا ماركت فقط حفاظاً على
-                  أمان الحسابات. تواصل معنا لإثبات ملكية حسابك وسنعيد تعيينها لك.
+                  استعادة كلمة المرور تتم عبر إدارة سيلا ماركت — تواصل معنا
+                  لإثبات ملكية حسابك.
                 </Text>
                 {adminPhone != null && adminPhone !== '' ? (
                   <Button
@@ -321,8 +359,7 @@ export function LoginScreen({navigation, route}: Props) {
               <>
                 <Text style={[type.h3, {color: palette.ink}]}>استعادة كلمة المرور</Text>
                 <Text style={[type.small, {color: palette.muted, lineHeight: 20}]}>
-                  أدخل رقم الهوية والجوال المسجلين في حسابك — سنرسل رمز
-                  تحقق إلى جوالك لإكمال التغيير.
+                  أدخل رقم الهوية والجوال المسجلين — سنرسل رمز تحقق إلى جوالك.
                 </Text>
                 <Field
                   label="رقم الهوية"
@@ -354,9 +391,8 @@ export function LoginScreen({navigation, route}: Props) {
               <>
                 <Text style={[type.h3, {color: palette.ink}]}>أدخل رمز التحقق</Text>
                 <Text style={[type.small, {color: palette.muted, lineHeight: 20}]}>
-                  أرسلنا رسالة نصية برمز من 6 أرقام إلى الجوال المنتهي بـ
+                  أرسلنا رمزاً من 6 أرقام إلى الجوال المنتهي بـ
                   {' ' + (forgotPhone.length >= 3 ? forgotPhone.slice(-3) : '***')}.
-                  أدخله مع كلمة المرور الجديدة.
                 </Text>
                 <Field
                   label="رمز التحقق"
@@ -396,7 +432,40 @@ export function LoginScreen({navigation, route}: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+/* ═══ v3.4: لغة التصميم الموحدة لشاشات الدخول ═══ */
+const authStyles = StyleSheet.create({
+  body: {padding: spacing.lg, gap: spacing.xl},
+  topRow: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.sm,
+  },
+  grab: {width: 44, height: 5, borderRadius: 999},
+  closeBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  markWrap: {alignItems: 'center', gap: spacing.sm},
+  markBadge: {
+    width: 64,
+    height: 64,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.xs,
+  },
+  errorCard: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: spacing.sm,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 10,
+  },
   dividerRow: {
     flexDirection: 'row-reverse',
     alignItems: 'center',
@@ -407,6 +476,9 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 1,
   },
+});
+
+const styles = StyleSheet.create({
   sheetOverlay: {flex: 1, justifyContent: 'flex-end'},
   sheet: {
     borderTopRightRadius: radius.xl,

@@ -53,11 +53,15 @@ describe('الجولة 61 — v3.1.0', () => {
 
   test('④ شريط المنطقة داخل التروسة + حذف الكلام الزائد', () => {
     const home = read('src/screens/home/HomeScreen.tsx');
-    // شريط «التوصيل إلى» بعرض كامل داخل التروسة الملونة
-    expect(home).toContain('regionBar');
-    expect(home).toContain('التوصيل إلى');
+    // v3.4 (الجولة 64): المنطقة انتقلت من التروسة إلى رقاقة لطيفة في
+    // أقصى يسار عنوان قسم «متاجر تخدم» بطلب المستخدم الصريح —
+    // الحرس حُدّث ليطابق التصميم الحالي.
+    expect(home).toContain('function RegionChip(');
+    expect(home).toContain("region ?? 'حدّد منطقتك'");
     expect(home).toContain('حدّد منطقتك');
     expect(home).toContain('heroBg');
+    // التروسة نفسها بلا شريط منطقة
+    expect(home).not.toContain('heroStyles.regionBar');
     // الرقاقة الجانبية القديمة أُزيلت
     expect(home).not.toContain('changeChip');
     // الشرح المطوّل تحت «أحدث ما وصل المول» أُزيل
@@ -113,11 +117,11 @@ describe('الجولة 61 — v3.1.0', () => {
     expect(nav).toContain('brandSoft');
   });
 
-  test('⑨ الإصدار: 3.3.0 (17)', () => {
+  test('⑨ الإصدار: 3.4.0 (18)', () => {
     const config = read('src/core/config.ts');
-    expect(config).toContain("APP_VERSION = '3.3.0'");
+    expect(config).toContain("APP_VERSION = '3.4.0'");
     const gradle = read('android/app/build.gradle');
-    expect(gradle).toContain('versionName "3.3.0"');
-    expect(gradle).toContain('versionCode 17');
+    expect(gradle).toContain('versionName "3.4.0"');
+    expect(gradle).toContain('versionCode 18');
   });
 });

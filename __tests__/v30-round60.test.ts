@@ -65,8 +65,11 @@ describe('الجولة 60 — v3.0.0: إعادة البناء الهيكلي', (
     const home = read('src/screens/home/HomeScreen.tsx');
     expect(home).toContain('getHomeFeed');
     expect(home).not.toContain('getCrossProductsAdaptive');
-    // انتهت مروكة «شبكة الأمان» التي كانت تضرب 12 متجراً على حدة
-    expect(home).not.toContain('getStoreProducts');
+    // v3.4 (الجولة 64): getStoreProducts عادت بشكل شرعي واحد فقط —
+    // شرائط «أقسام أنواع المتاجر» (نداءان مخبآن لكل نوع)؛ التغذية
+    // الأساسية ما زالت النداء المجمّع /home حصراً.
+    expect((home.match(/getStoreProducts\(/g) ?? []).length).toBe(1);
+    expect(home).toContain('cachedFetch(`typeprods:v1:${s.id}`');
     // بلاطات التصنيفات الملونة
     expect(home).toContain('tileFor(item.category');
     const endpoints = read('src/api/endpoints.ts');
@@ -111,12 +114,12 @@ describe('الجولة 60 — v3.0.0: إعادة البناء الهيكلي', (
     expect((tokens.match(/\{soft: '#/g) ?? []).length).toBeGreaterThanOrEqual(20);
   });
 
-  test('⑤ الإصدار: 3.3.0 (17)', () => {
+  test('⑤ الإصدار: 3.4.0 (18)', () => {
     const config = read('src/core/config.ts');
-    expect(config).toContain("APP_VERSION = '3.3.0'");
-    expect(config).toContain('APP_BUILD_CODE = 17');
+    expect(config).toContain("APP_VERSION = '3.4.0'");
+    expect(config).toContain('APP_BUILD_CODE = 18');
     const gradle = read('android/app/build.gradle');
-    expect(gradle).toContain('versionCode 17');
-    expect(gradle).toContain('versionName "3.3.0"');
+    expect(gradle).toContain('versionCode 18');
+    expect(gradle).toContain('versionName "3.4.0"');
   });
 });

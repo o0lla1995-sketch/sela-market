@@ -1031,21 +1031,29 @@ function strengthColor(level: 0 | 1 | 2 | 3, palette: Palette): string {
  * مسافات RTL». القواعد الجديدة:
  *  • صف Flexbox صارم: justify-content: space-between +
  *    align-items: center — العنوان يقود من اليمين (RTL) ويأخذ
- *    الأولوية بمرونة flexShrink + numberOfLines، وزر «عرض الكل»
+ *    الأولوية بمرونة flexShrink + numberOfLines، وزر الفعل
  *    يتذيل يساراً ولا يتداخل أبداً حتى على أصغر الشاشات.
- *  • «عرض الكل» يُرقّى لرابط ثانوي حقيقي: خط أصغر بلون العلامة
- *    داخل كبسولة ناعمة + سهم «‹» في اتجاه الاستمرار RTL. */
+ *  • v3.4 (الجولة 64): طلب المستخدم بالنص — «زر عرض الكل بدلا من
+ *    الجهة اليمنى كأيقونة يمكن مختصرة يُنقل لأقصى اليسار للعنوان».
+ *    الفعل الآن أيقونة دائرية مضغوطة 30px (سهم «‹» داخل كبسولة
+ *    ناعمة بلون العلامة) في أقصى يسار صف العنوان — نظيفة، لا
+ *    تزاحم العنوان أبداً، وتُقرأ كـ«استمرار» في اتجاه RTL.
+ *  • end: عقدة مخصصة في أقصى اليسار (رقاقة «توصيل إلى» لقسم
+ *    متاجر المنطقة مثلاً) — تتقدم على أيقونة الفعل عند وجودها. */
 export function SectionTitle({
   title,
   subtitle,
   actionLabel,
   onAction,
+  end,
 }: {
   title: string;
   /** v2.8: سطر تفسيري صغير تحت العنوان — سبب التوصية مثلاً. */
   subtitle?: string;
   actionLabel?: string;
   onAction?: () => void;
+  /** v3.4: عقدة فعل مخصصة في أقصى يسار الصف (رقاقة منطقة مثلاً). */
+  end?: React.ReactNode;
 }) {
   const {palette} = useTheme();
   return (
@@ -1064,26 +1072,31 @@ export function SectionTitle({
           </Text>
         ) : null}
       </View>
-      {actionLabel && onAction ? (
+      {/* v3.4: الفعل في أقصى اليسار — عقدة مخصصة إن وُجدت، وإلا
+       * أيقونة «استمرار» دائرية مضغوطة بدل زر نصي عريض. */}
+      {end != null ? (
+        end
+      ) : onAction != null ? (
         <Pressable
           onPress={onAction}
           hitSlop={10}
           accessibilityRole="button"
-          accessibilityLabel={actionLabel}
+          accessibilityLabel={actionLabel ?? 'عرض الكل'}
           style={({pressed}) => [
-            sectionStyles.action,
-            {backgroundColor: palette.brandSoft, opacity: pressed ? 0.7 : 1},
+            sectionStyles.actionIcon,
+            {
+              backgroundColor: palette.brandSoft,
+              borderColor: palette.brandBorder,
+              opacity: pressed ? 0.7 : 1,
+            },
           ]}>
-          <Text
-            style={[
-              type.smallMedium,
-              {color: palette.brandDark, fontFamily: fonts.bold},
-            ]}
-            numberOfLines={1}>
-            {actionLabel}
-          </Text>
           {/* سهم يسار «‹» — اتجاه الاستمرار في RTL */}
-          <Icon name="chevronLeft" size={14} color={palette.brandDark} strokeWidth={2.4} />
+          <Icon
+            name="chevronLeft"
+            size={16}
+            color={palette.brandDark}
+            strokeWidth={2.6}
+          />
         </Pressable>
       ) : null}
     </View>
@@ -1119,7 +1132,17 @@ const sectionStyles = StyleSheet.create({
     fontFamily: fonts.regular,
     marginRight: spacing.sm + spacing.sm,
   },
-  /* زر «عرض الكل» — كبسولة رابط ثانوي أنيق بلا تزاحم. */
+  /* v3.4: أيقونة الفعل الدائرية المضغوطة — 30px في أقصى اليسار. */
+  actionIcon: {
+    width: 30,
+    height: 30,
+    borderRadius: 999,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  /* النمط القديم لزر نصي — يبقى لضمان التوافق إن استُخدم موضعياً. */
   action: {
     flexDirection: 'row-reverse',
     alignItems: 'center',

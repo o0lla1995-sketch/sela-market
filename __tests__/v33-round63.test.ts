@@ -17,7 +17,7 @@
  *     بحالة الطلب.
  *  ⑥ متاجر المول: بحث مخصص داخل الصفحة يفلتر المتاجر محلياً +
  *     عدّاد نتائج + مسح شامل + شارة توثيق ورقاقة رسوم توصيل.
- *  ⑦ الإصدار: 3.3.0 (17).
+ *  ⑦ الإصدار: 3.4.0 (18).
  */
 import {readFileSync, readdirSync, statSync} from 'fs';
 import {join} from 'path';
@@ -131,13 +131,13 @@ describe('الجولة 63 — v3.3.0: إصلاح الانهيار + تحسينا
     expect(card).toContain('count={store.ratingCount}');
   });
 
-  test('⑦ الإصدار: 3.3.0 (17)', () => {
+  test('⑦ الإصدار: 3.4.0 (18)', () => {
     const config = read('src/core/config.ts');
-    expect(config).toContain("APP_VERSION = '3.3.0'");
-    expect(config).toContain('APP_BUILD_CODE = 17');
+    expect(config).toContain("APP_VERSION = '3.4.0'");
+    expect(config).toContain('APP_BUILD_CODE = 18');
     expect(config).toContain('APP_VERSION_LABEL');
     const gradle = read('android/app/build.gradle');
-    expect(gradle).toContain('versionName "3.3.0"');
-    expect(gradle).toContain('versionCode 17');
+    expect(gradle).toContain('versionName "3.4.0"');
+    expect(gradle).toContain('versionCode 18');
   });
 });
