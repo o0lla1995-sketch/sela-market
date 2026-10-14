@@ -290,7 +290,9 @@ export function SearchScreen({navigation, route}: Props) {
               value={query}
               onChangeText={setQuery}
               placeholder="ابحث عن منتج… اسم أو كلمة"
-              autoFocus={initialQuery === ''}
+              /* v3.2: في وضع التصفح لا نقفز بلوحة المفاتيح — نية
+               * المستخدم تصفّح القائمة الكاملة لا الكتابة. */
+              autoFocus={initialQuery === '' && !browse}
             />
           </View>
           <Pressable onPress={openSheet} style={({pressed}) => [
