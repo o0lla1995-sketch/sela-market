@@ -22,6 +22,13 @@
  *    البطاقة داخل خلية مسقوفة 50%، والصورة بلا photoWidth صريح
  *    تملأ عرض البطاقة كاملاً (وضع الملء) بدل معادلة العرض التقريبية —
  *    البطاقات متطابقة العرض تماماً كصفوف التجارة الحديثة.
+ *  • v3.6 (الجولة 66 — طلب المستخدم: «حسّن وميّز بطاقات المنتجات
+ *    التي عليها خصومات واجعلها مودرن واحترافية»): لغة «عرض» كاملة
+ *    للمخفّضات بلا أي نص فوق التصوير نفسه (التزاماً بقرار v3.2):
+ *    شارة عرض عائمة فوق حد البطاقة (أعلى اليمين — نمط نون)، إطار
+ *    البطاقة يميل للأحمر، رقاقة خصم صلبة بيضاء النص، وصف سعر جديد:
+ *    السعر بعد الخصم كبير بلون الخصم + الأصلي مشطوب على خط الأساس
+ *    + سطر «وفّر» أخضر — تمييز فوري من نظرة واحدة.
  */
 import React from 'react';
 import {Image, Pressable, StyleSheet, Text, View} from 'react-native';
@@ -124,6 +131,9 @@ export function ProductCard({
   const discounted = hasDiscount(product);
   const finalPrice = effectiveMinor(product);
   const inCart = cartQtyForProduct > 0;
+  /* v3.6: مبلغ التوفير — سطر صريح في بطاقات العروض. */
+  const savedMinor = Math.max(0, product.price_minor - finalPrice);
+  const discountPct = Math.round(product.discount_pct ?? 0);
 
   return (
     <Pressable
@@ -133,14 +143,25 @@ export function ProductCard({
       style={({pressed}) => [
         styles.card,
         {
+          /* v3.6: بطاقات العروض بإطار أحمر مائل — تمييز فوري بلا
+           * أي نص فوق التصوير (التزام بقرار v3.2 للتصوير النظيف). */
           backgroundColor: palette.surface,
-          /* v3.2: حدود البطاقات — ‎#2A2A2A في الداكن (طلب التاجر)،
-           * حدود الثيم + ظل ناعم في الفاتح. */
-          borderColor: cardBorderFor(palette.isDark),
+          borderColor: discounted ? palette.danger + 'B3' : cardBorderFor(palette.isDark),
+          borderWidth: discounted ? 1.25 : 1,
           opacity: pressed ? 0.92 : 1,
         },
         shadowFor(palette.isDark),
       ]}>
+      {/* v3.6: شارة العرض العائمة — فوق حد البطاقة أعلى اليمين
+       * (نمط نون/أمازون): عنصر واجهة صريح فوق الإطار، لا نص محفور
+       * داخل صورة المنتج — التصوير يبقى نظيفاً ومعزولاً تماماً. */}
+      {discounted ? (
+        <View style={[styles.dealBadge, {backgroundColor: palette.danger}]}>
+          <Icon name="flame" size={10} color="#FFFFFF" />
+          <Text style={styles.dealBadgeText}>خصم {discountPct}%</Text>
+        </View>
+      ) : null}
+
       {/* الصورة — نظيفة ومعزولة تماماً: زر المفضلة فقط فوقها */}
       <View style={styles.photoWrap}>
         {firstImage != null ? (
@@ -220,10 +241,10 @@ export function ProductCard({
           </View>
         ) : null}
         {discounted ? (
-          <View style={[styles.chip, {backgroundColor: palette.dangerSoft}]}>
-            <Icon name="tag" size={11} color={palette.danger} />
-            <Text style={[styles.chipText, {color: palette.danger, fontFamily: fonts.bold}]}>
-              خصم {Math.round(product.discount_pct ?? 0)}%
+          <View style={[styles.chip, {backgroundColor: palette.danger}]}>
+            <Icon name="flame" size={11} color="#FFFFFF" />
+            <Text style={[styles.chipText, {color: '#FFFFFF', fontFamily: fonts.bold}]}>
+              خصم {discountPct}%
             </Text>
           </View>
         ) : null}
@@ -256,20 +277,27 @@ export function ProductCard({
         ) : null}
       </View>
 
-      {/* السعر — والإشارة إلى صفحة المنتج للاختيار */}
+      {/* السعر — والإشارة إلى صفحة المنتج للاختيار
+       * v3.6: صف سعر العروض — السعر النهائي كبير بلون الخصم،
+       * الأصلي مشطوب على خط الأساس نفسه، وسطر «وفّر» أخضر تحته. */}
       <View style={styles.bottomRow}>
-        <View style={{gap: 0, alignItems: 'flex-start', flex: 1}}>
+        <View style={{gap: 1, alignItems: 'flex-start', flex: 1}}>
           {discounted ? (
             <>
-              <Text
-                style={[
-                  styles.priceStruck,
-                  {color: palette.muted, textDecorationLine: 'line-through'},
-                ]}>
-                {formatMoney(product.price_minor)}
-              </Text>
-              <Text style={[styles.price, {color: palette.brandDark}]}>
-                {formatMoney(finalPrice)}
+              <View style={{flexDirection: 'row-reverse', alignItems: 'baseline', gap: 5}}>
+                <Text style={[styles.price, {color: palette.danger}]}>
+                  {formatMoney(finalPrice)}
+                </Text>
+                <Text
+                  style={[
+                    styles.priceStruck,
+                    {color: palette.muted, textDecorationLine: 'line-through'},
+                  ]}>
+                  {formatMoney(product.price_minor)}
+                </Text>
+              </View>
+              <Text style={{fontSize: 9.5, color: palette.success, fontFamily: fonts.bold}}>
+                وفّر {formatMoney(savedMinor)}
               </Text>
             </>
           ) : (
@@ -294,6 +322,30 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     padding: spacing.sm,
     gap: spacing.sm,
+  },
+  /* v3.6: شارة العرض العائمة — تعلو حد البطاقة أعلى اليمين (نمط
+   * نون): عنصر واجهة بارز فوق الإطار بلا أي حجب للتصوير. */
+  dealBadge: {
+    position: 'absolute',
+    top: -9,
+    right: 10,
+    zIndex: 5,
+    elevation: 6,
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 3,
+    borderRadius: radius.pill,
+    paddingHorizontal: 8,
+    paddingVertical: 3.5,
+    shadowColor: '#000000',
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    shadowOffset: {width: 0, height: 2},
+  },
+  dealBadgeText: {
+    fontSize: 9.5,
+    color: '#FFFFFF',
+    fontFamily: fonts.bold,
   },
   priceStruck: {
     fontSize: 11,

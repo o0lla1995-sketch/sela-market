@@ -88,8 +88,12 @@ export function LoginScreen({navigation, route}: Props) {
    * نافذة الدخول تُغلق بـ goBack لكن ما تحتها كان شاشة الترحيب التي
    * أُزيلت من المكدس لحظة setOnboarded() — فلا عودة إلى شيء. الآن:
    * إذا كان ما تحت النافذة هو الترحيب أو لا يوجد شيء تحتها، قفزة
-   * نظيفة إلى الرئيسية (reset) بدل العودة للوراء. */
+   * نظيفة إلى الرئيسية (reset) بدل العودة للوراء.
+   * v3.6 (الجولة 66): وسم onboarding انتقل إلى هنا — بعد نجاح الدخول
+   * فعلاً. قبل ذلك كانت الترحيب تُحرق قبل فتح النافذة فيهبط إغلاقها
+   * على الرئيسية زائراً بدل العودة للترحيب (شكوى المستخدم). */
   const finishLogin = (message?: string) => {
+    useSettingsStore.getState().setOnboarded();
     primeAndStart();
     toast(message ?? 'أهلاً بعودتك', 'success');
     const state = navigation.getState();

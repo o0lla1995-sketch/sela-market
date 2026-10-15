@@ -15,7 +15,7 @@ import {
   View,
   type ViewStyle,
 } from 'react-native';
-import {SafeAreaView, useSafeAreaInsets} from 'react-native-safe-area-context';
+import {SafeAreaView} from 'react-native-safe-area-context';
 import {useTheme} from '../theme/ThemeProvider';
 import {
   radius,
@@ -1236,10 +1236,18 @@ const toastStyles = StyleSheet.create({
  * الرؤية، مهما كان حجم المحتوى أو سلوك flexbox. الشاشات التي
  * تستخدمه تعطي قائمة تمريرها paddingBottom ≈ ارتفاع الشريط +
  * إخلاء النظام كي لا يختفي آخر عنصر خلفه. هذا هو نمط أمازون/نون/
- * سلة في كل تطبيقات التجزئة العالمية. */
+ * سلة في كل تطبيقات التجزئة العالمية.
+ *
+ * v3.6 (الجولة 66 — شكوى «بانر أضف السلة يترك هامشاً سفلياً كبيراً
+ * جداً فوق الهيدر السفلي»): حُذف insets.bottom من الحاشية السفلية —
+ * كل شاشات هذا الشريط تعرضه فوق قائمة التبويبات، والقائمة نفسها
+ * تستهلك إخلاء شريط النظام (زر الإيماءات/التنقل)، فكانت الزيادة
+ * تضيف 34-58px فراغاً ميتاً داخل الشريط فوق الهيدر السفلي، أكبر
+ * على الأجهزة الأكبر (شكوى «غير متجاوب مع حجم الشاشة»). كما يُسقف
+ * عرض المحتوى بـ 720 ويُوسَّط — على التابلت يبقى الشريط بعرض
+ * الشاشة لكن أزراره بمقاس مقروء مركزي كالمتاجر العالمية. */
 export function BottomFixed({children}: {children: React.ReactNode}) {
   const {palette} = useTheme();
-  const insets = useSafeAreaInsets();
   return (
     <View
       pointerEvents="box-none"
@@ -1248,7 +1256,7 @@ export function BottomFixed({children}: {children: React.ReactNode}) {
         {
           backgroundColor: palette.surface,
           borderTopColor: palette.line,
-          paddingBottom: insets.bottom + 10,
+          paddingBottom: 10,
         },
         shadowFor(palette.isDark),
         // ظل علوي واضح فوق المحتوى في الفاتح
@@ -1260,7 +1268,7 @@ export function BottomFixed({children}: {children: React.ReactNode}) {
           elevation: 14,
         },
       ]}>
-      {children}
+      <View style={fixedStyles.inner}>{children}</View>
     </View>
   );
 }
@@ -1275,6 +1283,8 @@ const fixedStyles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
   },
+  /* v3.6: سقف المحتوى على الشاشات العريضة + توسيط. */
+  inner: {maxWidth: 720, width: '100%', alignSelf: 'center'},
 });
 
 /* ═══════════════ EndOfList ═══════════════ */

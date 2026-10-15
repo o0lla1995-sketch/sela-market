@@ -101,7 +101,7 @@ describe('v2.7 — تنظيف المفضلة من المنتجات غير الم
     const screen = read('src/screens/product/ProductScreen.tsx');
     // المعرض 60% من العرض (كان 86%).
     /* v3.0: أُعيد بناء المعرض بعرض كامل 4:5 — انظر v30-round60.test.ts */
-    expect(screen).toContain('screenWidth * 1.25');
+    expect(screen).toContain('galleryImageWidth * 1.25');
     // السعر 21px (كان 30px) وبلا صندوق أيقونة 76px.
     /* v3.0: السعر 26px بعرض كامل بعد إعادة البناء */
     expect(screen).toContain('fontSize: 26');
@@ -133,10 +133,10 @@ describe('v2.7 — تنظيف المفضلة من المنتجات غير الم
 
   test('⑤ الإصدار: محدّث في الجولة 62 (3.2.0)', () => {
     const config = read('src/core/config.ts');
-    expect(config).toContain("APP_VERSION = '3.5.0'");
-    expect(config).toContain('APP_BUILD_CODE = 19');
+    expect(config).toContain("APP_VERSION = '3.6.0'");
+    expect(config).toContain('APP_BUILD_CODE = 20');
     const gradle = read('android/app/build.gradle');
-    expect(gradle).toContain('versionCode 19');
-    expect(gradle).toContain('versionName "3.5.0"');
+    expect(gradle).toContain('versionCode 20');
+    expect(gradle).toContain('versionName "3.6.0"');
   });
 });

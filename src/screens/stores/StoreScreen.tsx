@@ -339,13 +339,18 @@ export function StoreScreen({navigation, route}: Props) {
         /* v3.5: الخلية مسقوفة 50% — المنتج الوحيد في صفه يبقى بنصف
          * العرض كبقية بطاقات الشبكة، لا شريطاً ضخماً بكامل السطر
          * (شكوى الجولة 65: «في الصف الواحد تصبح كبيرة لمنتج واحد
-         * وشكلها مقرف»). + هامش جانبي للصفوف كان الصفر. */
+         * وشكلها مقرف»). + هامش جانبي للصفوف كان الصفر.
+         * v3.6 (الجولة 66): gap عمودي بين الصفوف — كانت البطاقات
+         * ملاصقة لبعضها عمودياً بلا أي تنفّس (شكوى «بطاقات المنتجات
+         * ملاصقة لبعضها خصوصاً الهامش السفلي»). نفس نمط قسم نوع
+         * المتجر المُجرّب في v3.5. */
         columnWrapperStyle={{
           gap: spacing.md,
           width: '100%',
           paddingHorizontal: spacing.lg,
         }}
         contentContainerStyle={{
+          gap: spacing.md,
           paddingBottom: Math.max(insets.bottom + 24, 96),
         }}
         showsVerticalScrollIndicator={false}

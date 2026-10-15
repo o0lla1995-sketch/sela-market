@@ -19,12 +19,24 @@
  *    كاش 60 ثانية لكل متجر — لا نداء متكرر لكل منتج يُفتح.
  *  • القائمة كلها تمرر فوق الشريط بـ paddingBottom = ارتفاع الشريط
  *    + إخلاء النظام: لا محتوى يختفي خلفه أبداً.
+ *  • v3.6 (الجولة 66 — ملاحظات المستخدم الثمانية):
+ *   ① شريط الشراء لم يعد يضيف insets.bottom (كان يترك فراغاً
+ *      ميتاً ضخماً فوق الهيدر السفلي ويكبر مع الشاشات الأكبر).
+ *   ② المعرض مسقوف العرض 440px على الشاشات الكبيرة (تجاوب)
+ *      + شريط مصغرات قابل للنقر أسفل الصورة (نمط أمازون/نون)
+ *      يحلّ محل النقاط، والنقر على مصغرة يقفز لصورتها.
+ *   ③ عارض ملء الشاشة بتكبير القرصة (إصبعان حتى 5×) + نقر
+ *      مزدوج للتكبير 2.5× + سحب الصورة وهي مكبّرة مع قصّ حدودها
+ *      وقفل تقليب الصفحات أثناء التكبير — بلا أي مكتبات جديدة.
  */
-import React, {useEffect, useMemo, useState} from 'react';
+import React, {useEffect, useMemo, useRef, useState} from 'react';
 import {
+  Animated,
   FlatList,
+  I18nManager,
   Image,
   Modal,
+  PanResponder,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -127,6 +139,19 @@ export function ProductScreen({navigation, route}: Props) {
   );
   const [slide, setSlide] = useState(0);
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
+  /* v3.6: مؤشر المعرض + حالة التكبير (تقفل تقليب الصفحات أثناءها). */
+  const galleryRef = useRef<ScrollView>(null);
+  const [viewerZoomed, setViewerZoomed] = useState(false);
+
+  /** v3.6: القفز لصورة عبر مصغّرتها — إزاحة RTL سالبة على أندرويد.
+   * عرض الصفحة = عرض حاوية المعرض (الشاشة ناقص حشوة القائمة 12×2). */
+  const jumpToImage = (i: number) => {
+    const clamped = Math.max(0, Math.min(images.length - 1, i));
+    const pageW = screenWidth - spacing.md * 2;
+    const x = I18nManager.isRTL ? -clamped * pageW : clamped * pageW;
+    galleryRef.current?.scrollTo({x, animated: true});
+    setSlide(clamped);
+  };
 
   /* توصيات ذكية بمحرك core/recommend — عبر كاش المتجر (60 ث):
    * فتح عشرة منتجات من متجر واحد = نداء واحد لا عشرة. */
@@ -192,11 +217,18 @@ export function ProductScreen({navigation, route}: Props) {
     });
   };
 
-  /* معرض بنسبة نون (4:5) بعرض كامل — الصورة أكبر مساحة بيع. */
-  const galleryHeight = Math.round(screenWidth * 1.25);
-  /* إخلاء المحتوى فوق الشريط المثبت: ارتفاع الشريط (عدّاد+زر ≈ 64 +
-   * سطر الإجمالي 20 + حواشي 24) + إخلاء النظام. */
-  const barClearance = insets.bottom + 132;
+  /* v3.6: سقف عرض المعرض على الشاشات الكبيرة — الصورة لا تتمدد
+   * بلا حدود مع الشاشة (شكوى «غير متجاوب مع حجم الشاشة»): عرض
+   * الصفحة يساوي عرض حاوية المعرض (الشاشة ناقص حشوة القائمة)
+   * ليصحّ التقليب المقضم، والصورة نفسها مسقوفة 440 وموسّطة داخل
+   * صفحتها كالمتاجر العالمية على التابلت. */
+  const galleryPageWidth = screenWidth - spacing.md * 2;
+  const galleryImageWidth = Math.min(galleryPageWidth, 440);
+  const galleryHeight = Math.round(galleryImageWidth * 1.25);
+  /* إخلاء المحتوى فوق الشريط المثبت: ارتفاع الشريط بعد إصلاح v3.6
+   * (حواشٍ 12×2 + صف الأزرار ‎≈52 + سطر التلميح ‎≈21 + حاشية 10)
+   * + تنفّس — بلا insets.bottom (تستهلكه قائمة التبويبات نفسها). */
+  const barClearance = 128;
 
   return (
     <Screen>
@@ -212,50 +244,81 @@ export function ProductScreen({navigation, route}: Props) {
         {/* ─── معرض الصور ─── */}
         {images.length > 0 ? (
           <View>
+            {/* إطار الصورة الحالية + عدّادها (المصغّرات تحته خارج الإطار
+             * كي لا يتراكب معها العدّاد المطلق). */}
+            <View style={{position: 'relative'}}>
+              <ScrollView
+                ref={galleryRef}
+                horizontal
+                pagingEnabled
+                showsHorizontalScrollIndicator={false}
+                scrollEventThrottle={32}
+                /* v3.6: تتبّع مستمر — المصغّرة النشطة وعدّاد الصورة
+                 * يتحركان مع السحب البطيء أيضاً لا بعد القذف فقط. */
+                onScroll={e => {
+                  // RTL: إزاحات سالبة على أندرويد — القيمة المطلقة تعطي
+                  // الفهرس الصحيح دائماً (بمقياس عرض صفحة المعرض).
+                  const i = Math.round(
+                    Math.abs(e.nativeEvent.contentOffset.x) / galleryPageWidth,
+                  );
+                  setSlide(prev => (prev === i ? prev : i));
+                }}
+                style={{borderRadius: radius.xl, overflow: 'hidden'}}>
+                {images.map((uri, i) => (
+                  <Pressable
+                    key={uri}
+                    onPress={() => setViewerIndex(i)}
+                    style={{width: galleryPageWidth, alignItems: 'center'}}>
+                    <Image
+                      source={{uri}}
+                      style={{width: galleryImageWidth, height: galleryHeight}}
+                      resizeMode="cover"
+                      resizeMethod="resize"
+                      progressiveRenderingEnabled
+                    />
+                  </Pressable>
+                ))}
+              </ScrollView>
+              <View style={[galleryStyles.countChip, {backgroundColor: palette.overlay}]}>
+                <Icon name="photo" size={11} color="#FFFFFF" />
+                <Text style={{fontSize: 10.5, color: '#FFFFFF', fontFamily: fonts.medium}}>
+                  {slide + 1} / {images.length}
+                </Text>
+              </View>
+            </View>
+
+            {/* v3.6: شريط المصغّرات — نمط أمازون/نون: مصغّرة لكل صورة،
+             * النشطة بإطار العلامة، والنقر يقفز لصورتها. حلّ محل
+             * النقاط السابقة (معلومات الوضع نفسها بلا ازدواج). */}
             <ScrollView
               horizontal
-              pagingEnabled
               showsHorizontalScrollIndicator={false}
-              onMomentumScrollEnd={e => {
-                // RTL: إزاحات سالبة على أندرويد — القيمة المطلقة تعطي
-                // الفهرس الصحيح دائماً.
-                setSlide(Math.round(Math.abs(e.nativeEvent.contentOffset.x) / screenWidth));
-              }}
-              style={{borderRadius: radius.xl, overflow: 'hidden'}}>
-              {images.map((uri, i) => (
-                <Pressable key={uri} onPress={() => setViewerIndex(i)}>
-                  <Image
-                    source={{uri}}
-                    style={{width: screenWidth - spacing.md * 2, height: galleryHeight}}
-                    resizeMode="cover"
-                    resizeMethod="resize"
-                    progressiveRenderingEnabled
-                  />
-                </Pressable>
-              ))}
+              contentContainerStyle={galleryStyles.thumbsRow}>
+              {images.map((uri, i) => {
+                const active = i === slide;
+                return (
+                  <Pressable
+                    key={uri}
+                    onPress={() => jumpToImage(i)}
+                    hitSlop={4}
+                    accessibilityRole="image"
+                    accessibilityLabel={`صورة ${i + 1} من ${images.length}`}>
+                    <View
+                      style={[
+                        galleryStyles.thumbWrap,
+                        {borderColor: active ? palette.brand : palette.line},
+                      ]}>
+                      <Image
+                        source={{uri}}
+                        style={galleryStyles.thumb}
+                        resizeMode="cover"
+                        resizeMethod="resize"
+                      />
+                    </View>
+                  </Pressable>
+                );
+              })}
             </ScrollView>
-
-            {/* العدّاد + النقاط */}
-            <View style={galleryStyles.dotsRow}>
-              {images.map((uri, i) => (
-                <View
-                  key={uri}
-                  style={[
-                    galleryStyles.dot,
-                    {
-                      backgroundColor: i === slide ? palette.brand : palette.lineStrong,
-                      width: i === slide ? 20 : 7,
-                    },
-                  ]}
-                />
-              ))}
-            </View>
-            <View style={[galleryStyles.countChip, {backgroundColor: palette.overlay}]}>
-              <Icon name="photo" size={11} color="#FFFFFF" />
-              <Text style={{fontSize: 10.5, color: '#FFFFFF', fontFamily: fonts.medium}}>
-                {slide + 1} / {images.length}
-              </Text>
-            </View>
           </View>
         ) : (
           /* بديل مرسوم عند غياب الصور — بلون بلاطة التصنيف */
@@ -575,12 +638,21 @@ export function ProductScreen({navigation, route}: Props) {
         </Text>
       </BottomFixed>
 
-      {/* ─── عارض ملء الشاشة ─── */}
+      {/* ─── عارض ملء الشاشة ───
+       * v3.6: معاينة احترافية كالمتاجر العالمية — تكبير بالقرصة
+       * (إصبعان حتى ‎5×‎)، نقر مزدوج للتكبير ‎2.5×‎، وسحب الصورة وهي
+       * مكبّرة مع قصّ حدودها، ويُقفل تقليب الصفحات أثناء التكبير. */}
       <Modal visible={viewerIndex != null} transparent animationType="fade"
-        onRequestClose={() => setViewerIndex(null)}>
+        onRequestClose={() => {
+          setViewerZoomed(false);
+          setViewerIndex(null);
+        }}>
         <View style={[viewerStyles.wrap, {backgroundColor: '#000000'}]}>
           <Pressable
-            onPress={() => setViewerIndex(null)}
+            onPress={() => {
+              setViewerZoomed(false);
+              setViewerIndex(null);
+            }}
             style={[viewerStyles.closeBtn, {top: insets.top + spacing.md}]}>
             <Icon name="close" size={22} color="#FFFFFF" />
           </Pressable>
@@ -589,6 +661,8 @@ export function ProductScreen({navigation, route}: Props) {
               data={images}
               horizontal
               pagingEnabled
+              /* قفل التمرير أثناء التكبير — الإصبع يحرّك الصورة لا الصفحات. */
+              scrollEnabled={!viewerZoomed}
               initialScrollIndex={viewerIndex}
               getItemLayout={(_, i) => ({
                 length: screenWidth,
@@ -603,11 +677,10 @@ export function ProductScreen({navigation, route}: Props) {
                 );
               }}
               renderItem={({item}) => (
-                <Image
-                  source={{uri: item}}
-                  style={{width: screenWidth, height: '100%'}}
-                  resizeMode="contain"
-                  resizeMethod="resize"
+                <ZoomableImage
+                  uri={item}
+                  width={screenWidth}
+                  onZoomChange={setViewerZoomed}
                 />
               )}
             />
@@ -616,6 +689,9 @@ export function ProductScreen({navigation, route}: Props) {
             <Text style={{color: '#FFFFFF', fontSize: 12, fontFamily: fonts.medium}}>
               {(viewerIndex ?? 0) + 1} / {images.length}
             </Text>
+            <Text style={{color: 'rgba(255,255,255,0.66)', fontSize: 10, fontFamily: fonts.medium}}>
+              قرّب بإصبعين أو انقر نقرتين
+            </Text>
           </View>
         </View>
       </Modal>
@@ -623,14 +699,198 @@ export function ProductScreen({navigation, route}: Props) {
   );
 }
 
+/* ═══ v3.6: صورة قابلة للتكبير داخل العارض ═══
+ * قرصة بإصبعين (‎1×‎ إلى ‎5×‎) + نقر مزدوج (تبديل ‎1×‎/‎2.5×‎) + سحب
+ * وهي مكبّرة مع قصّ الإزاحة داخل حدودها. المنفّذ بـ PanResponder
+ * وAnimated(transform بمحرك أصلي) حصراً — بلا أي مكتبة جديدة
+ * وبلا مساس بمنظومة الانهيارات المحروسة (v3.4). تُترك لمسات
+ * التمرير العادية للقائمة الأم حين تكون الصورة بحجمها الطبيعي. */
+function ZoomableImage({
+  uri,
+  width,
+  onZoomChange,
+}: {
+  uri: string;
+  width: number;
+  onZoomChange: (zoomed: boolean) => void;
+}) {
+  const scale = useRef(new Animated.Value(1)).current;
+  const translateX = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(0)).current;
+
+  /* مرايا عددية للحظة القرار — قيم Animated لا تُقرأ مباشرة. */
+  const scaleNow = useRef(1);
+  const txNow = useRef(0);
+  const tyNow = useRef(0);
+  const boxW = useRef(width);
+  const boxH = useRef(600);
+  const pinchDist = useRef(0);
+  const pinchBase = useRef(1);
+  const panBase = useRef({x: 0, y: 0});
+  const lastTap = useRef(0);
+
+  useEffect(() => {
+    const a = scale.addListener(v => (scaleNow.current = v.value));
+    const b = translateX.addListener(v => (txNow.current = v.value));
+    const c = translateY.addListener(v => (tyNow.current = v.value));
+    return () => {
+      scale.removeListener(a);
+      translateX.removeListener(b);
+      translateY.removeListener(c);
+    };
+  }, [scale, translateX, translateY]);
+
+  /* عودة ناعمة للحجم الطبيعي مع تصفير الإزاحة. */
+  const resetZoom = () => {
+    Animated.parallel([
+      Animated.spring(scale, {toValue: 1, useNativeDriver: true, friction: 7}),
+      Animated.spring(translateX, {toValue: 0, useNativeDriver: true, friction: 7}),
+      Animated.spring(translateY, {toValue: 0, useNativeDriver: true, friction: 7}),
+    ]).start(() => onZoomChange(false));
+  };
+
+  /* تكبير النقرة المزدوجة — توسيط بلا إزاحة. */
+  const zoomIn = () => {
+    Animated.parallel([
+      Animated.spring(scale, {toValue: 2.5, useNativeDriver: true, friction: 7}),
+      Animated.spring(translateX, {toValue: 0, useNativeDriver: true, friction: 7}),
+      Animated.spring(translateY, {toValue: 0, useNativeDriver: true, friction: 7}),
+    ]).start(() => onZoomChange(true));
+  };
+
+  /* قصّ الإزاحة داخل حدود الصورة المكبّرة (لا سحب لما لا نهاية). */
+  const clamped = (dx: number, dy: number) => {
+    const maxX = (boxW.current * (scaleNow.current - 1)) / 2;
+    const maxY = (boxH.current * (scaleNow.current - 1)) / 2;
+    return {
+      x: Math.max(-maxX, Math.min(maxX, dx)),
+      y: Math.max(-maxY, Math.min(maxY, dy)),
+    };
+  };
+
+  const responder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => false,
+        onMoveShouldSetPanResponder: (e, g) => {
+          const touches = e.nativeEvent.touches;
+          /* قرصة بإصبعين ⇒ تكبير. سحب بإصبع والصورة مكبّرة ⇒ تحريك.
+           * غير ذلك نترك اللمسة للقائمة (تقليب الصفحات). */
+          if (touches.length >= 2) {
+            return true;
+          }
+          if (scaleNow.current > 1.05 && (Math.abs(g.dx) > 2 || Math.abs(g.dy) > 2)) {
+            return true;
+          }
+          return false;
+        },
+        onPanResponderGrant: e => {
+          const t = e.nativeEvent.touches;
+          if (t.length >= 2) {
+            pinchDist.current = Math.hypot(
+              t[0].pageX - t[1].pageX,
+              t[0].pageY - t[1].pageY,
+            );
+            pinchBase.current = scaleNow.current;
+          } else {
+            panBase.current = {x: txNow.current, y: tyNow.current};
+          }
+        },
+        onPanResponderMove: (e, g) => {
+          const t = e.nativeEvent.touches;
+          if (t.length >= 2 && pinchDist.current > 0) {
+            const d = Math.hypot(t[0].pageX - t[1].pageX, t[0].pageY - t[1].pageY);
+            const next = Math.max(1, Math.min(5, pinchBase.current * (d / pinchDist.current)));
+            scale.setValue(next);
+            onZoomChange(next > 1.05);
+          } else if (scaleNow.current > 1.05) {
+            const target = clamped(panBase.current.x + g.dx, panBase.current.y + g.dy);
+            translateX.setValue(target.x);
+            translateY.setValue(target.y);
+          }
+        },
+        onPanResponderRelease: () => {
+          /* هبطت القرصة تحت الطبيعي؟ عودة ناعمة. وإلا فالإزاحة
+           * مقصوصة أصلاً أثناء الحركة — ثبات هادئ. */
+          if (scaleNow.current <= 1.05) {
+            resetZoom();
+          }
+        },
+        onPanResponderTerminate: () => {
+          if (scaleNow.current <= 1.05) {
+            resetZoom();
+          }
+        },
+        /* لا نتخلى عن الإصبعين أثناء القرصة للقائمة الأم. */
+        onPanResponderTerminationRequest: () => false,
+      }),
+    // مراجع فقط — المنشئ مرة واحدة آمن.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
+
+  /* النقرة المزدوجة — تُلتقط في onPress الودّي (لا تعارض مع القرصة). */
+  const onTap = () => {
+    const now = Date.now();
+    if (now - lastTap.current < 300) {
+      lastTap.current = 0;
+      if (scaleNow.current > 1.05) {
+        resetZoom();
+      } else {
+        zoomIn();
+      }
+    } else {
+      lastTap.current = now;
+    }
+  };
+
+  return (
+    <Animated.View
+      {...responder.panHandlers}
+      onLayout={e => {
+        boxW.current = e.nativeEvent.layout.width || width;
+        boxH.current = e.nativeEvent.layout.height || 600;
+      }}
+      style={{width, height: '100%'}}>
+      <Pressable
+        onPress={onTap}
+        style={{width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center'}}>
+        <Animated.Image
+          source={{uri}}
+          style={{
+            width,
+            height: '100%',
+            transform: [{translateX}, {translateY}, {scale}],
+          }}
+          resizeMode="contain"
+          resizeMethod="resize"
+        />
+      </Pressable>
+    </Animated.View>
+  );
+}
+
 const galleryStyles = StyleSheet.create({
-  dotsRow: {
+  /* v3.6: شريط المصغّرات — بديل النقاط (نمط أمازون/نون). */
+  thumbsRow: {
     flexDirection: 'row',
-    gap: 6,
+    gap: 8,
     justifyContent: 'center',
     marginTop: spacing.md,
   },
-  dot: {height: 7, borderRadius: 999},
+  thumbWrap: {
+    width: 58,
+    height: 58,
+    borderRadius: radius.md,
+    borderWidth: 2,
+    padding: 2,
+  },
+  thumb: {
+    width: '100%',
+    height: '100%',
+    borderRadius: radius.md - 2,
+    backgroundColor: 'rgba(120,120,120,0.12)',
+  },
   countChip: {
     position: 'absolute',
     bottom: spacing.md,

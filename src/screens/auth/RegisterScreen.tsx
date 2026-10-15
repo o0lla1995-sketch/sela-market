@@ -28,6 +28,7 @@ import {radius, spacing, type, fonts} from '../../theme/tokens';
 import {Icon} from '../../components/Icon';
 import {Button, Field, Screen, SecureField} from '../../components/ui';
 import {useAuthStore} from '../../stores/authStore';
+import {useSettingsStore} from '../../stores/settingsStore';
 import {useToastStore} from '../../stores/toastStore';
 import {passwordProblem, passwordStrength} from '../../api/endpoints';
 import {
@@ -96,6 +97,10 @@ export function RegisterScreen({navigation}: Props) {
       password,
     );
     if (ok) {
+      /* v3.6: وسم onboarding بعد نجاح التسجيل فقط — كانت الترحيب
+       * تُحرق قبل فتح النافذة فيهبط إغلاقها على الرئيسية زائراً
+       * بدل العودة للترحيب (نفس إصلاح شاشة الدخول). */
+      useSettingsStore.getState().setOnboarded();
       primeAndStart();
       toast(`أهلاً ${name.trim().split(' ')[0]} في سيلا ماركت`, 'success');
       /* v3.1 (الجولة 61): نفس إصلاح شاشة الدخول — التسجيل من شاشة

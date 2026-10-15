@@ -41,7 +41,7 @@ describe('الجولة 60 — v3.0.0: إعادة البناء الهيكلي', (
     expect(screen).toContain('barClearance');
     expect(screen).toContain('paddingBottom: barClearance');
     // معرض بنسبة نون 4:5
-    expect(screen).toContain('screenWidth * 1.25');
+    expect(screen).toContain('galleryImageWidth * 1.25');
     // سقف المخزون محفوظ من v2.8 (لا تراجع)
     expect(screen).toContain('max={maxQty}');
     expect(screen).toContain('Math.floor(product.stock * 1000) / 1000');
@@ -116,10 +116,10 @@ describe('الجولة 60 — v3.0.0: إعادة البناء الهيكلي', (
 
   test('⑤ الإصدار: 3.5.0 (19)', () => {
     const config = read('src/core/config.ts');
-    expect(config).toContain("APP_VERSION = '3.5.0'");
-    expect(config).toContain('APP_BUILD_CODE = 19');
+    expect(config).toContain("APP_VERSION = '3.6.0'");
+    expect(config).toContain('APP_BUILD_CODE = 20');
     const gradle = read('android/app/build.gradle');
-    expect(gradle).toContain('versionCode 19');
-    expect(gradle).toContain('versionName "3.5.0"');
+    expect(gradle).toContain('versionCode 20');
+    expect(gradle).toContain('versionName "3.6.0"');
   });
 });

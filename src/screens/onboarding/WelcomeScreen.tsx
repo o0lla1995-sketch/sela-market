@@ -214,8 +214,17 @@ export function WelcomeScreen({navigation}: Props) {
     }
   };
 
+  /* v3.6 (الجولة 66 — شكوى «إغلاق نافذة التسجيل أو الدخول لا يغلق
+   * بشكل صحيح»): كانت setOnboarded() تُستدعى لحظة فتح النافذة، فتُزال
+   * شاشة الترحيب من المكدس (تُرسم شرطياً بشرط !onboarded) ويهبط
+   * الإغلاق على الرئيسية بوضع الزائر بدل العودة للترحيب. الآن:
+   * الوسم يتم عند اختيار الزائر فقط، أما الدخول/التسجيل فتُوسم
+   * شاشتاهما بعد نجاح العملية فعلاً — الإغلاق يعود للترحيب دوماً. */
   const start = (mode: 'guest' | 'login' | 'register') => {
-    setOnboarded();
+    if (mode === 'guest') {
+      setOnboarded();
+      return;
+    }
     if (mode === 'login') {
       navigation.navigate('Login');
     } else if (mode === 'register') {

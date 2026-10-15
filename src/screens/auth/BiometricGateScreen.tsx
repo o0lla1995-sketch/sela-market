@@ -3,11 +3,16 @@
  * ─────────────────────────────────────────────────────────────────
  *  • تظهر عند بدء التطبيق عندما توجد جلسة محفوظة (token) وفُعّل خيار
  *    «الدخول بالبصمة» من الإعدادات. بصمة واحدة تفتح التطبيق على جلسة
- *    المستخدم — أو «الدخول بدون بصمة» يدخل مباشرة.
+ *    المستخدم.
  *  • v3.4 (الجولة 64): إعادة تصميم عصرية بطلب المستخدم — دائرة بصمة
  *    كبيرة بأيقونة مخصصة جديدة، نصوص مختصرة بلا ملاحظات ثانوية،
  *    وزر أساسي واضح. المنطق (الفتح التلقائي وحارس إعادة القفل)
  *    لم يُمس إطلاقاً.
+ *  • v3.6 (الجولة 66 — طلب المستخدم الصريح): أُزيل «الدخول بدون
+ *    بصمة» كلياً — كان يفتح الجلسة المحفوظة بلا أي تحقق فيكسر غرض
+ *    البوابة الأمني بالكامل. البديل: زر «تسجيل الخروج» — ينهي
+ *    الجلسة المحفوظة نظيفاً (مع إيقاف مستطلع الطلبات) ويعيد
+ *    التطبيق لوضع التصفح كزائر. المنطق المتبقي لم يُمس.
  */
 import React, {useCallback, useEffect, useRef, useState} from 'react';
 import {Pressable, StyleSheet, Text, View} from 'react-native';
@@ -24,6 +29,8 @@ import {
   markBiometricAuthEnded,
   markBiometricAuthStarted,
 } from '../../services/biometrics';
+import {useAuthStore} from '../../stores/authStore';
+import {stopOrdersSync} from '../../services/ordersSync';
 import {useToastStore} from '../../stores/toastStore';
 import type {RootStackParamList} from '../../navigation/RootNavigator';
 
@@ -55,7 +62,9 @@ export function BiometricGateScreen({navigation}: Props) {
       if (ok) {
         navigation.replace('Main');
       } else {
-        toast('أُلغي الدخول بالبصمة — استخدم كلمة المرور', 'info');
+        /* v3.6: لا مسار التفافي بعد الآن — إما إعادة المحاولة أو
+         * تسجيل الخروج (الزر أسفل البطاقة). */
+        toast('أُلغي الدخول بالبصمة — أعد المحاولة أو سجّل الخروج', 'info');
       }
     } catch {
       markBiometricAuthEnded(false);
@@ -82,6 +91,16 @@ export function BiometricGateScreen({navigation}: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  /* v3.6: تسجيل الخروج — بديل «الدخول بدون بصمة» المحذوف بطلب
+   * المستخدم (كان يكسر غرض البصمة). يوقف مستطلع الطلبات، ينهي
+   * الجلسة المحفوظة نظيفاً، ويعيد التطبيق لوضع التصفح كزائر. */
+  const doLogout = useCallback(() => {
+    stopOrdersSync();
+    useAuthStore.getState().logout();
+    toast('تم تسجيل الخروج — يمكنك التصفح كزائر', 'info');
+    navigation.reset({index: 0, routes: [{name: 'Main'}]});
+  }, [navigation, toast]);
+
   return (
     <SafeAreaView style={[gateStyles.wrap, {backgroundColor: palette.bg}]}>
       <View style={[gateStyles.card, {backgroundColor: palette.surface, borderColor: palette.line}]}>
@@ -97,7 +116,7 @@ export function BiometricGateScreen({navigation}: Props) {
         </Text>
         {hasPrint === false ? (
           <Text style={{fontSize: 11, color: palette.warning, fontFamily: fonts.medium, textAlign: 'center'}}>
-            لا توجد بصمة مسجلة في الجهاز — سجّلها من إعدادات الجهاز أو استخدم رمز القفل
+            لا توجد بصمة مسجلة في الجهاز — سجّلها من إعدادات الجهاز أو سجّل الخروج
           </Text>
         ) : null}
         <Button
@@ -106,12 +125,18 @@ export function BiometricGateScreen({navigation}: Props) {
           onPress={run}
           disabled={busy}
         />
+        {/* v3.6: تسجيل الخروج — البديل الوحيد للبصمة (طلب المستخدم:
+         * «قم بإزالة الدخول بدون بصمة لأنها تكسر البصمة واجعله
+         * تسجيل الخروج من التطبيق»). */}
         <Pressable
-          onPress={() => navigation.replace('Main')}
+          onPress={doLogout}
           hitSlop={8}
-          style={{paddingVertical: 6}}>
-          <Text style={{fontSize: 12.5, color: palette.brandDark, fontFamily: fonts.medium}}>
-            الدخول بدون بصمة
+          accessibilityRole="button"
+          accessibilityLabel="تسجيل الخروج من التطبيق"
+          style={({pressed}) => [gateStyles.logoutRow, {opacity: pressed ? 0.6 : 1}]}>
+          <Icon name="logout" size={14} color={palette.muted} />
+          <Text style={{fontSize: 12.5, color: palette.muted, fontFamily: fonts.medium}}>
+            تسجيل الخروج من التطبيق
           </Text>
         </Pressable>
       </View>
@@ -143,5 +168,13 @@ const gateStyles = StyleSheet.create({
     borderWidth: 2,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  /* v3.6: صف تسجيل الخروج — هادئ ومتقن تحت الزر الأساسي. */
+  logoutRow: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 6,
   },
 });

@@ -646,6 +646,11 @@ export function HomeScreen({navigation}: Props) {
                   renderItem={({item}) => {
                     const tile = tileFor(item.category, palette.isDark);
                     return (
+                      /* v3.6 (الجولة 66 — طلب المستخدم: «بطاقات الأقسام
+                       * مميزة يعني تكون صورة وعنوان بدون تفاصيل»): بطاقة
+                       * بيضاء نظيفة بميدالية دائرية كبيرة ناعمة بلون بلاطة
+                       * التصنيف + الاسم فقط — بلا عدّاد منتجات ولا أي
+                       * تفاصيل ثانوية (نمط نون/أمازون في بلاطات الأقسام). */
                       <Pressable
                         onPress={() => navigation.navigate('Category', {category: item.category})}
                         accessibilityRole="button"
@@ -653,30 +658,28 @@ export function HomeScreen({navigation}: Props) {
                         style={({pressed}) => [
                           catStyles.tile,
                           {
-                            backgroundColor: tile.soft,
-                            borderColor: tile.solid + '33',
+                            backgroundColor: palette.surface,
+                            borderColor: tile.solid + '2E',
                             opacity: pressed ? 0.85 : 1,
                           },
+                          shadowFor(palette.isDark),
                         ]}>
-                        <View style={[catStyles.iconWrap, {backgroundColor: tile.solid}]}>
+                        <View style={[catStyles.iconWrap, {backgroundColor: tile.soft}]}>
                           <Icon
                             name={CATEGORY_ICONS[item.category] ?? 'tag'}
-                            size={22}
-                            color="#FFFFFF"
+                            size={27}
+                            color={tile.solid}
                           />
                         </View>
                         <Text
                           style={{
-                            fontSize: 12.5,
-                            color: tile.ink,
+                            fontSize: 12,
+                            color: palette.ink,
                             fontFamily: fonts.bold,
                             textAlign: 'center',
                           }}
                           numberOfLines={1}>
                           {item.category}
-                        </Text>
-                        <Text style={{fontSize: 10, color: tile.solid, fontFamily: fonts.medium}}>
-                          {item.n} منتجاً
                         </Text>
                       </Pressable>
                     );
@@ -901,19 +904,20 @@ const staleStyles = StyleSheet.create({
 });
 
 const catStyles = StyleSheet.create({
+  /* v3.6: بلاطة القسم — صورة (ميدالية) وعنوان فقط بلا تفاصيل. */
   tile: {
     alignItems: 'center',
-    gap: 6,
+    gap: 7,
     borderRadius: radius.lg,
     borderWidth: 1,
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.sm,
-    width: 96,
+    width: 92,
   },
   iconWrap: {
-    width: 46,
-    height: 46,
-    borderRadius: 16,
+    width: 60,
+    height: 60,
+    borderRadius: 999,
     alignItems: 'center',
     justifyContent: 'center',
   },
