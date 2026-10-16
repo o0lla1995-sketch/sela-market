@@ -31,7 +31,7 @@
  *    + سطر «وفّر» أخضر — تمييز فوري من نظرة واحدة.
  */
 import React from 'react';
-import {Image, Pressable, StyleSheet, Text, View} from 'react-native';
+import {Animated, Image, Pressable, StyleSheet, Text, View} from 'react-native';
 import {useTheme} from '../theme/ThemeProvider';
 import {
   radius,
@@ -42,6 +42,7 @@ import {
   cardBorderFor,
 } from '../theme/tokens';
 import {hapticLight} from '../core/haptics';
+import {usePop} from '../core/motion';
 import {Icon} from './Icon';
 import {absoluteUrl} from '../api/client';
 import {formatMoney} from '../core/money';
@@ -120,6 +121,9 @@ export function ProductCard({
   const toast = useToastStore(s => s.show);
   /* v2.6: الزائر يتصفح فقط — المفضلة تتطلب دخولاً. */
   const requireAuth = useRequireAuth();
+  /* v4.0 (الجولة 68): نبضة القلب — يكبر لحظة التفعيل ثم يعود
+   * بنابض ناعم، فيحس المستخدم بالفعل وهو يقع (طلب «موشن لطيفة»). */
+  const heart = usePop();
 
   const soldByWeight = product.sold_by_weight === 1;
   const outOfStock = product.stock <= 0;
@@ -148,7 +152,10 @@ export function ProductCard({
           backgroundColor: palette.surface,
           borderColor: discounted ? palette.danger + 'B3' : cardBorderFor(palette.isDark),
           borderWidth: discounted ? 1.25 : 1,
+          /* v4.0: ضغط حي — البطاقة تتقلص بلمسة خفيفة بدل الشفافية
+           * وحدها (بلا ripple — محظور منذ v3.3). */
           opacity: pressed ? 0.92 : 1,
+          transform: [{scale: pressed ? 0.97 : 1}],
         },
         shadowFor(palette.isDark),
       ]}>
@@ -188,6 +195,7 @@ export function ProductCard({
           onPress={() =>
             requireAuth(() => {
               hapticLight();
+              heart.pop();
               const added = toggleWishlist(product, displayName);
               toast(added ? 'أُضيف إلى المفضلة' : 'أُزيل من المفضلة', 'info');
             })
@@ -196,11 +204,13 @@ export function ProductCard({
           accessibilityRole="button"
           accessibilityLabel={wishlisted ? 'إزالة من المفضلة' : 'إضافة إلى المفضلة'}
           style={[styles.heartBtn, {backgroundColor: palette.surface}]}>
-          <Icon
-            name={wishlisted ? 'heartFilled' : 'heart'}
-            size={17}
-            color={wishlisted ? palette.danger : palette.muted}
-          />
+          <Animated.View style={heart.style}>
+            <Icon
+              name={wishlisted ? 'heartFilled' : 'heart'}
+              size={17}
+              color={wishlisted ? palette.danger : palette.muted}
+            />
+          </Animated.View>
         </Pressable>
       </View>
 

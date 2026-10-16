@@ -82,17 +82,21 @@ describe('الجولة 65 — v3.5.0: إصلاح بطاقة المنتج الض�
     const search = stripComments(read('src/screens/search/SearchScreen.tsx'));
     expect(search).toContain("cell: {flex: 1, maxWidth: '50%'}");
     expect(search).toContain('numColumns={2}');
-    // أشرطة المشابهة/المقترحات الأفقية تحتفظ بعرضها الصريح المشروط
+    /* v4.0 (الجولة 68): أشرطة الرئيسية الأفقية (أنواع المتاجر +
+     * المقترحات) صارت بطاقات الشريط المضغوطة ProductRailCard
+     * (148) بدل بطاقات 152 — تنويع أشكال البطاقات حسب القسم;
+     * شبكات 2×2 ما زالت بطاقات المنتج الكاملة بارتفاع 104. */
     const home = stripComments(read('src/screens/home/HomeScreen.tsx'));
-    expect(home).toContain('photoWidth={152}');
+    expect(home).toContain('ProductRailCard');
+    expect(home).toContain('photoHeight={104}');
   });
 
   test('⑥ الإصدار: 3.5.0 (19)', () => {
     const config = read('src/core/config.ts');
-    expect(config).toContain("APP_VERSION = '3.7.0'");
-    expect(config).toContain('APP_BUILD_CODE = 21');
+    expect(config).toContain("APP_VERSION = '4.0.0'");
+    expect(config).toContain('APP_BUILD_CODE = 22');
     const gradle = read('android/app/build.gradle');
-    expect(gradle).toContain('versionCode 21');
-    expect(gradle).toContain('versionName "3.7.0"');
+    expect(gradle).toContain('versionCode 22');
+    expect(gradle).toContain('versionName "4.0.0"');
   });
 });

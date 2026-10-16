@@ -3,9 +3,10 @@
  * كل مكون يستهلك الثيم من ThemeProvider (فاتح/داكن) ويحترم الـ RTL
  * (I18nManager.forceRTL مفعل من App) وقاعدة «صفر إيموجي».
  */
-import React, {useMemo, useState} from 'react';
+import React, {useEffect, useMemo, useRef, useState} from 'react';
 import {
   ActivityIndicator,
+  Animated,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -1159,37 +1160,90 @@ const sectionStyles = StyleSheet.create({
 export function Toaster() {
   const {palette} = useTheme();
   const toasts = useToastStore(s => s.toasts);
-  const dismiss = useToastStore(s => s.dismiss);
   if (toasts.length === 0) {
     return null;
   }
   return (
     <View style={toastStyles.wrap} pointerEvents="box-none">
-      {toasts.slice(-3).map(t => {
-        /* v2.1: نغمات التنبيه من هوية الثيم نفسها — البرتقالي العلامة
-         * بدقّة بدل الأزرق الافتراضي الذي كان يبدو غريباً عن الهوية. */
-        const tone =
-          t.tone === 'success' ? palette.success :
-          t.tone === 'danger' ? palette.danger : palette.brand;
-        return (
-          <Pressable
-            key={t.id}
-            onPress={() => dismiss(t.id)}
-            style={[
-              toastStyles.toast,
-              {
-                backgroundColor: palette.surface,
-                borderColor: palette.line,
-                borderRightColor: tone,
-              },
-              shadowFor(palette.isDark),
-            ]}>
-            <View style={[toastStyles.toneDot, {backgroundColor: tone}]} />
-            <Text style={[type.smallMedium, {color: palette.ink}]}>{t.text}</Text>
-          </Pressable>
-        );
-      })}
+      {toasts.slice(-3).map(t => (
+        <ToastItem key={t.id} id={t.id} text={t.text} tone={t.tone} palette={palette} />
+      ))}
     </View>
+  );
+}
+
+/* v4.0 (الجولة 68): بطاقة توست متحركة — كانت تظهر وتختفي بقفزة
+ * جامدة (شكوى «التطبيق جامد»); الآن تنزلق من أعلى بنابض ناعم
+ * لحظة ولادتها. المحرك JS على transform/opacity فقط — صفر كلفة
+ * مستمرة بعد اكتمال الدخول. */
+function ToastItem({
+  id,
+  text,
+  tone: toneKind,
+  palette,
+}: {
+  id: number;
+  text: string;
+  tone: 'success' | 'danger' | 'info';
+  palette: ReturnType<typeof useTheme>['palette'];
+}) {
+  const dismiss = useToastStore(s => s.dismiss);
+  const v = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.spring(v, {
+      toValue: 1,
+      friction: 8,
+      tension: 170,
+      useNativeDriver: false,
+    }).start();
+  }, [v]);
+  /* v2.1: نغمات التنبيه من هوية الثيم نفسها — البرتقالي العلامة
+   * بدقّة بدل الأزرق الافتراضي الذي كان يبدو غريباً عن الهوية. */
+  const tone =
+    toneKind === 'success' ? palette.success :
+    toneKind === 'danger' ? palette.danger : palette.brand;
+  return (
+    <AnimatedPressableHolder
+      onPress={() => dismiss(id)}
+      value={v}
+      style={[
+        toastStyles.toast,
+        {
+          backgroundColor: palette.surface,
+          borderColor: palette.line,
+          borderRightColor: tone,
+        },
+        shadowFor(palette.isDark),
+      ]}>
+      <View style={[toastStyles.toneDot, {backgroundColor: tone}]} />
+      <Text style={[type.smallMedium, {color: palette.ink}]}>{text}</Text>
+    </AnimatedPressableHolder>
+  );
+}
+
+/* غلاف ضغط متحرك — يبقي مطواعية الضغط للإخفاء مع حركة الدخول. */
+function AnimatedPressableHolder({
+  onPress,
+  value,
+  style,
+  children,
+}: {
+  onPress: () => void;
+  value: Animated.Value;
+  style: ViewStyle | ViewStyle[];
+  children: React.ReactNode;
+}) {
+  return (
+    <Animated.View style={{opacity: value}}>
+      <Pressable
+        onPress={onPress}
+        style={({pressed}) => [
+          style,
+          {transform: [{scale: pressed ? 0.98 : 1}], opacity: pressed ? 0.9 : 1},
+        ]}>
+        {children}
+      </Pressable>
+    </Animated.View>
   );
 }
 

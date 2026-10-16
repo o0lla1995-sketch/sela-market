@@ -65,7 +65,6 @@ export function CartScreen({navigation}: Props) {
   const carts = useCartStore(s => s.carts);
   const clearAll = useCartStore(s => s.clearAll);
   const toast = useToastStore(s => s.show);
-  const requireAuth = useRequireAuth();
   const serverAddresses = useLocationStore(s => s.addresses);
   const syncAddresses = useLocationStore(s => s.syncFromServer);
 
@@ -116,6 +115,34 @@ export function CartScreen({navigation}: Props) {
     0,
   );
 
+  /* ── v4.0 (الجولة 68): ترتيب السلال ──
+   * طلب المستخدم: «ترتيب السلال» — متاجر متعددة تعني سلالاً متعددة
+   * متراصة؛ رقائق ترتيب تعيد تنظيمها فوراً: الأحدث نشاطاً (الافتراضي
+   * — السلة التي أضفت إليها آخراً في الأعلى)، الأعلى قيمة، أبجدياً
+   * باسم المتجر. */
+  const [basketSort, setBasketSort] = useState<'recent' | 'value' | 'name'>('recent');
+  const sortedEntries = useMemo(() => {
+    const list = [...entries];
+    switch (basketSort) {
+      case 'value':
+        return list.sort(
+          (a, b) =>
+            b.lines.reduce((s, l) => s + lineTotal(l.priceMinor, l.quantity), 0) -
+            a.lines.reduce((s, l) => s + lineTotal(l.priceMinor, l.quantity), 0),
+        );
+      case 'name':
+        return list.sort((a, b) => a.storeName.localeCompare(b.storeName, 'ar'));
+      default:
+        return list.sort((a, b) => b.updatedAt - a.updatedAt);
+    }
+  }, [entries, basketSort]);
+  /* إجمالي قيمة الأصناف عبر كل السلال (بلا التوصيل — يختلف لكل متجر
+   * ويُحسب لحظة الطلب في بطاقة كل متجر). */
+  const grandItemsSubtotal = entries.reduce(
+    (sum, e) => sum + e.lines.reduce((s, l) => s + lineTotal(l.priceMinor, l.quantity), 0),
+    0,
+  );
+
   const onOrderSuccess = (order: Order) => {
     navigation.replace('OrderSuccess', {order});
   };
@@ -142,10 +169,67 @@ export function CartScreen({navigation}: Props) {
         />
       ) : (
         <FlatList
-          data={entries}
+          data={sortedEntries}
           keyExtractor={e => String(e.storeId)}
           contentContainerStyle={{padding: spacing.lg, gap: spacing.lg, paddingBottom: tabClearance + 48}}
           showsVerticalScrollIndicator={false}
+          /* ── v4.0: رأس السلة الموحّد — ملخص إجمالي + رقائق ترتيب ──
+           * طلب المستخدم: «ترتيب السلال» — نظرة واحدة على حجم التسوق
+           * كله (سلال/قطع/قيمة) ثم ترتيب البطاقات بالطريقة الأنسب. */
+          ListHeaderComponent={
+            <View style={{gap: spacing.md}}>
+              <View style={[summaryStyles.card, {backgroundColor: palette.surface, borderColor: palette.brandBorder}]}>
+                <View style={summaryStyles.row}>
+                  <View style={summaryStyles.cell}>
+                    <Text style={[summaryStyles.num, {color: palette.brandDark}]}>
+                      {entries.length}
+                    </Text>
+                    <Text style={[summaryStyles.label, {color: palette.muted}]}>سلال</Text>
+                  </View>
+                  <View style={[summaryStyles.divider, {backgroundColor: palette.line}]} />
+                  <View style={summaryStyles.cell}>
+                    <Text style={[summaryStyles.num, {color: palette.ink}]}>
+                      {Math.floor(grandCount)}
+                    </Text>
+                    <Text style={[summaryStyles.label, {color: palette.muted}]}>قطعة/كيلو</Text>
+                  </View>
+                  <View style={[summaryStyles.divider, {backgroundColor: palette.line}]} />
+                  <View style={summaryStyles.cell}>
+                    <Text style={[summaryStyles.num, {color: palette.ink}]}>
+                      {formatMoney(grandItemsSubtotal)}
+                    </Text>
+                    <Text style={[summaryStyles.label, {color: palette.muted}]}>قيمة الأصناف</Text>
+                  </View>
+                </View>
+                <Text style={[summaryStyles.hint, {color: palette.muted}]}>
+                  كل سلة تُطلب من متجرها — رسوم التوصيل تظهر داخل بطاقة كل متجر
+                </Text>
+              </View>
+
+              {entries.length > 1 ? (
+                <View style={summaryStyles.sortRow}>
+                  <Text style={{fontSize: 11.5, color: palette.muted, fontFamily: fonts.medium}}>
+                    ترتيب السلال:
+                  </Text>
+                  <BasketSortChip
+                    label="الأحدث"
+                    active={basketSort === 'recent'}
+                    onPress={() => setBasketSort('recent')}
+                  />
+                  <BasketSortChip
+                    label="الأعلى قيمة"
+                    active={basketSort === 'value'}
+                    onPress={() => setBasketSort('value')}
+                  />
+                  <BasketSortChip
+                    label="أبجدياً"
+                    active={basketSort === 'name'}
+                    onPress={() => setBasketSort('name')}
+                  />
+                </View>
+              ) : null}
+            </View>
+          }
           renderItem={({item: entry}) => (
             <StoreCheckout
               entry={entry}
@@ -874,5 +958,96 @@ const cardStyles = StyleSheet.create({
     paddingVertical: 7,
     marginHorizontal: spacing.md,
     marginBottom: spacing.sm,
+  },
+});
+
+/* ═══ v4.0 (الجولة 68): رأس السلة الموحّد — ملخص + ترتيب ═══ */
+
+/** رقاقة ترتيب السلال — نفس لغة رقائق الفلترة في التطبيق. */
+function BasketSortChip({
+  label,
+  active,
+  onPress,
+}: {
+  label: string;
+  active: boolean;
+  onPress: () => void;
+}) {
+  const {palette} = useTheme();
+  return (
+    <Pressable
+      onPress={onPress}
+      hitSlop={4}
+      accessibilityRole="button"
+      accessibilityLabel={`ترتيب: ${label}`}
+      accessibilityState={{selected: active}}
+      style={({pressed}) => [
+        summaryStyles.sortChip,
+        {
+          backgroundColor: active ? palette.brand : palette.surface,
+          borderColor: active ? palette.brand : palette.line,
+          opacity: pressed ? 0.8 : 1,
+          transform: [{scale: pressed ? 0.97 : 1}],
+        },
+      ]}>
+      <Text
+        style={{
+          fontSize: 11,
+          fontFamily: active ? fonts.bold : fonts.medium,
+          color: active ? palette.onBrand : palette.inkSoft,
+        }}>
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
+const summaryStyles = StyleSheet.create({
+  /* بطاقة الملخص — ثلاث خانات بأرقام كبيرة تفصلها فواصل عمودية،
+   * بإطار العلامة الناعم كي تُقرأ كبطاقة «الدفع» الأم. */
+  card: {
+    borderRadius: radius.lg,
+    borderWidth: 1.25,
+    padding: spacing.md,
+    gap: spacing.sm,
+  },
+  row: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+  },
+  cell: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 1,
+  },
+  divider: {
+    width: 1,
+    height: 34,
+  },
+  num: {
+    fontSize: 19,
+    lineHeight: 25,
+    fontFamily: fonts.black,
+  },
+  label: {
+    fontSize: 10.5,
+    fontFamily: fonts.medium,
+  },
+  hint: {
+    fontSize: 10.5,
+    textAlign: 'center',
+    lineHeight: 15,
+  },
+  sortRow: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  sortChip: {
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
   },
 });

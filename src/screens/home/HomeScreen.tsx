@@ -17,6 +17,7 @@
  */
 import React, {useCallback, useEffect, useMemo, useState} from 'react';
 import {
+  Animated,
   FlatList,
   Modal,
   Pressable,
@@ -40,6 +41,10 @@ import {
   tileFor,
 } from '../../theme/tokens';
 import {Icon, type IconName} from '../../components/Icon';
+import {ProductCard} from '../../components/ProductCard';
+import {ProductRailCard, WeeklyOfferCard} from '../../components/ProductCards';
+import {Entrance, useCollapseHeader} from '../../core/motion';
+import {hasDiscount} from '../../core/discount';
 import {
   Badge,
   Button,
@@ -50,7 +55,6 @@ import {
   Screen,
   SectionTitle,
 } from '../../components/ui';
-import {ProductCard} from '../../components/ProductCard';
 import {CircleStoreCard, storeTypeInfo} from '../../components/StoreCard';
 import {
   getCrossProducts,
@@ -107,6 +111,10 @@ export function HomeScreen({navigation}: Props) {
   const [categories, setCategories] = useState<CategoryCount[]>([]);
   const [products, setProducts] = useState<CrossProduct[]>([]);
   const [recommended, setRecommended] = useState<CrossProduct[]>([]);
+  /* v4.0 (الجولة 68): عروض هذا الأسبوع — أقوى التخفيضات من كل
+   * متاجر المول دفعة واحدة (الخادم يدعم offers=1 وإن كان أقدم
+   * فلترنا محلياً من نفس الدفعة). */
+  const [weeklyOffers, setWeeklyOffers] = useState<CrossProduct[]>([]);
   /* v3.4: شريط منتجات كل نوع متجر — {product, store} لبناء storeRef. */
   const [typeProducts, setTypeProducts] = useState<
     Record<string, {product: Product; store: Store}[]>
@@ -147,6 +155,29 @@ export function HomeScreen({navigation}: Props) {
   useEffect(() => {
     void loadHome();
   }, [loadHome]);
+
+  /* ── v4.0: عروض هذا الأسبوع — دفعة كبيرة مفلترة بالخصم ──
+   * تجلب مرة واحدة بالكاش المحلي (5 دقائق كأحدث الصفحة) وتُرتّب
+   * بالخصم الأكبر أولاً — القسم يختفي تلقائياً إن لم توجد عروض. */
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const res = await cachedFetch('offers:week:v1', () =>
+        getCrossProducts({per: 48, offers: true}),
+      );
+      if (!alive || res.data == null) {
+        return;
+      }
+      const deals = res.data
+        .filter(p => hasDiscount(p))
+        .sort((a, b) => (b.discount_pct ?? 0) - (a.discount_pct ?? 0))
+        .slice(0, 10);
+      setWeeklyOffers(deals);
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   /* ── مزامنة «متاجر منطقتك» عند تغيّر المنطقة ── */
   useEffect(() => {
@@ -321,6 +352,17 @@ export function HomeScreen({navigation}: Props) {
    * في الداكن لتبقى القراءة البيضاء مريحة (تباين 5:1). */
   const heroBg = palette.isDark ? '#C2410C' : '#EA580C';
 
+  /* ── v4.0 (الجولة 68): محرّك التروسة المنطوية ──
+   * طلب المستخدم: «أشعر أن التطبيق جامد — في الهيدر عند عمل
+   * سكرول وموشن لطيفة وانتقالات سلسة». التروسة الآن طبقة عائمة
+   * تنطوي ببطء (parallax 0.55×) وتتلاشى كلما نزل المحتوى، ويحل
+   * محلها شريط مضغوط أنيق (تحية مصغّرة + بحث + أجراس) بين عتبتين
+   * بانزلاق وتلاشٍ متصلين — لا قفزة ثنائية. المحرك JS بالكامل
+   * (قاعدة v3.4: صفر عقد أصلية على مسار التمرير). */
+  const HERO_CONTENT_H = 118;
+  const collapse = useCollapseHeader({heroHeight: HERO_CONTENT_H, collapseFrom: 56, collapseTo: 132});
+  const {compactActive} = collapse;
+
   /* ── هندسة كاروسيل «أحدث ما وصل المول» ──
    * كل صفحة: شبكة 2×2 بعرض الشاشة متناقصاً الحواشي + فجوة بين
    * الصفحات. snapToInterval يضمن قفزاً ناعماً صفحةً صفحة. */
@@ -375,10 +417,20 @@ export function HomeScreen({navigation}: Props) {
 
   return (
     <Screen>
-      {/* ═══ التروسة اللاصقة المدمجة (v3.2) ═══
-       * خارج منطقة التمرير هندسياً — ثابتة بلا قفزات، تدمج التحية
-       * والمنطقة والبحث في كتلة واحدة متماسكة بانحناء وظل موحّدين. */}
-      <View style={[heroStyles.wrap, {backgroundColor: heroBg}, shadowRaised(palette.isDark)]}>
+      {/* ═══ التروسة العائمة المنطوية (v4.0) ═══
+       * طبقة مطلقة أعلى الشاشة (نفس نمط شريط المتجر المثبت في
+       * v3.4 — position absolute داخل الإطار الآمن): المحتوى يمر
+       * تحتها بتباعد paddingTop مكافئ. عند التمرير تنطوي ببطء
+       * وتتلاشى، وتُعاد لمساتها للشريط المضغوط كي لا تحجبه. */}
+      <Animated.View
+        pointerEvents={compactActive ? 'none' : 'auto'}
+        style={[
+          heroStyles.wrap,
+          heroFloatStyles.wrap,
+          {backgroundColor: heroBg},
+          collapse.heroStyle,
+          shadowRaised(palette.isDark),
+        ]}>
         <View style={heroStyles.inner}>
           <View style={heroStyles.topRow}>
             <View style={heroStyles.greetingCol}>
@@ -431,13 +483,76 @@ export function HomeScreen({navigation}: Props) {
             </View>
           </Pressable>
         </View>
-      </View>
+      </Animated.View>
 
-      {/* ═══ محتوى الصفحة القابل للتمرير تحت التروسة الثابتة ═══ */}
-      <ScrollView
+      {/* ═══ الشريط المضغوط (v4.0) ═══
+       * يظهر محل التروسة عند التمرير: عنوان المول + بحث مصغّر +
+       * المفضلة والإشعارات — استمرارية الأفعال بلا انقطاع. طبقة
+       * مطلقة بنفس نمط شريط صفحة المتجر (المثبت على الأجهزة). */}
+      <Animated.View
+        pointerEvents={compactActive ? 'auto' : 'none'}
+        style={[
+          compactStyles.wrap,
+          {
+            backgroundColor: palette.surface,
+            borderBottomColor: palette.line,
+          },
+          collapse.compactStyle,
+          shadowRaised(palette.isDark),
+        ]}>
+        <View style={compactStyles.brandCol}>
+          <Text style={[compactStyles.brandTitle, {color: palette.ink}]}>سيلا ماركت</Text>
+          <Text style={[compactStyles.brandSub, {color: palette.muted}]} numberOfLines={1}>
+            {myRegion != null ? `توصيل إلى ${myRegion}` : 'سوّق من مئات المتاجر'}
+          </Text>
+        </View>
+        <View style={{flexDirection: 'row-reverse', gap: spacing.sm}}>
+          <Pressable
+            onPress={() => navigation.navigate('Search')}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="البحث في المول"
+            style={[compactStyles.iconBtn, {borderColor: palette.line}]}>
+            <Icon name="search" size={18} color={palette.ink} />
+          </Pressable>
+          <Pressable
+            onPress={() => navigation.navigate('Wishlist')}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="المفضلة"
+            style={[compactStyles.iconBtn, {borderColor: palette.line}]}>
+            <Icon name="heart" size={18} color={palette.ink} />
+          </Pressable>
+          <Pressable
+            onPress={() => navigation.navigate('Notifications')}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="الإشعارات"
+            style={[compactStyles.iconBtn, {borderColor: palette.line}]}>
+            <Icon name="bell" size={18} color={palette.ink} />
+            {unread > 0 ? (
+              <View style={heroStyles.badgeSlot}>
+                <Badge count={unread} />
+              </View>
+            ) : null}
+          </Pressable>
+        </View>
+      </Animated.View>
+
+      {/* ═══ محتوى الصفحة القابل للتمرير تحت التروسة العائمة ═══ */}
+      <Animated.ScrollView
         style={{flex: 1}}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{paddingBottom: tabClearance}}
+        /* v4.0: تباعد ثابت يساوي ارتفاع التروسة + تنفّس — المحتوى
+         * يمر تحت الطبقة العائمة من أول بكسل. */
+        contentContainerStyle={{
+          paddingTop: HERO_CONTENT_H + spacing.md,
+          paddingBottom: tabClearance,
+        }}
+        /* v4.0: محرك JS صرف (قاعدة v3.4 — لا Animated.event ولا
+         * محرك أصلي على مسار التمرير). */
+        scrollEventThrottle={16}
+        onScroll={e => collapse.onScroll(e.nativeEvent.contentOffset.y)}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -476,6 +591,7 @@ export function HomeScreen({navigation}: Props) {
         ) : (
           <View style={{paddingHorizontal: spacing.lg, gap: spacing.xl, paddingTop: spacing.lg}}>
             {/* ─── متاجر تخدم منطقتك — رقاقة المنطقة بأقصى يسار العنوان ─── */}
+            <Entrance delay={0}>
             <View style={{gap: spacing.md}}>
               <SectionTitle
                 title={
@@ -493,6 +609,7 @@ export function HomeScreen({navigation}: Props) {
                       backgroundColor: palette.brandSoft,
                       borderColor: palette.brandBorder,
                       opacity: pressed ? 0.85 : 1,
+                      transform: [{scale: pressed ? 0.98 : 1}],
                     },
                   ]}>
                   <View style={[regionStyles.pinCircle, {backgroundColor: palette.brand}]}>
@@ -529,19 +646,62 @@ export function HomeScreen({navigation}: Props) {
                 </Text>
               )}
             </View>
+            </Entrance>
+
+            {/* ─── عروض هذا الأسبوع (v4.0) ───
+             * أقوى تخفيضات المول في بطاقات «صفقة» أفقية كاملة
+             * المعلومات — قرار الشراء بنظرة واحدة. «كل العروض» يفتح
+             * البحث مفلتراً بالعروض فقط. */}
+            {weeklyOffers.length > 0 ? (
+              <Entrance delay={70}>
+                <View style={{gap: spacing.md}}>
+                  <SectionTitle
+                    title="عروض هذا الأسبوع"
+                    subtitle="أقوى التخفيضات من كل متاجر المول"
+                    actionLabel="كل العروض"
+                    onAction={() => navigation.navigate('Search', {offers: true, browse: true})}
+                  />
+                  <FlatList
+                    horizontal
+                    data={weeklyOffers}
+                    keyExtractor={p => `offer-w-${p.store_id}:${p.id}`}
+                    showsHorizontalScrollIndicator={false}
+                    snapToInterval={252 + spacing.md}
+                    decelerationRate="fast"
+                    contentContainerStyle={{gap: spacing.md, paddingVertical: 8}}
+                    renderItem={({item}) => (
+                      <WeeklyOfferCard
+                        product={item}
+                        onPress={() =>
+                          navigation.navigate('Product', {
+                            product: item,
+                            storeRef: {
+                              id: item.store_id,
+                              name: item.store_name,
+                              storeNumber: item.store_number,
+                            },
+                          })
+                        }
+                      />
+                    )}
+                  />
+                </View>
+              </Entrance>
+            ) : null}
 
             {/* ─── أقسام حسب نوع المتجر (v3.4 — طلب المستخدم الأهم) ───
              * لكل نوع شريط من أحدث وأفضل منتجات أفضل متاجره،
              * وأيقونة «عرض الكل» بأقصى يسار العنوان تفتح شاشة
              * القسم الكاملة (StoreTypeScreen) بكل متاجر القسم
              * ومنتجاتها بجلب دوّار عادل حتى الاستنفاد. */}
-            {typeSections.map(sec => {
+            {typeSections.map((sec, idx) => {
               const rail = typeProducts[sec.label] ?? [];
               if (rail.length === 0) {
                 return null;
               }
               return (
-                <View key={`type-${sec.label}`} style={{gap: spacing.md}}>
+                <Entrance key={`type-${sec.label}`} delay={120 + idx * 50}>
+                <View style={{gap: spacing.md}}>
                   <SectionTitle
                     title={sec.label}
                     subtitle={`${sec.stores.length} ${
@@ -550,61 +710,62 @@ export function HomeScreen({navigation}: Props) {
                     actionLabel="عرض الكل"
                     onAction={() => navigation.navigate('StoreType', {type: sec.label})}
                   />
+                  {/* v4.0: بطاقة الشريط المضغوطة — صورة مربعة واسم وسعر
+                   * فقط: بطاقتان ونصف في الشاشة بدل بطاقة ونصف، وتنويع
+                   * واضح عن بطاقة الشبكة الكاملة (طلب تنويع الأشكال). */}
                   <FlatList
                     horizontal
                     data={rail}
                     keyExtractor={item => `t${item.store.id}:${item.product.id}`}
                     showsHorizontalScrollIndicator={false}
-                    snapToInterval={176 + spacing.md}
+                    snapToInterval={148 + spacing.md}
                     decelerationRate="fast"
                     contentContainerStyle={{gap: spacing.md, paddingVertical: 2}}
                     renderItem={({item}) => (
-                      <View style={recStyles.card}>
-                        <ProductCard
-                          product={item.product}
-                          photoWidth={152}
-                          photoHeight={120}
-                          storeRef={{
-                            id: item.store.id,
-                            name: item.store.name,
-                            storeNumber: item.store.store_number,
-                          }}
-                          onPress={() =>
-                            navigation.navigate('Product', {
-                              product: item.product,
-                              storeRef: {
-                                id: item.store.id,
-                                name: item.store.name,
-                                storeNumber: item.store.store_number,
-                              },
-                            })
-                          }
-                        />
-                      </View>
+                      <ProductRailCard
+                        product={item.product}
+                        width={148}
+                        storeName={item.store.name}
+                        storeRef={{
+                          id: item.store.id,
+                          name: item.store.name,
+                          storeNumber: item.store.store_number,
+                        }}
+                        onPress={() =>
+                          navigation.navigate('Product', {
+                            product: item.product,
+                            storeRef: {
+                              id: item.store.id,
+                              name: item.store.name,
+                              storeNumber: item.store.store_number,
+                            },
+                          })
+                        }
+                      />
                     )}
                   />
                 </View>
+                </Entrance>
               );
             })}
 
             {/* ─── مقترحات لك (اهتماماتك) — كاروسيل snap ─── */}
             {recommended.length > 0 ? (
-              <View style={{gap: spacing.md}}>
-                <SectionTitle title="مقترحات لك" subtitle="من تصنيفات شاهدتها وعجبتك" />
-                <FlatList
-                  horizontal
-                  data={recommended}
-                  keyExtractor={item => `rec${item.store_id}:${item.id}`}
-                  showsHorizontalScrollIndicator={false}
-                  snapToInterval={176 + spacing.md}
-                  decelerationRate="fast"
-                  contentContainerStyle={{gap: spacing.md, paddingVertical: 2}}
-                  renderItem={({item}) => (
-                    <View style={recStyles.card}>
-                      <ProductCard
+              <Entrance delay={140}>
+                <View style={{gap: spacing.md}}>
+                  <SectionTitle title="مقترحات لك" subtitle="من تصنيفات شاهدتها وعجبتك" />
+                  <FlatList
+                    horizontal
+                    data={recommended}
+                    keyExtractor={item => `rec${item.store_id}:${item.id}`}
+                    showsHorizontalScrollIndicator={false}
+                    snapToInterval={148 + spacing.md}
+                    decelerationRate="fast"
+                    contentContainerStyle={{gap: spacing.md, paddingVertical: 2}}
+                    renderItem={({item}) => (
+                      <ProductRailCard
                         product={item}
-                        photoWidth={152}
-                        photoHeight={120}
+                        width={148}
                         storeRef={{
                           id: item.store_id,
                           name: item.store_name,
@@ -621,10 +782,10 @@ export function HomeScreen({navigation}: Props) {
                           })
                         }
                       />
-                    </View>
-                  )}
-                />
-              </View>
+                    )}
+                  />
+                </View>
+              </Entrance>
             ) : null}
 
             {/* ─── التصنيفات — بلاطات ملونة عمودية (نمط نون) ─── */}
@@ -633,6 +794,7 @@ export function HomeScreen({navigation}: Props) {
                 <RowSkeleton />
               </View>
             ) : categories.length > 0 ? (
+              <Entrance delay={160}>
               <View style={{gap: spacing.md}}>
                 <SectionTitle title="تسوّق حسب التصنيف" />
                 <FlatList
@@ -661,6 +823,7 @@ export function HomeScreen({navigation}: Props) {
                             backgroundColor: palette.surface,
                             borderColor: tile.solid + '2E',
                             opacity: pressed ? 0.85 : 1,
+                            transform: [{scale: pressed ? 0.95 : 1}],
                           },
                           shadowFor(palette.isDark),
                         ]}>
@@ -686,12 +849,14 @@ export function HomeScreen({navigation}: Props) {
                   }}
                 />
               </View>
+              </Entrance>
             ) : null}
 
             {/* ─── أحدث ما وصل المول — كاروسيل شبكي 2×2 بانتقال صفحات ───
              * v3.2: طلب التاجر «snap-to-grid pagination» — كانت شبكة
              * تمرير رأسية لا نهائية؛ الآن صفحات مقضمة من 4 منتجات،
              * والجلب التدريجي يستمر عند بلوغ آخر صفحة. */}
+            <Entrance delay={190}>
             <View style={{gap: spacing.md}}>
               <SectionTitle
                 title="أحدث ما وصل المول"
@@ -729,9 +894,10 @@ export function HomeScreen({navigation}: Props) {
                 </View>
               )}
             </View>
+            </Entrance>
           </View>
         )}
-      </ScrollView>
+      </Animated.ScrollView>
 
       {/* ── مساعد اختيار المنطقة ── */}
       <Modal
@@ -833,7 +999,9 @@ export function HomeScreen({navigation}: Props) {
 const heroStyles = StyleSheet.create({
   /* v3.4: عادت الزوايا الدائرية السفلية بطلب المستخدم الصريح —
    * التروسة كبطاقة عائمة أنيقة بظل مرفوع فوق محتوى التمرير
-   * (كانت مسطحة الحواف منذ v3.2 بلا أي انحناء سفلي). */
+   * (كانت مسطحة الحواف منذ v3.2 بلا أي انحناء سفلي).
+   * v4.0: الطبقة نفسها صارت عائمة منطوية — هندستها في
+   * heroFloatStyles ومحتواها هنا كما هو. */
   wrap: {
     paddingBottom: spacing.md,
     borderBottomLeftRadius: radius.xl,
@@ -969,8 +1137,50 @@ const regionStyles = StyleSheet.create({
   },
 });
 
-const recStyles = StyleSheet.create({
-  card: {width: 176},
+/* v4.0 (الجولة 68): هندسة التروسة العائمة — طبقة مطلقة أعلى الشاشة
+ * (نفس نمط شريط صفحة المتجر المثبت على الأجهزة منذ v3.4). */
+const heroFloatStyles = StyleSheet.create({
+  wrap: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 10,
+    elevation: 10,
+  },
+});
+
+/* v4.0 (الجولة 68): الشريط المضغوط — يظهر بانزلاق وتلاشٍ عند
+ * التمرير محل التروسة المنطوية: عنوان المول + المنطقة + أزرار
+ * البحث/المفضلة/الإشعارات — استمرارية كاملة للأفعال الشائعة. */
+const compactStyles = StyleSheet.create({
+  wrap: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 20,
+    elevation: 20,
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingTop: 8,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+  },
+  brandCol: {gap: 1, alignItems: 'flex-start', flex: 1},
+  brandTitle: {fontSize: 17, lineHeight: 23, fontFamily: fonts.black},
+  brandSub: {fontSize: 10.5, fontFamily: fonts.medium},
+  iconBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 });
 
 /* ═══ v3.4: رقاقة «توصيل إلى» اللطيفة — أقصى يسار عنوان القسم ═══

@@ -77,8 +77,10 @@ describe('الجولة 61 — v3.1.0', () => {
     // التقييم سطر واحد داخل التروسة الملونة
     expect(store).toContain('ratingRow');
     expect(store).toContain('heroBg');
-    // شريط الإحصاءات المكرر حُذف
-    expect(store).not.toContain('statsStyles');
+    // شريط الإحصاءات القديم المكرر حُذف في الجولة 61، وعاد في v4.0
+    // (الجولة 68) بهيئة كبسولات مضغوطة جديدة (statsStyles) كقيمة
+    // معلوماتية واحدة أعلى الصفحة — طلب المستخدم الصريح.
+    expect(store).toContain('statsStyles');
     // الآراء: كاروسيل أفقي مدمج مقضم فوق المنتجات (v3.2 — الجولة 62)
     expect(store).toContain('snapToInterval={264 + spacing.md}');
     expect(store).toContain('آراء المشترين');
@@ -123,9 +125,9 @@ describe('الجولة 61 — v3.1.0', () => {
 
   test('⑨ الإصدار: 3.5.0 (19)', () => {
     const config = read('src/core/config.ts');
-    expect(config).toContain("APP_VERSION = '3.7.0'");
+    expect(config).toContain("APP_VERSION = '4.0.0'");
     const gradle = read('android/app/build.gradle');
-    expect(gradle).toContain('versionName "3.7.0"');
-    expect(gradle).toContain('versionCode 21');
+    expect(gradle).toContain('versionName "4.0.0"');
+    expect(gradle).toContain('versionCode 22');
   });
 });

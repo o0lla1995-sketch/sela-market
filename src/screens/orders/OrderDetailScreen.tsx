@@ -30,6 +30,7 @@ import {lineKeyOf, type Order, type Store} from '../../core/types';
 import {useAuthStore} from '../../stores/authStore';
 import {useCartStore} from '../../stores/cartStore';
 import {useToastStore} from '../../stores/toastStore';
+import {shareOrder} from '../../core/share';
 import {syncOrdersOnce} from '../../services/ordersSync';
 import type {OrdersStackParamList} from '../../navigation/RootNavigator';
 import {useStackBottomClearance} from '../../core/layout';
@@ -159,6 +160,8 @@ export function OrderDetailScreen({navigation, route}: Props) {
   /* v3.3: لون حالة الطلب — يلوّن الحافة الأمامية لبطاقة الحالة
    * (نفس لغة بطاقات القائمة). */
   const tone = toneColors(palette, meta.tone);
+  /* v4.0: هل الطلب في مسار التتبع الحي؟ (يتحرك — يستحق مؤشر تحديث). */
+  const liveTracking = order.status === 'new' || order.status === 'accepted' || order.status === 'sent';
 
   return (
     <Screen>
@@ -166,6 +169,18 @@ export function OrderDetailScreen({navigation, route}: Props) {
         title={order.order_number}
         subtitle={`طلب ${order.store?.name ?? ''}`}
         onBack={() => navigation.goBack()}
+        /* v4.0: مشاركة الطلب — رقمه وحالته وإجماليه في رسالة جاهزة
+         * (طلب المستخدم: المشاركة في كل الصفحات المفيدة). */
+        right={
+          <Pressable
+            onPress={() => void shareOrder(order)}
+            hitSlop={10}
+            accessibilityRole="button"
+            accessibilityLabel="مشاركة الطلب"
+            style={[detailStyles.shareBtn, {backgroundColor: palette.surface, borderColor: palette.line}]}>
+            <Icon name="forward" size={18} color={palette.ink} />
+          </Pressable>
+        }
       />
       <ScrollView contentContainerStyle={{padding: spacing.lg, gap: spacing.lg, paddingBottom: stackClearance}} showsVerticalScrollIndicator={false}>
         {/* حالة الطلب — v3.3: حافة ملونة بحالة الطلب + وصف */}
@@ -180,6 +195,29 @@ export function OrderDetailScreen({navigation, route}: Props) {
             {meta.description}
           </Text>
           <OrderTimeline order={order} />
+          {/* v4.0: شريط التتبع الحي — للطلبات المتحركة فقط: تحديث يدوي
+           * فوري + طمأنة أن التطبيق يراقب تلقائياً (مستطلع الطلبات كل
+           * ٤٥ ثانية) — طلب المستخدم: «التتبع والمراقبة». */}
+          {liveTracking ? (
+            <View style={[detailStyles.liveRow, {backgroundColor: palette.infoSoft, borderColor: palette.info}]}>
+              <Icon name="refresh" size={13} color={palette.info} />
+              <Text style={{fontSize: 11, color: palette.info, flex: 1, fontFamily: fonts.medium}}>
+                نراقب حالة طلبك تلقائياً ونُشعرك بأي تحديث
+              </Text>
+              <Pressable
+                onPress={() => {
+                  toast('نجلب أحدث حالة للطلب…', 'info');
+                  void load();
+                }}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="تحديث حالة الطلب الآن">
+                <Text style={{fontSize: 11.5, color: palette.info, fontFamily: fonts.bold}}>
+                  تحديث الآن
+                </Text>
+              </Pressable>
+            </View>
+          ) : null}
         </Card>
 
         {/* تقييم المتجر — للطلبات المسلّمة فقط (خادم 4.4) */}
@@ -438,6 +476,25 @@ const detailStyles = StyleSheet.create({
     justifyContent: 'center',
   },
   infoRow: {flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.sm},
+  /* v4.0: زر مشاركة الطلب في التروسة — نفس لغة زر الرجوع. */
+  shareBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  /* v4.0: شريط التتبع الحي داخل بطاقة الحالة. */
+  liveRow: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 7,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 8,
+  },
   itemRow: {
     flexDirection: 'row-reverse',
     alignItems: 'center',

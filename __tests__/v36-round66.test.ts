@@ -143,10 +143,10 @@ describe('الجولة 66 — v3.6.0: ملاحظات التصميم الثمان
 
   test('⑨ الإصدار: 3.6.0 (20)', () => {
     const config = read('src/core/config.ts');
-    expect(config).toContain("APP_VERSION = '3.7.0'");
-    expect(config).toContain('APP_BUILD_CODE = 21');
+    expect(config).toContain("APP_VERSION = '4.0.0'");
+    expect(config).toContain('APP_BUILD_CODE = 22');
     const gradle = read('android/app/build.gradle');
-    expect(gradle).toContain('versionCode 21');
-    expect(gradle).toContain('versionName "3.7.0"');
+    expect(gradle).toContain('versionCode 22');
+    expect(gradle).toContain('versionName "4.0.0"');
   });
 });

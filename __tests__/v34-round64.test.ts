@@ -32,20 +32,22 @@ function stripComments(source: string): string {
 }
 
 describe('الجولة 64 — v3.4.0: الإصلاح الجذري + أقسام الأنواع + الدخول العصري', () => {
-  test('① انهيار صفحة المتجر: صفر Animated في StoreScreen — شريط آمن بحالة عادية', () => {
+  test('① انهيار صفحة المتجر: صفر Animated أصلي في StoreScreen — محرك JS فقط', () => {
     const store = stripComments(read('src/screens/stores/StoreScreen.tsx'));
-    // لا أي منظومة Animated في الشاشة إطلاقاً (السبب الجذري للانهيار)
+    /* السبب الجذري للانهيار القديم هو Animated.event بـ useNativeDriver
+     * على حدث التمرير (عقد أصلية على Fabric) — حُظر إلى الأبد.
+     * v4.0 (الجولة 68): الشريط اللاصق يتحرك الآن بتلاشٍ وانزلاق
+     * متصلين عبر Animated.Value صافية: onScroll ← setValue (محرك
+     * JS) + interpolate — بلا Animated.event وبلا useNativeDriver
+     * وبلا أي عقدة أصلية في مسار التمرير (نفس قاعدة السلامة). */
     expect(store).not.toContain('Animated.event');
     expect(store).not.toContain('useNativeDriver');
-    expect(store).not.toContain('Animated.View');
-    expect(store).not.toContain('Animated.Value');
-    expect(store).not.toMatch(/import\s*{[^}]*Animated[^}]*}\s*from\s*'react-native'/);
-    // البديل الآمن: حالة إظهار ثنائية + onScroll عادي يقارن عتبة
+    // الحالة الثنائية تبقى حارس اللمس (pointerEvents) — لا لمس على
+    // شريط شفاف.
     expect(store).toContain('const [barShown, setBarShown] = useState(false);');
     expect(store).toContain('const show = y > 150;');
     expect(store).toContain('setBarShown(prev => (prev === show ? prev : show));');
-    // الشريط يُرندر شرطياً بطبقة View عادية
-    expect(store).toContain('{barShown ? (');
+    expect(store).toContain("pointerEvents={barShown ? 'auto' : 'none'}");
     // بقية الشاشة سليمة: الفلاتر والكاروسيل كما هما
     expect(store).toContain('FilterChip');
     expect(store).toContain('آراء المشترين');
@@ -132,10 +134,10 @@ describe('الجولة 64 — v3.4.0: الإصلاح الجذري + أقسام �
 
   test('⑥ الإصدار: 3.5.0 (19)', () => {
     const config = read('src/core/config.ts');
-    expect(config).toContain("APP_VERSION = '3.7.0'");
-    expect(config).toContain('APP_BUILD_CODE = 21');
+    expect(config).toContain("APP_VERSION = '4.0.0'");
+    expect(config).toContain('APP_BUILD_CODE = 22');
     const gradle = read('android/app/build.gradle');
-    expect(gradle).toContain('versionCode 21');
-    expect(gradle).toContain('versionName "3.7.0"');
+    expect(gradle).toContain('versionCode 22');
+    expect(gradle).toContain('versionName "4.0.0"');
   });
 });

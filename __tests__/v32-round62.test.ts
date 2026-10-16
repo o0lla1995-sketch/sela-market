@@ -43,15 +43,20 @@ describe('الجولة 62 — v3.2.0: التطوير الشامل UX/UI', () => 
 
   test('② تروسة الرئيسية: لاصقة مدمجة خارج التمرير — بلا قفزات', () => {
     const home = read('src/screens/home/HomeScreen.tsx');
-    // الكتلة خارج ScrollView (لاصقة هندسياً) + ظل مرفوع
+    // الظل المرفوع للتروسة العائمة
     expect(home).toContain('shadowRaised');
     // المكونات مدمجة: تحية + بحث (المنطقة انتقلت لرقاقة القسم في v3.4
     // بطلب المستخدم الصريح — حُدّث الحرس تبعاً)
     expect(home).toContain('greeting()');
     expect(home).toContain('ابحث عن منتج في كل متاجر المول');
     expect(home).toContain('RegionChip');
-    // المحتوى القابل للتمرير منفصل تحت التروسة
-    expect(home).toContain('محتوى الصفحة القابل للتمرير تحت التروسة الثابتة');
+    /* v4.0 (الجولة 68): التروسة صارت طبقة عائمة منطوية على التمرير
+     * (طلب المستخدم: «التطبيق جامد — الهيدر عند عمل سكرول»):
+     * المحتوى القابل للتمرير يمر تحتها بتباعد مكافئ ويغذي محرك
+     * الانطواء (onScroll ← setValue بمحرك JS حصراً). */
+    expect(home).toContain('محتوى الصفحة القابل للتمرير تحت التروسة العائمة');
+    expect(home).toContain('useCollapseHeader');
+    expect(home).toContain('شريط مضغوط');
   });
 
   test('③ الشريط السفلي: تباين ووضوح ومنع انزياح التخطيط', () => {
@@ -88,12 +93,16 @@ describe('الجولة 62 — v3.2.0: التطوير الشامل UX/UI', () => 
 
   test('⑤ صفحة التاجر: شريط لاصق + فلاتر سريعة + كاروسيل آراء', () => {
     const store = read('src/screens/stores/StoreScreen.tsx');
-    // v3.4 (الجولة 64): الشريط اللاصق أعيد تنفيذه بحالة عادية آمنة
-    // (barShown + onScroll) — منظومة Animated ذات المحرك الأصلي
-    // حُذفت كلياً لأنها كانت تُفجّر انهيار فتح الصفحة.
+    /* v3.4 (الجولة 64): الشريط اللاصق أُعيد تنفيذه بحالة عادية آمنة
+     * (barShown + onScroll) — منظومة Animated ذات المحرك الأصلي
+     * حُذفت كلياً لأنها كانت تُفجّر انهيار فتح الصفحة.
+     * v4.0 (الجولة 68): الشريط يظهر الآن بانزلاق وتلاشٍ متصلين عبر
+     * Animated.Value بمحرك JS فقط (setValue من onScroll — لا
+     * Animated.event ولا useNativeDriver في مسار التمرير) — نفس
+     * قاعدة السلامة مع مظهر ناعم. الحالة الثنائية بقيت لللمس. */
     expect(store).toContain('const [barShown, setBarShown] = useState(false);');
-    expect(store).not.toContain('Animated.Value');
-    expect(store).not.toContain('stickyTranslateY');
+    expect(store).not.toContain('Animated.event');
+    expect(store).not.toContain('useNativeDriver');
     // رقائق الفلترة السريعة: عروض + تصنيفات + ترتيب سعر
     expect(store).toContain('FilterChip');
     expect(store).toContain('offersOnly');
@@ -161,16 +170,19 @@ describe('الجولة 62 — v3.2.0: التطوير الشامل UX/UI', () => 
     expect(home).toContain('decelerationRate="fast"');
     // الجلب التدريجي مستمر عند آخر صفحة
     expect(home).toContain('onEndReached={loadMore}');
-    // مقترحات لك: snap أيضاً
-    expect(home).toContain('snapToInterval={176 + spacing.md}');
+    /* v4.0 (الجولة 68): أشرطة أنواع المتاجر والمقترحات صارت بطاقات
+     * الشريط المضغوطة (148) بدل بطاقة 176 — تنويع الأشكال واستغلال
+     * أمثل للمساحات (طلب المستخدم). */
+    expect(home).toContain('snapToInterval={148 + spacing.md}');
+    expect(home).toContain('ProductRailCard');
   });
 
   test('⑩ الإصدار: 3.5.0 (19)', () => {
     const config = read('src/core/config.ts');
-    expect(config).toContain("APP_VERSION = '3.7.0'");
-    expect(config).toContain('APP_BUILD_CODE = 21');
+    expect(config).toContain("APP_VERSION = '4.0.0'");
+    expect(config).toContain('APP_BUILD_CODE = 22');
     const gradle = read('android/app/build.gradle');
-    expect(gradle).toContain('versionName "3.7.0"');
-    expect(gradle).toContain('versionCode 21');
+    expect(gradle).toContain('versionName "4.0.0"');
+    expect(gradle).toContain('versionCode 22');
   });
 });

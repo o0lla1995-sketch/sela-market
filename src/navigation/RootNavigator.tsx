@@ -4,8 +4,8 @@
  * السلة/طلباتي/حسابي) + شاشتا الدخول والتسجيل كنوافذ منبثقة من أي
  * مكان (بوابة إتمام الطلب للزوار).
  */
-import React, {useCallback, useEffect} from 'react';
-import {AppState, I18nManager, StyleSheet, View} from 'react-native';
+import React, {useCallback, useEffect, useRef} from 'react';
+import {Animated, AppState, I18nManager, StyleSheet, View} from 'react-native';
 import {
   NavigationContainer,
   useNavigation,
@@ -65,7 +65,9 @@ export type ShopStackParamList = {
    * «مطاعم، بقالة، ملابس…» من الرئيسية. */
   StoreType: {type: string};
   Product: {product: Product; storeRef: StoreRef; storeName?: string};
-  Search: {initialQuery?: string; browse?: boolean} | undefined;
+  /* v4.0 (الجولة 68): offers — فتح البحث مفلتراً بالعروض فقط
+   * (زر «كل العروض» من قسم عروض الأسبوع في الرئيسية). */
+  Search: {initialQuery?: string; browse?: boolean; offers?: boolean} | undefined;
   Category: {category: string};
   Notifications: undefined;
   Wishlist: undefined;
@@ -105,6 +107,7 @@ export type AccountStackParamList = {
   Store: {storeId: number; storeName?: string};
   StoreType: {type: string};
   Product: {product: Product; storeRef: StoreRef; storeName?: string};
+  Search: {initialQuery?: string; browse?: boolean; offers?: boolean} | undefined;
   AddressBook: undefined;
   AddressForm: {address?: Address} | undefined;
 };
@@ -163,6 +166,10 @@ const Tabs = createBottomTabNavigator<MainTabParamList>();
 const screenOptions = {
   headerShown: false,
   animation: 'slide_from_left' as const, // RTL: الدفع من اليسار
+  /* v4.0 (الجولة 68): إيقاع انتقال أسرع وأنعم — الافتراضي في
+   * أندرويد (‎~400ms) كان يبدو «جامداً وثقيلاً» (شكوى المستخدم
+   * من قسوة الانتقالات). ‎300ms هو إيقاع المتاجر العالمية. */
+  animationDuration: 300,
 };
 
 /* ─── مكدس المتاجر المشترك (لتبويبي الرئيسية والمتاجر) ─── */
@@ -268,13 +275,32 @@ function CartTabIcon({color, focused}: {color: string; focused: boolean}) {
         : sum,
     0,
   );
+  /* v4.0 (الجولة 68): قفزة الشارة — كل إضافة للسلة تُنبض الشارة
+   * فيتأكد المستخدم بصرياً أن المنتج «وقع في السلة» حتى لو كان
+   * في شاشة أخرى (موشن لطيفة بلا أي تأثير على الأداء). */
+  const badgeScale = useRef(new Animated.Value(1)).current;
+  const prevCount = useRef(count);
+  useEffect(() => {
+    if (count > prevCount.current) {
+      badgeScale.setValue(0.7);
+      Animated.spring(badgeScale, {
+        toValue: 1,
+        friction: 5,
+        tension: 220,
+        useNativeDriver: false,
+      }).start();
+    }
+    prevCount.current = count;
+  }, [count, badgeScale]);
   return (
     <TabIconWrap focused={focused}>
       <View style={tabIconStyles.wrap}>
         <Icon name="cart" size={23} color={color} />
         {count > 0 ? (
           <View style={tabIconStyles.badgeSlot}>
-            <Badge count={Math.floor(count)} />
+            <Animated.View style={{transform: [{scale: badgeScale}]}}>
+              <Badge count={Math.floor(count)} />
+            </Animated.View>
           </View>
         ) : null}
       </View>

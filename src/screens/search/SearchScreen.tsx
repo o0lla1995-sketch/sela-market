@@ -37,6 +37,7 @@ import {getCategories, getCrossProducts, getStores} from '../../api/endpoints';
 import {cachedFetch} from '../../api/cached';
 import {ApiError} from '../../api/client';
 import {PRODUCTS_PAGE_SIZE} from '../../core/config';
+import {hasDiscount} from '../../core/discount';
 import type {CategoryCount, CrossProduct, Store} from '../../core/types';
 import {useRecentsStore} from '../../stores/recentsStore';
 import type {ShopStackParamList} from '../../navigation/RootNavigator';
@@ -53,6 +54,9 @@ interface Filters {
   maxPrice: string;
   weightOnly: boolean;
   inStockOnly: boolean;
+  /** v4.0 (الجولة 68): المخفّضة فقط — يغذي «كل العروض» من الرئيسية
+   *   وشيت الفلاتر (طلب المستخدم: قسم/صفحة عروض واضح). */
+  offersOnly: boolean;
 }
 
 const EMPTY_FILTERS: Filters = {
@@ -62,6 +66,7 @@ const EMPTY_FILTERS: Filters = {
   maxPrice: '',
   weightOnly: false,
   inStockOnly: false,
+  offersOnly: false,
 };
 
 const SORTS: {key: SortKey; label: string; icon: IconName}[] = [
@@ -78,6 +83,7 @@ function activeFilterCount(f: Filters): number {
   if (f.minPrice !== '' || f.maxPrice !== '') n += 1;
   if (f.weightOnly) n += 1;
   if (f.inStockOnly) n += 1;
+  if (f.offersOnly) n += 1;
   return n;
 }
 
@@ -93,6 +99,9 @@ export function SearchScreen({navigation, route}: Props) {
    * كامل منتجات المول (بلا استعلام) مع نفس الفلاتر والترتيب
    * والجلب التدريجي. */
   const browse = route.params?.browse === true;
+  /* v4.0 (الجولة 68): وضع العروض — «كل العروض» من قسم عروض
+   * الأسبوع يفتح البحث مفلتراً بالمخفّضة فقط. */
+  const offersMode = route.params?.offers === true;
   const [query, setQuery] = useState(initialQuery);
   const [submittedQuery, setSubmittedQuery] = useState(initialQuery);
   const [results, setResults] = useState<CrossProduct[]>([]);
@@ -105,9 +114,13 @@ export function SearchScreen({navigation, route}: Props) {
   const [categories, setCategories] = useState<CategoryCount[]>([]);
   const [stores, setStores] = useState<Store[]>([]);
 
-  const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
+  const [filters, setFilters] = useState<Filters>(
+    offersMode ? {...EMPTY_FILTERS, offersOnly: true} : EMPTY_FILTERS,
+  );
   const [sheetOpen, setSheetOpen] = useState(false);
-  const [draft, setDraft] = useState<Filters>(EMPTY_FILTERS);
+  const [draft, setDraft] = useState<Filters>(
+    offersMode ? {...EMPTY_FILTERS, offersOnly: true} : EMPTY_FILTERS,
+  );
   const [sort, setSort] = useState<SortKey>('newest');
 
   const recent = useRecentsStore(s => s.searches);
@@ -136,7 +149,7 @@ export function SearchScreen({navigation, route}: Props) {
   const search = useCallback(async (q: string, f: Filters, pageNo = 1, seq?: number) => {
     const clean = q.trim();
     /* v3.2: في وضع التصفح يُجلب كل شيء بلا استعلام — «عرض الكل». */
-    if (clean.length < 2 && f.category == null && !browse) {
+    if (clean.length < 2 && f.category == null && !browse && !f.offersOnly) {
       setResults([]);
       setSubmittedQuery('');
       setHasMore(false);
@@ -150,6 +163,10 @@ export function SearchScreen({navigation, route}: Props) {
         category: f.category ?? undefined,
         page: pageNo,
         per: PRODUCTS_PAGE_SIZE,
+        /* v4.0: العروض على الخادم إن دعمها؛ والفلترة المحلية في
+         * visible تكفل النتيجة على أي خادم (offers=1 يُتجاهل بأمان
+         * عند غيابه). */
+        offers: f.offersOnly ? true : undefined,
       });
       /* حارس التسلسل: رد متقادم بعد كتابة أحدث — يُهمل بصمت. */
       if (seq != null && seq !== searchSeq.current) {
@@ -245,6 +262,11 @@ export function SearchScreen({navigation, route}: Props) {
     }
     if (filters.inStockOnly) {
       list = list.filter(p => p.stock > 0);
+    }
+    /* v4.0: العروض فقط — فلترة محلية فوق النتائج (تعمل أياً كان
+     * دعم الخادم للمعامل). */
+    if (filters.offersOnly) {
+      list = list.filter(p => hasDiscount(p));
     }
     switch (sort) {
       case 'priceAsc':
@@ -374,6 +396,9 @@ export function SearchScreen({navigation, route}: Props) {
             ) : null}
             {filters.inStockOnly ? (
               <ActiveChip label="متوفر" onRemove={() => setFilters(f => ({...f, inStockOnly: false}))} />
+            ) : null}
+            {filters.offersOnly ? (
+              <ActiveChip label="عروض فقط" onRemove={() => setFilters(f => ({...f, offersOnly: false}))} />
             ) : null}
           </ScrollView>
         ) : null}
@@ -628,6 +653,16 @@ export function SearchScreen({navigation, route}: Props) {
                   <Switch
                     value={draft.inStockOnly}
                     onValueChange={v => setDraft(d => ({...d, inStockOnly: v}))}
+                    trackColor={{true: palette.brand, false: palette.line}}
+                    thumbColor="#FFFFFF"
+                  />
+                </View>
+                {/* v4.0: العروض فقط — مفتاح داخل شيت الفلاتر. */}
+                <View style={{flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between'}}>
+                  <Text style={[type.small, {color: palette.inkSoft}]}>العروض فقط (المخفّضة)</Text>
+                  <Switch
+                    value={draft.offersOnly}
+                    onValueChange={v => setDraft(d => ({...d, offersOnly: v}))}
                     trackColor={{true: palette.brand, false: palette.line}}
                     thumbColor="#FFFFFF"
                   />

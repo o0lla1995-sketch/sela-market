@@ -196,6 +196,11 @@ export interface CrossProductsQuery {
   category?: string;
   page?: number;
   per?: number;
+  /** v4.0 (الجولة 68): عروض فقط — المخفّضة من كل متاجر المول
+   *  (تغذي قسم «عروض هذا الأسبوع» في الرئيسية). الخادم الذي
+   *  يدعم offers=1 يرجعها مفلترة؛ والخادم الأقدم يتجاهل المعامل
+   *  فيفلترها التطبيق محلياً — يعمل على كلا الحالتين. */
+  offers?: boolean;
 }
 
 /** بحث عابر للمتاجر + فلتر تصنيف (v4.1 على الخادم). */
@@ -209,6 +214,7 @@ export async function getCrossProducts(
     category: query.category,
     page: query.page,
     per: query.per,
+    offers: query.offers === true ? 1 : undefined,
   });
   const res = await apiRequest<{ok: true; products: CrossProduct[]}>(
     `/api/market/products${qs ? `?${qs}` : ''}`,

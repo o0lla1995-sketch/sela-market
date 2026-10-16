@@ -76,6 +76,9 @@ import {useInterestStore} from '../../stores/interestStore';
 import {useWishlistStore} from '../../stores/wishlistStore';
 import {useToastStore} from '../../stores/toastStore';
 import {hapticLight, hapticSuccess} from '../../core/haptics';
+import {usePop} from '../../core/motion';
+import {shareProduct} from '../../core/share';
+import {getStoreDetail} from '../../api/endpoints';
 import {useRequireAuth, type ShopStackParamList} from '../../navigation/RootNavigator';
 import {minQty, qtyStep} from '../../core/money';
 import {recommendSimilar, RECOMMEND_LIMIT} from '../../core/recommend';
@@ -158,6 +161,42 @@ export function ProductScreen({navigation, route}: Props) {
   const [similar, setSimilar] = useState<Product[]>([]);
   const [similarReason, setSimilarReason] = useState<string | null>(null);
 
+  /* v4.0 (الجولة 68): معلومات المتجر الحية — أرخص منطقة توصيل
+   * وعددها وتقييم المتجر (تغذي سطر «التوصيل يبدأ من…» وسطر المتجر
+   * وسطر تقييمه). فشلها غير فادح — الصفحة تعمل كاملة بدونه. */
+  const [storeDelivery, setStoreDelivery] = useState<{
+    minFeeMinor: number | null;
+    regionsCount: number;
+    rating: number | null;
+    ratingCount: number;
+  } | null>(null);
+  useEffect(() => {
+    let alive = true;
+    getStoreDetail(storeRef.id)
+      .then(d => {
+        if (!alive) {
+          return;
+        }
+        const fees = d.deliveryRegions
+          .filter(r => r.enabled === 1)
+          .map(r => r.fee_minor);
+        setStoreDelivery({
+          minFeeMinor: fees.length > 0 ? Math.min(...fees) : null,
+          regionsCount: d.deliveryRegions.length,
+          rating: d.store.rating ?? null,
+          ratingCount: d.store.ratingCount ?? 0,
+        });
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [storeRef.id]);
+
+  /* v4.0: نبضة زر السلة — لحظة إضافة المنتج يقفز الزر قفزة صغيرة
+   * فيحس المستخدم بالإضافة وهي تقع (موشن لطيفة بلا أي كلفة). */
+  const addPulse = usePop();
+
   useEffect(() => {
     useInterestStore.getState().trackView(product.category);
   }, [product.id, product.category]);
@@ -204,8 +243,16 @@ export function ProductScreen({navigation, route}: Props) {
       addProduct(storeRef, product, variantText, qty);
       /* v3.2: تأكيد لمسي ملموس لحظة دخول المنتج للسلة. */
       hapticSuccess();
+      /* v4.0: قفزة الزر — الإضافة تُرى ولا تُسمع فقط. */
+      addPulse.pop();
       toast(`أُضيف «${product.name}» (${formatQty(qty, soldByWeight)}) إلى سلة ${storeRef.name}`, 'success');
     });
+  };
+
+  /* v4.0: مشاركة المنتج — طلب المستخدم الصريح: «يمكن للزبون مشاركة
+   * منتج وهكذا» — زر مشاركة في التروسة وبجانب المفضلة. */
+  const onShare = () => {
+    void shareProduct(product, storeRef.name);
   };
 
   const onWishlist = () => {
@@ -236,6 +283,18 @@ export function ProductScreen({navigation, route}: Props) {
         title={product.name}
         subtitle={`من ${storeRef.name}`}
         onBack={() => navigation.goBack()}
+        /* v4.0: زر مشاركة في التروسة — فعل المشاركة دائماً في المتناول
+         * (طلب المستخدم: المشاركة من صفحة المنتج). */
+        right={
+          <Pressable
+            onPress={onShare}
+            hitSlop={10}
+            accessibilityRole="button"
+            accessibilityLabel="مشاركة المنتج"
+            style={[shareHeaderStyles.btn, {backgroundColor: palette.surface, borderColor: palette.line}]}>
+            <Icon name="forward" size={18} color={palette.ink} />
+          </Pressable>
+        }
       />
       <ScrollView
         style={{flex: 1}}
@@ -354,16 +413,28 @@ export function ProductScreen({navigation, route}: Props) {
                 </Text>
               </View>
             </View>
-            <Pressable
-              onPress={onWishlist}
-              hitSlop={10}
-              style={[priceStyles.wishBtn, {backgroundColor: palette.surfaceAlt}]}>
-              <Icon
-                name={wishlisted ? 'heartFilled' : 'heart'}
-                size={19}
-                color={wishlisted ? palette.danger : palette.muted}
-              />
-            </Pressable>
+            <View style={{flexDirection: 'row-reverse', gap: spacing.sm}}>
+              <Pressable
+                onPress={onWishlist}
+                hitSlop={10}
+                style={[priceStyles.wishBtn, {backgroundColor: palette.surfaceAlt}]}>
+                <Icon
+                  name={wishlisted ? 'heartFilled' : 'heart'}
+                  size={19}
+                  color={wishlisted ? palette.danger : palette.muted}
+                />
+              </Pressable>
+              {/* v4.0: مشاركة المنتج بجانب المفضلة — الفعلان الجانبيان
+               * للمنتج في مكان واحد (طلب المستخدم: المشاركة). */}
+              <Pressable
+                onPress={onShare}
+                hitSlop={10}
+                accessibilityRole="button"
+                accessibilityLabel="مشاركة المنتج"
+                style={[priceStyles.wishBtn, {backgroundColor: palette.surfaceAlt}]}>
+                <Icon name="forward" size={18} color={palette.ink} />
+              </Pressable>
+            </View>
           </View>
 
           <View style={priceStyles.priceRow}>
@@ -415,6 +486,22 @@ export function ProductScreen({navigation, route}: Props) {
                     : `متوفر (${Math.floor(product.stock)}${soldByWeight ? ' كيلو' : ' قطعة'})`}
               </Text>
             </View>
+            {/* v4.0: معلومة التوصيل الحية — أرخص رسم توصيل لهذا المتجر
+             * وعدد مناطقه (من نداء تفاصيل المتجر). */}
+            {storeDelivery != null && storeDelivery.minFeeMinor != null ? (
+              <View style={[priceStyles.infoChip, {
+                backgroundColor: palette.successSoft,
+                borderColor: palette.success,
+              }]}>
+                <Icon name="truck" size={12} color={palette.success} />
+                <Text style={{fontSize: 11, fontFamily: fonts.medium, color: palette.success}}>
+                  التوصيل يبدأ من {formatMoney(storeDelivery.minFeeMinor)}
+                  {storeDelivery.regionsCount > 1
+                    ? ` · ${storeDelivery.regionsCount} مناطق`
+                    : ''}
+                </Text>
+              </View>
+            ) : null}
           </View>
         </Card>
 
@@ -536,9 +623,24 @@ export function ProductScreen({navigation, route}: Props) {
                 <Text style={{fontSize: 13, color: palette.ink, fontFamily: fonts.bold}}>
                   {storeRef.name}
                 </Text>
-                <Text style={{fontSize: 10.5, color: palette.muted}}>
-                  {storeRef.storeNumber ? `${storeRef.storeNumber} · ` : ''}زيارة المتجر وتصفح منتجاته ومناطق توصيله ›
-                </Text>
+                {/* v4.0: تقييم المتجر الحي + مناطق التوصيل في سطر المتجر */}
+                {storeDelivery?.rating != null && storeDelivery.rating > 0 ? (
+                  <View style={{flexDirection: 'row-reverse', alignItems: 'center', gap: 4}}>
+                    <Icon name="star" size={11} color={palette.warning} />
+                    <Text style={{fontSize: 10.5, color: palette.muted}}>
+                      {storeDelivery.rating} من 5 ({storeDelivery.ratingCount} تقييماً)
+                    </Text>
+                  </View>
+                ) : (
+                  <Text style={{fontSize: 10.5, color: palette.muted}}>
+                    {storeRef.storeNumber ? `${storeRef.storeNumber} · ` : ''}زيارة المتجر وتصفح منتجاته ومناطق توصيله ›
+                  </Text>
+                )}
+                {storeDelivery?.rating != null && storeDelivery.rating > 0 ? (
+                  <Text style={{fontSize: 10.5, color: palette.brandDark, fontFamily: fonts.medium}}>
+                    زيارة المتجر وتصفح منتجاته ومناطق توصيله ›
+                  </Text>
+                ) : null}
               </View>
             </View>
           </Card>
@@ -587,6 +689,8 @@ export function ProductScreen({navigation, route}: Props) {
        * الإضافة مع الإجمالي الحي لا يمكن أن يختفيا خلف المحتوى أياً
        * كان حجمه. هذا هو الزر الذي اشتكى التاجر من اختفائه. */}
       <BottomFixed>
+        {/* v4.0: نبضة الزر لحظة الإضافة — الغلاف المتحرك حول صف الأزرار. */}
+        <Animated.View style={addPulse.style}>
         <View style={bottomStyles.row}>
           <QtyStepper
             qty={cartQty > 0 ? cartQty : qty}
@@ -630,6 +734,7 @@ export function ProductScreen({navigation, route}: Props) {
             disabled={outOfStock}
           />
         </View>
+        </Animated.View>
         <Text style={[bottomStyles.hint, {color: palette.muted}]}>
           {cartQty > 0
             ? `في سلة ${storeRef.name} — اضغط الزر لإتمام الطلب`
@@ -973,6 +1078,19 @@ const optStyles = StyleSheet.create({
     borderWidth: 1,
     paddingHorizontal: 7,
     paddingVertical: 2,
+  },
+});
+
+/* v4.0 (الجولة 68): زر المشاركة في التروسة — نفس لغة زر الرجوع
+ * (40×40 بحدود) كي يبقى الاتساق البصري للشريط العلوي. */
+const shareHeaderStyles = StyleSheet.create({
+  btn: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
 

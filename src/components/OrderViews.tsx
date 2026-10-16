@@ -1,9 +1,12 @@
 /**
  * OrderViews.tsx — مكونات الطلب: شارة الحالة، خط الزمن، بطاقة الطلب
  * في القائمة، وبطاقة تفاصيل الطلب.
+ * v4.0 (الجولة 68): خط الزمن يدخل بإيقاع متدرج — كل خطوة تظهر
+ * بتأخير صغير عن سابقتها (cascade) فيقرأ المستخدم «التتبع» كقصة
+ * متحركة لا قائمة ساكنة (طلب: موشن لطيفة في كل الصفحات).
  */
-import React from 'react';
-import {Image, Pressable, StyleSheet, Text, View} from 'react-native';
+import React, {useEffect, useRef} from 'react';
+import {Animated, Image, Pressable, StyleSheet, Text, View} from 'react-native';
 import {useTheme} from '../theme/ThemeProvider';
 import {radius, spacing, type, fonts, toneColors} from '../theme/tokens';
 import {Icon} from './Icon';
@@ -103,57 +106,107 @@ export function OrderTimeline({order}: {order: Order}) {
           step.status === 'sent' ? order.sent_at :
           order.delivered_at;
         return (
-          <View key={step.status} style={timelineStyles.row}>
-            {/* العمود الدائري */}
-            <View style={timelineStyles.rail}>
-              <View
-                style={[
-                  timelineStyles.dot,
-                  {
-                    backgroundColor: done || active ? palette.brand : palette.surface,
-                    borderColor: done || active ? palette.brand : palette.lineStrong,
-                  },
-                ]}>
-                {done ? (
-                  <Icon name="check" size={11} color="#FFFFFF" strokeWidth={3} />
-                ) : active ? (
-                  <View style={[timelineStyles.innerDot, {backgroundColor: '#FFFFFF'}]} />
-                ) : null}
-              </View>
-              {!isLast ? (
-                <View
-                  style={[
-                    timelineStyles.line,
-                    {backgroundColor: done ? palette.brand : palette.line},
-                  ]}
-                />
-              ) : null}
-            </View>
-            {/* النص */}
-            <View style={[timelineStyles.texts, {marginBottom: isLast ? 0 : spacing.md}]}>
-              <Text
-                style={[
-                  type.smallMedium,
-                  {
-                    color: done || active ? palette.ink : palette.muted,
-                    fontFamily: active || done ? fonts.bold : fonts.medium,
-                    opacity: done ? 0.75 : 1,
-                  },
-                ]}>
-                {step.label}
-              </Text>
-              <Text style={[{fontSize: 11, color: palette.muted}]}>
-                {active
-                  ? step.hint
-                  : ts != null
-                    ? formatDateTime(ts)
-                    : step.hint}
-              </Text>
-            </View>
-          </View>
+          <AnimatedTimelineRow
+            key={step.status}
+            index={i}
+            done={done}
+            active={active}
+            isLast={isLast}
+            label={step.label}
+            timestamp={active ? step.hint : ts != null ? formatDateTime(ts) : step.hint}
+          />
         );
       })}
     </View>
+  );
+}
+
+/* v4.0: صف خط زمن متدرج الدخول — يظهر بتأخير ‎90ms عن سابقه
+ * (ظهور + انزلاق صغير من الأعلى) بمحرك JS: مرة واحدة عند التركيب. */
+function AnimatedTimelineRow({
+  index,
+  done,
+  active,
+  isLast,
+  label,
+  timestamp,
+}: {
+  index: number;
+  done: boolean;
+  active: boolean;
+  isLast: boolean;
+  label: string;
+  timestamp: string;
+}) {
+  const {palette} = useTheme();
+  const v = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const t = setTimeout(() => {
+      Animated.timing(v, {
+        toValue: 1,
+        duration: 320,
+        useNativeDriver: false,
+      }).start();
+    }, index * 90);
+    return () => clearTimeout(t);
+  }, [v, index]);
+  return (
+    <Animated.View
+      style={[
+        timelineStyles.row,
+        {
+          opacity: v,
+          transform: [
+            {
+              translateY: v.interpolate({
+                inputRange: [0, 1],
+                outputRange: [-8, 0],
+              }),
+            },
+          ],
+        },
+      ]}>
+      {/* العمود الدائري */}
+      <View style={timelineStyles.rail}>
+        <View
+          style={[
+            timelineStyles.dot,
+            {
+              backgroundColor: done || active ? palette.brand : palette.surface,
+              borderColor: done || active ? palette.brand : palette.lineStrong,
+            },
+          ]}>
+          {done ? (
+            <Icon name="check" size={11} color="#FFFFFF" strokeWidth={3} />
+          ) : active ? (
+            <View style={[timelineStyles.innerDot, {backgroundColor: '#FFFFFF'}]} />
+          ) : null}
+        </View>
+        {!isLast ? (
+          <View
+            style={[
+              timelineStyles.line,
+              {backgroundColor: done ? palette.brand : palette.line},
+            ]}
+          />
+        ) : null}
+      </View>
+      {/* النص */}
+      <View style={[timelineStyles.texts, {marginBottom: isLast ? 0 : spacing.md}]}>
+        <Text
+          style={[
+            type.smallMedium,
+            {
+              color: done || active ? palette.ink : palette.muted,
+              fontFamily: active || done ? fonts.bold : fonts.medium,
+              opacity: done ? 0.75 : 1,
+            },
+          ]}>
+          {label}
+        </Text>
+        <Text style={[{fontSize: 11, color: palette.muted}]}>{timestamp}</Text>
+      </View>
+    </Animated.View>
   );
 }
 
