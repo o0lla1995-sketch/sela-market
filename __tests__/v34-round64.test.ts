@@ -134,10 +134,10 @@ describe('الجولة 64 — v3.4.0: الإصلاح الجذري + أقسام �
 
   test('⑥ الإصدار: 3.5.0 (19)', () => {
     const config = read('src/core/config.ts');
-    expect(config).toContain("APP_VERSION = '4.0.0'");
-    expect(config).toContain('APP_BUILD_CODE = 22');
+    expect(config).toContain("APP_VERSION = '4.1.0'");
+    expect(config).toContain('APP_BUILD_CODE = 23');
     const gradle = read('android/app/build.gradle');
-    expect(gradle).toContain('versionCode 22');
-    expect(gradle).toContain('versionName "4.0.0"');
+    expect(gradle).toContain('versionCode 23');
+    expect(gradle).toContain('versionName "4.1.0"');
   });
 });

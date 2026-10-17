@@ -78,11 +78,11 @@ describe('الجولة 67 — v3.7.0: التسجيل على مرحلتين', () 
 
   test('⑦ الإصدار 3.7.0 (21) — حزمة جديدة لفك تعارض Google Play', () => {
     const gradle = read('android/app/build.gradle');
-    expect(gradle).toContain('versionCode 22');
-    expect(gradle).toContain('versionName "4.0.0"');
+    expect(gradle).toContain('versionCode 23');
+    expect(gradle).toContain('versionName "4.1.0"');
     const config = read('src/core/config.ts');
-    expect(config).toContain("APP_VERSION = '4.0.0'");
-    expect(config).toContain('APP_BUILD_CODE = 22');
+    expect(config).toContain("APP_VERSION = '4.1.0'");
+    expect(config).toContain('APP_BUILD_CODE = 23');
   });
 
   test('⑧ أيقونة المتجر 512×512 موجودة بأبعادها الصحيحة', () => {

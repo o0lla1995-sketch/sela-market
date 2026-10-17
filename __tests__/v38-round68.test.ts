@@ -169,10 +169,10 @@ describe('الجولة 68 — v4.0.0: إحياء التطبيق', () => {
 
   test('⑪ الإصدار: 4.0.0 (22)', () => {
     const config = read('src/core/config.ts');
-    expect(config).toContain("APP_VERSION = '4.0.0'");
-    expect(config).toContain('APP_BUILD_CODE = 22');
+    expect(config).toContain("APP_VERSION = '4.1.0'");
+    expect(config).toContain('APP_BUILD_CODE = 23');
     const gradle = read('android/app/build.gradle');
-    expect(gradle).toContain('versionCode 22');
-    expect(gradle).toContain('versionName "4.0.0"');
+    expect(gradle).toContain('versionCode 23');
+    expect(gradle).toContain('versionName "4.1.0"');
   });
 });
