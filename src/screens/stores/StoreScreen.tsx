@@ -29,11 +29,19 @@
  *    خلية مسقوفة 50% (نمط الجولة 63 المُجرّب في البحث) + الصورة
  *    تملأ البطاقة (وضع الملء) + صفوف الشبكة أخيراً بهامش جانبي 16
  *    مثل باقي أقسام الصفحة — كانت الصفوف ملاصقة لحرفي الشاشة.
+ *  • v4.2 (الجولة 70 — ملاحظات التاجر الثلاث):
+ *    1) البحث من الهيدر: حقل البحث نفسه انتقل إلى الشريط اللاصق
+ *       الذي يظهر عند السكرول فقط — فلترة حية أثناء التمرير بلا
+ *       العودة لأعلى الصفحة؛ حقل البحث داخل الصفحة أزيل.
+ *    2) سهم المشاركة المكرر في التروسة أزيل (كان يشبه سهم رجوع
+ *       ثانياً)، والمشاركة صارت أيقونة وحيدة 38px بجوار الاتصال
+ *       والواتساب — أما الزر العريض «مشاركة المتجر» فحُذف.
  */
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {
   Animated,
   FlatList,
+  I18nManager,
   Linking,
   Pressable,
   ScrollView,
@@ -62,7 +70,6 @@ import {
   ErrorState,
   Loader,
   Screen,
-  SearchBar,
   SectionTitle,
 } from '../../components/ui';
 import {ProductCard} from '../../components/ProductCard';
@@ -119,6 +126,15 @@ export function StoreScreen({navigation, route}: Props) {
    * من onScroll — بلا ربط أحداث أصلية ولا محرك أصلي: نفس قاعدة
    * السلامة، ومظهر ناعم بدل قفزة ظهور/اختفاء). */
   const [barShown, setBarShown] = useState(false);
+  /* v4.2 (الجولة 70): البحث صار من الهيدر — طلب التاجر:
+   * «عند عمل سكرول البحث يصبح من الهيدر حيث يصبح البحث أسهل
+   * وليس من الصفحة، ويظهر البحث فقط عند السكرول». حقل البحث
+   * نفسه ينتقل إلى الشريط اللاصق (يظهر عند التمرير فقط)، وحقل
+   * البحث داخل الصفحة أزيل. أثناء الكتابة أو التركيز يبقى الشريط
+   * ثابتاً فوق القائمة مهما نزلت — لا يختفي الحقل تحت التمرير. */
+  const [searchFocused, setSearchFocused] = useState(false);
+  const searchActive = searchFocused || query.trim().length > 0;
+  const headerVisible = barShown || searchActive;
   const barScrollY = useRef(new Animated.Value(0)).current;
   const barOpacity = useMemo(
     () =>
@@ -317,14 +333,16 @@ export function StoreScreen({navigation, route}: Props) {
        * المتجر + بحث فوري. طبقة مطلقة فوق المحتوى: صفر قفزات تخطيط،
        * وصفر وحدات أصلية (المحرك JS من onScroll ← setValue فقط). */}
       <Animated.View
-        pointerEvents={barShown ? 'auto' : 'none'}
+        pointerEvents={headerVisible ? 'auto' : 'none'}
         style={[
           stickyStyles.bar,
           {
             backgroundColor: palette.surface,
             borderBottomColor: palette.line,
           },
-          {opacity: barOpacity, transform: [{translateY: barTranslate}]},
+          searchActive
+            ? {opacity: 1, transform: [{translateY: 0}]}
+            : {opacity: barOpacity, transform: [{translateY: barTranslate}]},
           shadowRaised(palette.isDark),
         ]}>
         <Pressable
@@ -338,24 +356,47 @@ export function StoreScreen({navigation, route}: Props) {
         <StoreAvatar
           name={store?.name ?? storeName ?? 'س'}
           logoUrl={store?.logo_url}
-          size={32}
+          size={30}
         />
-        <Text
-          style={[type.h3, {color: palette.ink, flex: 1}]}
-          numberOfLines={1}>
-          {store?.name ?? storeName ?? 'المتجر'}
-        </Text>
-        <Pressable
-          onPress={() => {
-            listRef.current?.scrollToOffset({offset: 0, animated: true});
-            searchInputRef.current?.focus();
-          }}
-          hitSlop={10}
-          accessibilityRole="button"
-          accessibilityLabel="بحث داخل المتجر"
-          style={[stickyStyles.searchBtn, {borderColor: palette.line}]}>
-          <Icon name="search" size={18} color={palette.ink} />
-        </Pressable>
+        {/* v4.2 (الجولة 70): حقل البحث نفسه داخل الشريط اللاصق —
+         * فلترة حية فورية أثناء التمرير بلا العودة لأعلى الصفحة.
+         * اسم المتجر يعيش في نص الحقل التوضيحي فيبقى السياق
+         * محفوظاً، والحقل يظهر فقط عند السكرول كما طلب التاجر. */}
+        <View
+          style={[
+            stickyStyles.searchField,
+            {
+              backgroundColor: palette.surfaceAlt,
+              borderColor: searchFocused ? palette.brandBorder : palette.line,
+            },
+          ]}>
+          <Icon name="search" size={15} color={searchFocused ? palette.brandDark : palette.muted} />
+          <TextInput
+            ref={searchInputRef}
+            value={query}
+            onChangeText={setQuery}
+            onFocus={() => setSearchFocused(true)}
+            onBlur={() => setSearchFocused(false)}
+            placeholder={`ابحث في ${store?.name ?? storeName ?? 'المتجر'}…`}
+            placeholderTextColor={palette.muted}
+            style={[stickyStyles.searchInput, {color: palette.ink}]}
+            returnKeyType="search"
+            autoCorrect={false}
+            accessibilityLabel="بحث داخل المتجر"
+          />
+          {query.length > 0 ? (
+            <Pressable
+              onPress={() => {
+                setQuery('');
+                searchInputRef.current?.focus();
+              }}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="مسح البحث">
+              <Icon name="close" size={14} color={palette.muted} />
+            </Pressable>
+          ) : null}
+        </View>
       </Animated.View>
 
       <FlatList
@@ -381,6 +422,11 @@ export function StoreScreen({navigation, route}: Props) {
           paddingBottom: Math.max(insets.bottom + 24, 96),
         }}
         showsVerticalScrollIndicator={false}
+        /* v4.2: لوحة المفاتيح — نقرة المنتج تعمل فوراً فوقها
+         * (handled) والتمرير يطويها (on-drag) — البحث من الهيدر
+         * بلا احتكاك. */
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         /* v3.4: onScroll عادي بلا أي محرك أصلي — مقارنة عتبة واحدة
          * وتبديل حالة عند التغير فقط (React يتخطى setState المتطابق). */
         onScroll={e => {
@@ -403,7 +449,11 @@ export function StoreScreen({navigation, route}: Props) {
                 {backgroundColor: heroBg, paddingTop: spacing.xl},
               ]}>
               <View style={heroStyles.ring} />
-              {/* v3.2: زر الرجوع يسار الشاشة بسهم «‹» — توحيد RTL. */}
+              {/* v3.2: زر الرجوع يسار الشاشة بسهم «‹» — توحيد RTL.
+               * v4.2 (الجولة 70): زر المشاركة الذي كان بجانبه أزيل —
+               * أيقونته «forward» كانت تشبه سهم رجوع ثانياً فتلتبس
+               * على المستخدم («سهم رجوع مكرر يعمل كمشاركة»)؛
+               * المشاركة صارت أيقونة وحيدة بجوار الاتصال/واتساب. */}
               <Pressable
                 onPress={() => navigation.goBack()}
                 hitSlop={10}
@@ -411,34 +461,6 @@ export function StoreScreen({navigation, route}: Props) {
                 accessibilityLabel="رجوع"
                 style={heroStyles.backBtn}>
                 <Icon name="chevronLeft" size={20} color="#FFFFFF" strokeWidth={2.4} />
-              </Pressable>
-              {/* v4.0 (الجولة 68): زر مشاركة المتجر — طلب المستخدم
-               * «المشاركة حيث يمكن للزبون مشاركة منتج وهكذا» — يظهر
-               * فوق التروسة بجانب زر الرجوع بلون العلامة. */}
-              <Pressable
-                onPress={() => {
-                  if (store != null) {
-                    void shareStore(
-                      {
-                        name: store.name,
-                        rating: store.rating ?? null,
-                        region: store.region ?? null,
-                        store_number: store.store_number ?? null,
-                      },
-                      products.length,
-                    );
-                  } else {
-                    void shareStore(
-                      {name: storeName ?? 'المتجر', rating: null, region: null, store_number: null},
-                      products.length,
-                    );
-                  }
-                }}
-                hitSlop={10}
-                accessibilityRole="button"
-                accessibilityLabel="مشاركة المتجر"
-                style={heroStyles.shareBtn}>
-                <Icon name="forward" size={19} color="#FFFFFF" />
               </Pressable>
               <StoreAvatar name={store?.name ?? storeName ?? 'س'} logoUrl={store?.logo_url} size={84} />
               <Text style={[type.h1, {color: '#FFFFFF', fontFamily: fonts.black}]}>
@@ -524,73 +546,75 @@ export function StoreScreen({navigation, route}: Props) {
                   </View>
                 ) : null}
 
-                {/* ─── شريط الإجراءات ─── */}
-                {store?.phone || store?.whatsapp ? (
-                  <View style={{flexDirection: 'row-reverse', gap: spacing.md}}>
-                    {store?.phone ? (
-                      <Pressable
-                        onPress={() => Linking.openURL(`tel:${store.phone}`)}
-                        style={({pressed}) => [
-                          actionStyles.btn,
-                          {
-                            backgroundColor: palette.brandSoft,
-                            borderColor: palette.brandBorder,
-                            opacity: pressed ? 0.85 : 1,
-                          },
-                        ]}>
-                        <Icon name="phone" size={16} color={palette.brandDark} />
-                        <Text style={[actionStyles.btnText, {color: palette.brandDark}]}>اتصال</Text>
-                      </Pressable>
-                    ) : null}
-                    {store?.whatsapp ? (
-                      <Pressable
-                        onPress={() =>
-                          Linking.openURL(
-                            `https://wa.me/${store.whatsapp!.replace(/[^\d]/g, '')}`,
-                          )
-                        }
-                        style={({pressed}) => [
-                          actionStyles.btn,
-                          {
-                            backgroundColor: palette.surface,
-                            borderColor: palette.line,
-                            opacity: pressed ? 0.85 : 1,
-                          },
-                        ]}>
-                        <Icon name="whatsapp" size={16} color={palette.ink} />
-                        <Text style={[actionStyles.btnText, {color: palette.ink}]}>واتساب</Text>
-                      </Pressable>
-                    ) : null}
-                  </View>
-                ) : null}
-
-                {/* v4.0: مشاركة المتجر — زر مستقل يعمل دائماً حتى بلا
-                 * هاتف/واتساب (طلب المستخدم: المشاركة من صفحة التاجر). */}
-                <Pressable
-                  onPress={() => {
-                    const name = store?.name ?? storeName ?? 'المتجر';
-                    void shareStore(
+                {/* ─── شريط الإجراءات ───
+                 * v4.2 (الجولة 70): طلب التاجر — «اجعل زر مشاركة المتجر
+                 * أيقونة فقط واحذف الزر الخاصة بالمشاركة في الصفحة».
+                 * الزر العريض المستقل أزيل، والمشاركة صارت أيقونة
+                 * وحيدة 38px بجوار الاتصال/واتساب بنفس لغة التصميم،
+                 * وتعمل دائماً حتى بلا هاتف/واتساب (الشريط يظهر دوماً). */}
+                <View style={{flexDirection: 'row-reverse', gap: spacing.md}}>
+                  {store?.phone ? (
+                    <Pressable
+                      onPress={() => Linking.openURL(`tel:${store.phone}`)}
+                      style={({pressed}) => [
+                        actionStyles.btn,
+                        {
+                          backgroundColor: palette.brandSoft,
+                          borderColor: palette.brandBorder,
+                          opacity: pressed ? 0.85 : 1,
+                        },
+                      ]}>
+                      <Icon name="phone" size={16} color={palette.brandDark} />
+                      <Text style={[actionStyles.btnText, {color: palette.brandDark}]}>اتصال</Text>
+                    </Pressable>
+                  ) : null}
+                  {store?.whatsapp ? (
+                    <Pressable
+                      onPress={() =>
+                        Linking.openURL(
+                          `https://wa.me/${store.whatsapp!.replace(/[^\d]/g, '')}`,
+                        )
+                      }
+                      style={({pressed}) => [
+                        actionStyles.btn,
+                        {
+                          backgroundColor: palette.surface,
+                          borderColor: palette.line,
+                          opacity: pressed ? 0.85 : 1,
+                        },
+                      ]}>
+                      <Icon name="whatsapp" size={16} color={palette.ink} />
+                      <Text style={[actionStyles.btnText, {color: palette.ink}]}>واتساب</Text>
+                    </Pressable>
+                  ) : null}
+                  <Pressable
+                    onPress={() => {
+                      const name = store?.name ?? storeName ?? 'المتجر';
+                      void shareStore(
+                        {
+                          name,
+                          rating: store?.rating ?? null,
+                          region: store?.region ?? null,
+                          store_number: store?.store_number ?? null,
+                        },
+                        products.length,
+                      );
+                    }}
+                    hitSlop={6}
+                    accessibilityRole="button"
+                    accessibilityLabel="مشاركة المتجر"
+                    style={({pressed}) => [
+                      actionStyles.iconBtn,
                       {
-                        name,
-                        rating: store?.rating ?? null,
-                        region: store?.region ?? null,
-                        store_number: store?.store_number ?? null,
+                        backgroundColor: palette.surface,
+                        borderColor: palette.line,
+                        opacity: pressed ? 0.85 : 1,
+                        transform: [{scale: pressed ? 0.96 : 1}],
                       },
-                      products.length,
-                    );
-                  }}
-                  style={({pressed}) => [
-                    actionStyles.btn,
-                    {
-                      backgroundColor: palette.surface,
-                      borderColor: palette.line,
-                      opacity: pressed ? 0.85 : 1,
-                      transform: [{scale: pressed ? 0.98 : 1}],
-                    },
-                  ]}>
-                  <Icon name="forward" size={16} color={palette.ink} />
-                  <Text style={[actionStyles.btnText, {color: palette.ink}]}>مشاركة المتجر</Text>
-                </Pressable>
+                    ]}>
+                    <Icon name="share" size={16} color={palette.brandDark} />
+                  </Pressable>
+                </View>
 
                 {/* ─── آراء المشترين — كاروسيل أفقي مدمج (v3.2) ───
                  * طلب التاجر: «ملخص التقييم + أهم مراجعتين في كاروسيل
@@ -736,23 +760,16 @@ export function StoreScreen({navigation, route}: Props) {
                   </View>
                 ) : null}
 
-                {/* ─── بحث داخل المتجر + رقائق الفلترة السريعة ─── */}
-                <View style={{gap: spacing.md}}>
-                  <SearchBar
-                    value={query}
-                    onChangeText={setQuery}
-                    inputRef={searchInputRef}
-                    placeholder={`ابحث داخل ${store?.name ?? 'المتجر'}…`}
-                  />
-
-                  {/* v3.2: رقائق فلترة أفقية سريعة (طلب التاجر):
-                   * الكل / عروض / تصنيفات المتجر + ترتيب بالسعر —
-                   * كلها محلية فورية فوق الكتالوج المُحمّل. */}
-                  {storeCategories.length + (offers.length > 0 ? 1 : 0) > 0 ? (
-                    <ScrollView
-                      horizontal
-                      showsHorizontalScrollIndicator={false}
-                      contentContainerStyle={{gap: spacing.sm, paddingVertical: 2}}>
+                {/* ─── رقائق الفلترة السريعة ───
+                 * v4.2 (الجولة 70): حقل البحث أزيل من الصفحة — انتقل
+                 * إلى الشريط اللاصق حيث يظهر عند السكرول فقط (طلب
+                 * التاجر: البحث من الهيدر وليس من الصفحة). بقيت
+                 * الرقائق المحلية الفورية فوق الكتالوج المُحمّل. */}
+                {storeCategories.length + (offers.length > 0 ? 1 : 0) > 0 ? (
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={{gap: spacing.sm, paddingVertical: 2}}>
                       <FilterChip
                         label="الكل"
                         active={!offersOnly && filterCategory == null}
@@ -805,8 +822,6 @@ export function StoreScreen({navigation, route}: Props) {
                       />
                     </ScrollView>
                   ) : null}
-                </View>
-
                 <SectionTitle
                   title={`المنتجات (${visible.length})`}
                   subtitle={
@@ -957,14 +972,24 @@ const stickyStyles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: 'rgba(0,0,0,0.03)',
   },
-  searchBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: radius.md,
-    borderWidth: 1,
+  /* v4.2: حقل البحث داخل الشريط اللاصق — كبسولة ناعمة تتنفس
+   * بجوار الصورة الرمزية، تظهر عند السكرول وتبقى أثناء الكتابة. */
+  searchField: {
+    flex: 1,
+    flexDirection: 'row-reverse',
     alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(0,0,0,0.03)',
+    gap: 7,
+    height: 40,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    paddingHorizontal: 13,
+  },
+  searchInput: {
+    flex: 1,
+    fontFamily: fonts.medium,
+    fontSize: 13.5,
+    padding: 0,
+    textAlign: I18nManager.isRTL ? 'right' : 'left',
   },
 });
 
@@ -998,18 +1023,9 @@ const heroStyles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: 'rgba(255,255,255,0.22)',
   },
-  /* v4.0: زر مشاركة المتجر — بجانب زر الرجوع على نفس الارتفاع. */
-  shareBtn: {
-    position: 'absolute',
-    top: spacing.lg,
-    left: spacing.lg + 48,
-    width: 40,
-    height: 40,
-    borderRadius: 999,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.22)',
-  },
+  /* v4.2: shareBtn أزيل — كان بجانب زر الرجوع وأيقونته تشبه
+   * سهم رجوع ثانياً فتلتبس على المستخدم؛ المشاركة صارت أيقونة
+   * وحيدة في شريط الإجراءات (اتصال/واتساب/مشاركة). */
   badgesRow: {
     flexDirection: 'row-reverse',
     flexWrap: 'wrap',
@@ -1052,6 +1068,15 @@ const actionStyles = StyleSheet.create({
     justifyContent: 'center',
     gap: spacing.sm,
     height: 38,
+    borderRadius: radius.md,
+    borderWidth: 1,
+  },
+  /* v4.2: زر أيقونة وحيد (المشاركة) — نفس لغة الإجراءات بلا نص. */
+  iconBtn: {
+    width: 38,
+    height: 38,
+    alignItems: 'center',
+    justifyContent: 'center',
     borderRadius: radius.md,
     borderWidth: 1,
   },

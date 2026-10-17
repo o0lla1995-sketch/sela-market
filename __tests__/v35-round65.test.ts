@@ -93,10 +93,10 @@ describe('الجولة 65 — v3.5.0: إصلاح بطاقة المنتج الض�
 
   test('⑥ الإصدار: 3.5.0 (19)', () => {
     const config = read('src/core/config.ts');
-    expect(config).toContain("APP_VERSION = '4.1.0'");
-    expect(config).toContain('APP_BUILD_CODE = 23');
+    expect(config).toContain("APP_VERSION = '4.2.0'");
+    expect(config).toContain('APP_BUILD_CODE = 24');
     const gradle = read('android/app/build.gradle');
-    expect(gradle).toContain('versionCode 23');
-    expect(gradle).toContain('versionName "4.1.0"');
+    expect(gradle).toContain('versionCode 24');
+    expect(gradle).toContain('versionName "4.2.0"');
   });
 });

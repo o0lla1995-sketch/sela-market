@@ -64,12 +64,19 @@ describe('الجولة 62 — v3.2.0: التطوير الشامل UX/UI', () => 
     expect(nav).toContain('tabBarInactiveTintColor: palette.inkSoft');
     expect(nav).toContain('tabBarActiveTintColor: palette.brandDeep');
     // ارتفاع ثابت للتسمية — لا انزياح عند التبديل
-    // (v4.1 الجولة 69: الشريط العائم جدد التصميم — التسمية 13)
-    expect(nav).toContain('height: 13');
-    // v4.1: الشريط العائم — يطفو فوق المحتوى فوق منطقة الإيماءات
-    expect(nav).toContain("position: 'absolute'");
-    expect(nav).toContain('marginBottom: Math.max(insets.bottom, 12) + 4');
-    expect(nav).toContain('paddingBottom: 6');
+    // (v4.2 الجولة 70: الشريط العائم أُزيل بطلب التاجر — كان يغطي زر
+    // إضافة للسلة في صفحة المنتج؛ عاد مثبتاً وبقيت الأيقونات المزدوجة
+    // الطبقة (duotone) وكبسولة الهوفر النابضة فقط)
+    expect(nav).toContain('height: 14');
+    // v4.2: الشريط مثبت — المحتوى لا يمر تحته أبداً (توقيع الشريط
+    // العائم المحدق أزيل؛ position:absolute الشرعي الوحيد الباقي
+    // هو خانة شارة السلة داخل الأيقونة)
+    expect(nav).not.toContain('marginBottom: Math.max(insets.bottom, 12) + 4');
+    expect(nav).not.toContain('marginHorizontal: 14');
+    expect(nav).toContain('borderTopWidth: StyleSheet.hairlineWidth');
+    // الأيقونات المزدوجة الطبقة + الكبسولة النابضة بقيتا
+    expect(nav).toContain('duotone');
+    expect(nav).toContain('usePop');
     // تسميات وصول لكل التبويبات
     expect(nav).toContain('tabBarAccessibilityLabel');
   });
@@ -184,10 +191,10 @@ describe('الجولة 62 — v3.2.0: التطوير الشامل UX/UI', () => 
 
   test('⑩ الإصدار: 3.5.0 (19)', () => {
     const config = read('src/core/config.ts');
-    expect(config).toContain("APP_VERSION = '4.1.0'");
-    expect(config).toContain('APP_BUILD_CODE = 23');
+    expect(config).toContain("APP_VERSION = '4.2.0'");
+    expect(config).toContain('APP_BUILD_CODE = 24');
     const gradle = read('android/app/build.gradle');
-    expect(gradle).toContain('versionName "4.1.0"');
-    expect(gradle).toContain('versionCode 23');
+    expect(gradle).toContain('versionName "4.2.0"');
+    expect(gradle).toContain('versionCode 24');
   });
 });

@@ -122,9 +122,19 @@ describe('الجولة 68 — v4.0.0: إحياء التطبيق', () => {
 
   test('⑦ صفحة المتجر: مشاركة + شريط أرقام + شريط لاصق ناعم', () => {
     const store = stripComments(read('src/screens/stores/StoreScreen.tsx'));
-    // مشاركة فوق التروسة + زر مستقل في الإجراءات
+    /* v4.2 (الجولة 70): سهم المشاركة المكرر في التروسة أُزيل (كان
+     * يشبه سهم رجوع ثانياً) والزر العريض حُذف — المشاركة أيقونة
+     * وحيدة (share) بجوار الاتصال/واتساب في شريط الإجراءات. */
     expect(store).toContain('مشاركة المتجر');
-    expect(store).toContain('heroStyles.shareBtn');
+    expect(store).toContain('actionStyles.iconBtn');
+    expect(store).toContain('name="share"');
+    expect(store).not.toContain('heroStyles.shareBtn');
+    expect(store).not.toContain('name="forward"');
+    /* v4.2: البحث من الهيدر — حقل البحث داخل الشريط اللاصق يظهر
+     * عند السكرول فقط، وحقل البحث داخل الصفحة أُزيل. */
+    expect(store).toContain('stickyStyles.searchField');
+    expect(store).toContain('searchActive');
+    expect(store).not.toContain('<SearchBar');
     // شريط الأرقام: منتجات/عروض/مناطق/تقييم
     expect(store).toContain('مناطق توصيل');
     expect(store).toContain('statsStyles');
@@ -169,10 +179,10 @@ describe('الجولة 68 — v4.0.0: إحياء التطبيق', () => {
 
   test('⑪ الإصدار: 4.0.0 (22)', () => {
     const config = read('src/core/config.ts');
-    expect(config).toContain("APP_VERSION = '4.1.0'");
-    expect(config).toContain('APP_BUILD_CODE = 23');
+    expect(config).toContain("APP_VERSION = '4.2.0'");
+    expect(config).toContain('APP_BUILD_CODE = 24');
     const gradle = read('android/app/build.gradle');
-    expect(gradle).toContain('versionCode 23');
-    expect(gradle).toContain('versionName "4.1.0"');
+    expect(gradle).toContain('versionCode 24');
+    expect(gradle).toContain('versionName "4.2.0"');
   });
 });

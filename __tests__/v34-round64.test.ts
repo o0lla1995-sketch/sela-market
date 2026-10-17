@@ -43,11 +43,12 @@ describe('الجولة 64 — v3.4.0: الإصلاح الجذري + أقسام �
     expect(store).not.toContain('Animated.event');
     expect(store).not.toContain('useNativeDriver');
     // الحالة الثنائية تبقى حارس اللمس (pointerEvents) — لا لمس على
-    // شريط شفاف.
+    // شريط شفاف. (v4.2 الجولة 70: صارت headerVisible = شريط ظاهر
+    // أو بحث نشط — حقل البحث انتقل إلى الشريط اللاصق.)
     expect(store).toContain('const [barShown, setBarShown] = useState(false);');
     expect(store).toContain('const show = y > 150;');
     expect(store).toContain('setBarShown(prev => (prev === show ? prev : show));');
-    expect(store).toContain("pointerEvents={barShown ? 'auto' : 'none'}");
+    expect(store).toContain("pointerEvents={headerVisible ? 'auto' : 'none'}");
     // بقية الشاشة سليمة: الفلاتر والكاروسيل كما هما
     expect(store).toContain('FilterChip');
     expect(store).toContain('آراء المشترين');
@@ -134,10 +135,10 @@ describe('الجولة 64 — v3.4.0: الإصلاح الجذري + أقسام �
 
   test('⑥ الإصدار: 3.5.0 (19)', () => {
     const config = read('src/core/config.ts');
-    expect(config).toContain("APP_VERSION = '4.1.0'");
-    expect(config).toContain('APP_BUILD_CODE = 23');
+    expect(config).toContain("APP_VERSION = '4.2.0'");
+    expect(config).toContain('APP_BUILD_CODE = 24');
     const gradle = read('android/app/build.gradle');
-    expect(gradle).toContain('versionCode 23');
-    expect(gradle).toContain('versionName "4.1.0"');
+    expect(gradle).toContain('versionCode 24');
+    expect(gradle).toContain('versionName "4.2.0"');
   });
 });

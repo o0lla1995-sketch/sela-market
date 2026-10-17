@@ -133,11 +133,11 @@ describe('الجولة 63 — v3.3.0: إصلاح الانهيار + تحسينا
 
   test('⑦ الإصدار: 3.5.0 (19)', () => {
     const config = read('src/core/config.ts');
-    expect(config).toContain("APP_VERSION = '4.1.0'");
-    expect(config).toContain('APP_BUILD_CODE = 23');
+    expect(config).toContain("APP_VERSION = '4.2.0'");
+    expect(config).toContain('APP_BUILD_CODE = 24');
     expect(config).toContain('APP_VERSION_LABEL');
     const gradle = read('android/app/build.gradle');
-    expect(gradle).toContain('versionName "4.1.0"');
-    expect(gradle).toContain('versionCode 23');
+    expect(gradle).toContain('versionName "4.2.0"');
+    expect(gradle).toContain('versionCode 24');
   });
 });

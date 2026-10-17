@@ -125,9 +125,9 @@ describe('الجولة 61 — v3.1.0', () => {
 
   test('⑨ الإصدار: 3.5.0 (19)', () => {
     const config = read('src/core/config.ts');
-    expect(config).toContain("APP_VERSION = '4.1.0'");
+    expect(config).toContain("APP_VERSION = '4.2.0'");
     const gradle = read('android/app/build.gradle');
-    expect(gradle).toContain('versionName "4.1.0"');
-    expect(gradle).toContain('versionCode 23');
+    expect(gradle).toContain('versionName "4.2.0"');
+    expect(gradle).toContain('versionCode 24');
   });
 });

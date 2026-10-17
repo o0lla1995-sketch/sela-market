@@ -257,10 +257,11 @@ function AccountStackScreens() {
  * 1) أيقونات مزدوجة الطبقة (duotone): رسمة خطية كاملة الوضوح
  *    للجميع + طبقة تعبئة ناعمة 16% تظهر للتبويب النشط فقط —
  *    عمق بصري فوري يميز النشط عن غير النشط دون صراخ لوني.
- * 2) كبسولة التركيز: خلفية brandSoft ناعمة + نبضة نابضة
+ * 2) كبسولة الهوفر: خلفية brandSoft ناعمة + نبضة نابضة
  *    (usePop) لحظة التنشيط — إحساس حي عند كل تبديل.
- * 3) الشريط نفسه: شريط عائم منفصل عن الحواف (هامش أفقي +
- *    زوايا 24 + ظل ناعم + خط شعرة) بدل الشريط الملتصق المسطح. */
+ * 3) v4.2 (الجولة 70): الشريط نفسه عاد مثبتاً كما كان (رفض
+ *    التاجر للشريط العائم الذي كان يغطي زر إضافة للسلة في
+ *    صفحة المنتج) — بقيت الأيقونات والكبسولة فقط. */
 
 /* ─── طبقة الأيقونة المزدوجة: خط + تعبئة ─── */
 type TabGlyphName = 'home' | 'store' | 'cart' | 'receipt' | 'user';
@@ -356,7 +357,11 @@ function TabGlyph({
   );
 }
 
-/* ─── كبسولة التركيز النابضة ─── */
+/* ─── كبسولة الهوفر (التركيز) النابضة ───
+ * v4.2 (الجولة 70): «شكل الهوفر» المطوّر — كبسولة حبّة أوفر
+ * بزوايا كاملة الاستدارة تتنفّس حول الأيقونة (حشو أفقي 14)،
+ * تظهر ببساطة عند التفعيل وتنبض نبضة نابض قصيرة (usePop)
+ * لحظة التبديل فتلمس الإصبع أن التبويب «استقبل» الاختيار. */
 function TabIconWrap({focused, children}: {focused: boolean; children: React.ReactNode}) {
   const {palette} = useTheme();
   const pop = usePop();
@@ -456,8 +461,8 @@ function OrdersTabIcon({color, focused}: {color: string; focused: boolean}) {
 const tabIconStyles = StyleSheet.create({
   iconWrap: {
     borderRadius: 999,
-    paddingHorizontal: 15,
-    paddingVertical: 4,
+    paddingHorizontal: 14,
+    paddingVertical: 5,
     marginTop: 2,
     alignItems: 'center',
     justifyContent: 'center',
@@ -478,7 +483,6 @@ function StoresTab() {
 
 function MainTabs() {
   const {palette} = useTheme();
-  const insets = useSafeAreaInsets();
   /* v3.2 (الجولة 62): تباين أيقونات الشريط السفلي — طلب التاجر:
    * «الأيقونات غير النشطة باهتة أكثر من اللازم». غير النشط يرتقي
    * من muted الباهت إلى inkSoft الواضح (‎#44403C فاتح / ‎#D6D3D1
@@ -489,30 +493,18 @@ function MainTabs() {
         headerShown: false,
         tabBarActiveTintColor: palette.brandDeep,
         tabBarInactiveTintColor: palette.inkSoft,
-        /* v4.1 (الجولة 69): الشريط العائم — يطفو فوق محتوى الشاشة
-         * بهامش أفقي وزوايا كبيرة وظل ناعم وخط شعرة؛ المحتوى يمر
-         * تحته (position absolute) فيبدو التطبيق أخف وأحدث.
-         * paddingBottom: 6 يلغي حشوة الإدراج التلقائي التي كانت
-         * تُفرغ أسفل الشريط، وmarginBottom يرفعه فوق منطقة
-         * الإيماءات (كل جهاز بحشوه) — كبسولة مضغوطة بلا فراغ. */
+        /* v4.2 (الجولة 70): عودة الشريط السفلي مثبتاً كما كان — طلب
+         * التاجر: «ارجع الهيدر السفلي للتطبيق كما كان». الشريط العائم
+         * (position absolute) كان يمر المحتوى تحته فيغطي زر إضافة
+         * للسلة في صفحة المنتج. عاد الشريط عادياً بأرضية صلبة وخط
+         * شعرة علوي (نمط v4.0 المجرب) وبقيت الأيقونات المزدوجة
+         * الطبقة (duotone) وكبسولة الهوفر الناعمة بنبضتها — «فقط
+         * طور الأيقونات وشكل الهوفر فيها». */
         tabBarStyle: {
-          position: 'absolute',
           backgroundColor: palette.surface,
-          marginHorizontal: 14,
-          marginBottom: Math.max(insets.bottom, 12) + 4,
-          borderRadius: 24,
-          borderWidth: 1,
-          borderColor: palette.line,
-          height: 64,
-          paddingTop: 8,
-          paddingBottom: 6,
-          paddingHorizontal: 0,
-          overflow: 'hidden',
-          shadowColor: '#000000',
-          shadowOpacity: 0.16,
-          shadowRadius: 14,
-          shadowOffset: {width: 0, height: 8},
-          elevation: 16,
+          borderTopWidth: StyleSheet.hairlineWidth,
+          borderTopColor: palette.line,
+          paddingTop: 6,
         },
         // لوحة المفاتيح تغطي الشريط في نماذج الإدخال — تجربة أوسع.
         tabBarHideOnKeyboard: true,
@@ -520,9 +512,9 @@ function MainTabs() {
          * التبديل + خط متوسط واضح بحجم مقروء. */
         tabBarLabelStyle: {
           fontFamily: fonts.medium,
-          fontSize: 10.5,
-          lineHeight: 13,
-          height: 13,
+          fontSize: 11,
+          lineHeight: 14,
+          height: 14,
           marginTop: 1,
         },
         tabBarLabelPosition: 'below-icon',

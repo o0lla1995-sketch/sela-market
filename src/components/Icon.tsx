@@ -15,6 +15,7 @@ export type IconName =
   | 'search'
   | 'back'
   | 'forward'
+  | 'share'
   | 'close'
   | 'plus'
   | 'minus'
@@ -144,6 +145,17 @@ export function Icon({name, size = 22, color = '#17171C', strokeWidth = 2}: Icon
       return (
         <Svg {...common}>
           <Path d="m14.5 5-7 7 7 7" />
+        </Svg>
+      );
+    /* v4.2 (الجولة 70): أيقونة مشاركة قياسية محايدة الاتجاه (سهم
+     * يصعد من صينية) — بديل «forward» الذي كان يشبه سهم رجوع
+     * ثانياً في صفحة المتجر ويلتبس على المستخدم. */
+    case 'share':
+      return (
+        <Svg {...common}>
+          <Path d="M12 13.5V3.5" />
+          <Path d="m8.3 7.2 3.7-3.7 3.7 3.7" />
+          <Path d="M7 11h-1.7A1.8 1.8 0 0 0 3.5 12.8v5.4A1.8 1.8 0 0 0 5.3 20h13.4a1.8 1.8 0 0 0 1.8-1.8v-5.4A1.8 1.8 0 0 0 18.7 11H17" />
         </Svg>
       );
     case 'close':
