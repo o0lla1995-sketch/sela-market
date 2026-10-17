@@ -64,7 +64,12 @@ describe('الجولة 62 — v3.2.0: التطوير الشامل UX/UI', () => 
     expect(nav).toContain('tabBarInactiveTintColor: palette.inkSoft');
     expect(nav).toContain('tabBarActiveTintColor: palette.brandDeep');
     // ارتفاع ثابت للتسمية — لا انزياح عند التبديل
-    expect(nav).toContain('height: 14');
+    // (v4.1 الجولة 69: الشريط العائم جدد التصميم — التسمية 13)
+    expect(nav).toContain('height: 13');
+    // v4.1: الشريط العائم — يطفو فوق المحتوى فوق منطقة الإيماءات
+    expect(nav).toContain("position: 'absolute'");
+    expect(nav).toContain('marginBottom: Math.max(insets.bottom, 12) + 4');
+    expect(nav).toContain('paddingBottom: 6');
     // تسميات وصول لكل التبويبات
     expect(nav).toContain('tabBarAccessibilityLabel');
   });

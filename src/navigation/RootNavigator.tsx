@@ -23,9 +23,11 @@ import {useCartStore} from '../stores/cartStore';
 import {useNotificationsStore} from '../stores/notificationsStore';
 import {useToastStore} from '../stores/toastStore';
 import {useTheme} from '../theme/ThemeProvider';
-import {Icon, type IconName} from '../components/Icon';
+import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {Badge} from '../components/ui';
 import {fonts} from '../theme/tokens';
+import Svg, {Circle, Path} from 'react-native-svg';
+import {usePop} from '../core/motion';
 import type {Address, Order, Product, StoreRef} from '../core/types';
 
 /* ─── الشاشات ─── */
@@ -249,22 +251,136 @@ function AccountStackScreens() {
 
 /* ─── شارات التبويبات (اشتراك تفاعلي داخل الأيقونة) ─── */
 
-/* v3.1: غلاف أيقونة التبويب — كبسولة ناعمة بلون العلامة حول
- * الأيقونة النشطة (نمط المتاجر العالمية) بدل تغيير اللون وحده. */
+/* v4.1 (الجولة 69): تطوير الهيدر السفلي بالكامل — طلب التاجر:
+ * «أشعر أن الهيدر السفلي يحتاج إلى تطوير وأيقونات أفضل وأجمل».
+ *
+ * 1) أيقونات مزدوجة الطبقة (duotone): رسمة خطية كاملة الوضوح
+ *    للجميع + طبقة تعبئة ناعمة 16% تظهر للتبويب النشط فقط —
+ *    عمق بصري فوري يميز النشط عن غير النشط دون صراخ لوني.
+ * 2) كبسولة التركيز: خلفية brandSoft ناعمة + نبضة نابضة
+ *    (usePop) لحظة التنشيط — إحساس حي عند كل تبديل.
+ * 3) الشريط نفسه: شريط عائم منفصل عن الحواف (هامش أفقي +
+ *    زوايا 24 + ظل ناعم + خط شعرة) بدل الشريط الملتصق المسطح. */
+
+/* ─── طبقة الأيقونة المزدوجة: خط + تعبئة ─── */
+type TabGlyphName = 'home' | 'store' | 'cart' | 'receipt' | 'user';
+
+function TabGlyph({
+  name,
+  size,
+  color,
+  fill,
+  duotone,
+}: {
+  name: TabGlyphName;
+  size: number;
+  color: string;
+  fill: string;
+  duotone: boolean;
+}) {
+  const common = {
+    width: size,
+    height: size,
+    viewBox: '0 0 24 24',
+    fill: 'none',
+    stroke: color,
+    strokeWidth: 2,
+    strokeLinecap: 'round' as const,
+    strokeLinejoin: 'round' as const,
+  };
+  /* طبقات كل أيقونة: [مسارات الخطوط] + [مسار التعبئة duotone].
+   * التعبئة ترسم أولاً (خلف الخطوط) وبشفافية 16% عند التفعيل. */
+  const strokes: Record<TabGlyphName, React.ReactNode> = {
+    /* البيت: سقف مزدوج الميل + جسم + باب مقوّس + نقطة نافذة. */
+    home: (
+      <>
+        <Path d="M3.5 11 12 3.5 20.5 11" />
+        <Path d="M5.5 10V20.5h13V10" />
+        <Path d="M10 20.5V16a2 2 0 0 1 4 0v4.5" />
+        <Circle cx="15.4" cy="13.4" r="0.5" fill={color} strokeWidth={0} />
+      </>
+    ),
+    /* المتجر: مظلة متموّجة ثلاثية + واجهة + باب + خط رفّ داخلي. */
+    store: (
+      <>
+        <Path d="M4 9.5 5.4 4h13.2L20 9.5" />
+        <Path d="M4 9.5a2.6 2.6 0 0 0 5.2 0 2.65 2.65 0 0 0 5.3 0 2.6 2.6 0 0 0 5.2 0" />
+        <Path d="M5.6 12.6V20h12.8v-7.4" />
+        <Path d="M9.5 20v-4.2h5V20" />
+        <Path d="M5.6 12.6h12.8" strokeWidth={1.6} />
+        <Circle cx="7.4" cy="16.4" r="0.5" fill={color} strokeWidth={0} />
+      </>
+    ),
+    /* السلة: مقبض + جسم + نسج أفقي مزدوج + عجلتان بنَبَّابتين. */
+    cart: (
+      <>
+        <Path d="M3.5 4.5h2l2.4 11.2a1.6 1.6 0 0 0 1.6 1.3h7.6a1.6 1.6 0 0 0 1.6-1.25L20.5 8H6.4" />
+        <Path d="M8.6 11.4h9.5M9.4 15.2h8" strokeWidth={1.6} />
+        <Circle cx="10" cy="20.2" r="1.4" />
+        <Circle cx="16.6" cy="20.2" r="1.4" />
+        <Circle cx="10" cy="20.2" r="0.45" fill={color} strokeWidth={0} />
+        <Circle cx="16.6" cy="20.2" r="0.45" fill={color} strokeWidth={0} />
+      </>
+    ),
+    /* الطلب: وصل مسنّن الأسفل (خمس أسنان) + سطور + فاصل منقّط. */
+    receipt: (
+      <>
+        <Path d="M6 3.5h12v16l-2.4-1.2-2.4 1.2-2.4-1.2-2.4 1.2-2.4-1.2L6 19.5Z" />
+        <Path d="M9 8h6M9 11.5h6" />
+        <Path d="M9 15h1.3M11.6 15h1.3M14.2 15h1.3" strokeWidth={1.6} />
+      </>
+    ),
+    /* الحساب: رأس + كتفان بإيقاع ناعم + طيّة ياقة صغيرة. */
+    user: (
+      <>
+        <Circle cx="12" cy="8" r="3.6" />
+        <Path d="M5 20.5c.8-3.6 3.6-5.4 7-5.4s6.2 1.8 7 5.4" />
+        <Path d="M9.6 15.9l2.4 1.9 2.4-1.9" strokeWidth={1.6} />
+      </>
+    ),
+  };
+  const fills: Record<TabGlyphName, string> = {
+    home: 'M3.5 11 12 3.5 20.5 11 12 9.4Z',
+    store: 'M4.6 8.2c1.2 1.5 3.4 1.5 4.6 0 1.2 1.5 3.5 1.5 4.7 0 1.2 1.5 3.4 1.5 4.6 0 1.2 1.5 3.4 1.5 4.6 0L20 9.5 5.4 4 4 9.5Z M5.6 12.6h12.8V20H9.5v-4.2h5V20H5.6Z',
+    cart: 'M6.4 8h14.1l-1.35 6.9a1.6 1.6 0 0 1-1.6 1.25H9.5a1.6 1.6 0 0 1-1.6-1.3Z',
+    receipt: 'M6 3.5h12v16l-2.4-1.2-2.4 1.2-2.4-1.2-2.4 1.2-2.4-1.2L6 19.5Z',
+    user: 'M5 20.5c.8-3.6 3.6-5.4 7-5.4s6.2 1.8 7 5.4Z',
+  };
+  return (
+    <Svg {...common}>
+      {duotone ? (
+        <Path d={fills[name]} fill={fill} fillOpacity={0.16} stroke="none" />
+      ) : null}
+      {strokes[name]}
+    </Svg>
+  );
+}
+
+/* ─── كبسولة التركيز النابضة ─── */
 function TabIconWrap({focused, children}: {focused: boolean; children: React.ReactNode}) {
   const {palette} = useTheme();
+  const pop = usePop();
+  const prev = useRef(focused);
+  useEffect(() => {
+    if (focused && !prev.current) {
+      pop.pop();
+    }
+    prev.current = focused;
+  }, [focused, pop]);
   return (
-    <View
+    <Animated.View
       style={[
         tabIconStyles.iconWrap,
         {backgroundColor: focused ? palette.brandSoft : 'transparent'},
+        pop.style,
       ]}>
       {children}
-    </View>
+    </Animated.View>
   );
 }
 
 function CartTabIcon({color, focused}: {color: string; focused: boolean}) {
+  const {palette} = useTheme();
   const carts = useCartStore(s => s.carts);
   /* v2.6: تعقيم دفاعي — أي بنية تالفة (قرص قديم) لا تقتل التطبيق
    * عند الإقلاع (كانت حلقة الانهيار: e.lines.reduce على undefined). */
@@ -295,7 +411,13 @@ function CartTabIcon({color, focused}: {color: string; focused: boolean}) {
   return (
     <TabIconWrap focused={focused}>
       <View style={tabIconStyles.wrap}>
-        <Icon name="cart" size={23} color={color} />
+        <TabGlyph
+          name="cart"
+          size={24}
+          color={color}
+          fill={palette.brand}
+          duotone={focused}
+        />
         {count > 0 ? (
           <View style={tabIconStyles.badgeSlot}>
             <Animated.View style={{transform: [{scale: badgeScale}]}}>
@@ -309,11 +431,18 @@ function CartTabIcon({color, focused}: {color: string; focused: boolean}) {
 }
 
 function OrdersTabIcon({color, focused}: {color: string; focused: boolean}) {
+  const {palette} = useTheme();
   const unread = useNotificationsStore(s => s.unread);
   return (
     <TabIconWrap focused={focused}>
       <View style={tabIconStyles.wrap}>
-        <Icon name="receipt" size={23} color={color} />
+        <TabGlyph
+          name="receipt"
+          size={24}
+          color={color}
+          fill={palette.brand}
+          duotone={focused}
+        />
         {unread > 0 ? (
           <View style={tabIconStyles.badgeSlot}>
             <Badge count={unread} />
@@ -327,12 +456,14 @@ function OrdersTabIcon({color, focused}: {color: string; focused: boolean}) {
 const tabIconStyles = StyleSheet.create({
   iconWrap: {
     borderRadius: 999,
-    paddingHorizontal: 14,
+    paddingHorizontal: 15,
     paddingVertical: 4,
     marginTop: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  wrap: {width: 40, height: 26, alignItems: 'center', justifyContent: 'center'},
-  badgeSlot: {position: 'absolute', top: -4, left: -2},
+  wrap: {width: 42, height: 30, alignItems: 'center', justifyContent: 'center'},
+  badgeSlot: {position: 'absolute', top: -3, left: -3},
 });
 
 /* ─── التبويبات ─── */
@@ -347,6 +478,7 @@ function StoresTab() {
 
 function MainTabs() {
   const {palette} = useTheme();
+  const insets = useSafeAreaInsets();
   /* v3.2 (الجولة 62): تباين أيقونات الشريط السفلي — طلب التاجر:
    * «الأيقونات غير النشطة باهتة أكثر من اللازم». غير النشط يرتقي
    * من muted الباهت إلى inkSoft الواضح (‎#44403C فاتح / ‎#D6D3D1
@@ -357,12 +489,30 @@ function MainTabs() {
         headerShown: false,
         tabBarActiveTintColor: palette.brandDeep,
         tabBarInactiveTintColor: palette.inkSoft,
-        // ارتفاع الشريط تلقائي: 49 للمحتوى + insets.bottom للنظام
-        // (edge-to-edge على Android 15).
+        /* v4.1 (الجولة 69): الشريط العائم — يطفو فوق محتوى الشاشة
+         * بهامش أفقي وزوايا كبيرة وظل ناعم وخط شعرة؛ المحتوى يمر
+         * تحته (position absolute) فيبدو التطبيق أخف وأحدث.
+         * paddingBottom: 6 يلغي حشوة الإدراج التلقائي التي كانت
+         * تُفرغ أسفل الشريط، وmarginBottom يرفعه فوق منطقة
+         * الإيماءات (كل جهاز بحشوه) — كبسولة مضغوطة بلا فراغ. */
         tabBarStyle: {
+          position: 'absolute',
           backgroundColor: palette.surface,
-          borderTopColor: palette.line,
-          paddingTop: 6,
+          marginHorizontal: 14,
+          marginBottom: Math.max(insets.bottom, 12) + 4,
+          borderRadius: 24,
+          borderWidth: 1,
+          borderColor: palette.line,
+          height: 64,
+          paddingTop: 8,
+          paddingBottom: 6,
+          paddingHorizontal: 0,
+          overflow: 'hidden',
+          shadowColor: '#000000',
+          shadowOpacity: 0.16,
+          shadowRadius: 14,
+          shadowOffset: {width: 0, height: 8},
+          elevation: 16,
         },
         // لوحة المفاتيح تغطي الشريط في نماذج الإدخال — تجربة أوسع.
         tabBarHideOnKeyboard: true,
@@ -370,9 +520,9 @@ function MainTabs() {
          * التبديل + خط متوسط واضح بحجم مقروء. */
         tabBarLabelStyle: {
           fontFamily: fonts.medium,
-          fontSize: 11,
-          lineHeight: 14,
-          height: 14,
+          fontSize: 10.5,
+          lineHeight: 13,
+          height: 13,
           marginTop: 1,
         },
         tabBarLabelPosition: 'below-icon',
@@ -385,7 +535,7 @@ function MainTabs() {
           tabBarAccessibilityLabel: 'الرئيسية',
           tabBarIcon: ({color, focused}) => (
             <TabIconWrap focused={focused}>
-              <Icon name="home" size={23} color={color} />
+              <HomeTabGlyph color={color} focused={focused} />
             </TabIconWrap>
           ),
         }}
@@ -398,7 +548,7 @@ function MainTabs() {
           tabBarAccessibilityLabel: 'دليل المتاجر',
           tabBarIcon: ({color, focused}) => (
             <TabIconWrap focused={focused}>
-              <Icon name="store" size={23} color={color} />
+              <StoreTabGlyph color={color} focused={focused} />
             </TabIconWrap>
           ),
         }}
@@ -429,13 +579,28 @@ function MainTabs() {
           tabBarAccessibilityLabel: 'حسابي',
           tabBarIcon: ({color, focused}) => (
             <TabIconWrap focused={focused}>
-              <Icon name="user" size={23} color={color} />
+              <UserTabGlyph color={color} focused={focused} />
             </TabIconWrap>
           ),
         }}
       />
     </Tabs.Navigator>
   );
+}
+
+/* v4.1: أغلفة أيقونات التبويبات الثابتة (بيت/متجر/حساب) —
+ * تمرّر ألوان الطبقة المزدوجة إلى TabGlyph. */
+function HomeTabGlyph({color, focused}: {color: string; focused: boolean}) {
+  const {palette} = useTheme();
+  return <TabGlyph name="home" size={24} color={color} fill={palette.brand} duotone={focused} />;
+}
+function StoreTabGlyph({color, focused}: {color: string; focused: boolean}) {
+  const {palette} = useTheme();
+  return <TabGlyph name="store" size={24} color={color} fill={palette.brand} duotone={focused} />;
+}
+function UserTabGlyph({color, focused}: {color: string; focused: boolean}) {
+  const {palette} = useTheme();
+  return <TabGlyph name="user" size={24} color={color} fill={palette.brand} duotone={focused} />;
 }
 
 /* ─── الجذر ─── */

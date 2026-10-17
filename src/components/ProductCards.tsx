@@ -350,6 +350,164 @@ export function WeeklyOfferCard({
   );
 }
 
+/* ═══════════════ StoreOfferCard ═══════════════
+ * v4.1 (الجولة 69): بطاقة «عروض المتجر» في صفحة التاجر — طلب
+ * التاجر بالنص: «العروض في صفحة التاجر تحتاج إلى تغيير البطاقات
+ * الخاصة بالمنتجات». البطاقة القديمة كانت نصاً فقط بلا صورة ولا
+ * هوية صفقة. الجديدة بلغة الصفقة الكاملة كما عروض الرئيسية
+ * (WeeklyOfferCard) لكن مخصصة لسياق داخل المتجر:
+ *  • صورة المنتج (أكبر مساحة بصرياً) + قرص نسبة الخصم الأحمر.
+ *  • الاسم بسطرين، السعر الجديد كبيراً + القديم مشطوباً.
+ *  • سطر التوفير بالأخضر + غشاء «نفدت» عند غياب المخزون.
+ *  • بلا سطر متجر (نحن داخل المتجر أصلاً) — المساحة للسعر والصورة. */
+export function StoreOfferCard({
+  product,
+  onPress,
+  width = 236,
+}: {
+  product: CrossProduct | Product;
+  onPress: () => void;
+  width?: number;
+}) {
+  const {palette} = useTheme();
+  const soldByWeight = product.sold_by_weight === 1;
+  const outOfStock = product.stock <= 0;
+  const finalPrice = effectiveMinor(product);
+  const savedMinor = Math.max(0, product.price_minor - finalPrice);
+  const discountPct = Math.round(product.discount_pct ?? 0);
+  const firstImage = absoluteUrl(product.images?.[0]);
+
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`عرض: ${product.name}`}
+      style={({pressed}) => [
+        storeOfferStyles.card,
+        {width},
+        {
+          backgroundColor: palette.surface,
+          borderColor: palette.danger + '66',
+          opacity: pressed ? 0.93 : 1,
+          transform: [{scale: pressed ? 0.97 : 1}],
+        },
+        shadowFor(palette.isDark),
+      ]}>
+      {/* قرص نسبة الخصم — الهوية البصرية الأولى للصفقة */}
+      <View style={[storeOfferStyles.pctDisc, {backgroundColor: palette.danger}]}>
+        <Text style={{fontSize: 15, color: '#FFFFFF', fontFamily: fonts.black, lineHeight: 17}}>
+          {discountPct > 0 ? `${discountPct}%` : 'عرض'}
+        </Text>
+        <Text style={{fontSize: 8, color: 'rgba(255,255,255,0.85)', fontFamily: fonts.bold}}>
+          خصم
+        </Text>
+      </View>
+
+      <View style={storeOfferStyles.photoWrap}>
+        {firstImage != null ? (
+          <Image
+            source={{uri: firstImage}}
+            style={storeOfferStyles.photo}
+            resizeMode="cover"
+            resizeMethod="resize"
+            progressiveRenderingEnabled
+          />
+        ) : (
+          <View
+            style={[
+              storeOfferStyles.photo,
+              {backgroundColor: palette.dangerSoft, alignItems: 'center', justifyContent: 'center'},
+            ]}>
+            <Text style={{fontSize: 34, fontFamily: fonts.black, color: palette.danger, opacity: 0.35}}>
+              {product.name.trim().charAt(0) || '؟'}
+            </Text>
+          </View>
+        )}
+        {outOfStock ? (
+          <View style={[storeOfferStyles.stockVeil, {backgroundColor: palette.overlay}]}>
+            <Text style={{fontSize: 10.5, color: '#FFFFFF', fontFamily: fonts.bold}}>
+              نفدت
+            </Text>
+          </View>
+        ) : null}
+      </View>
+
+      <View style={storeOfferStyles.texts}>
+        <Text
+          style={{fontSize: 13, color: palette.ink, fontFamily: fonts.bold, lineHeight: 18}}
+          numberOfLines={2}>
+          {product.name}
+        </Text>
+        <View style={{flexDirection: 'row-reverse', alignItems: 'baseline', gap: 6}}>
+          <Text style={{fontSize: 18, color: palette.danger, fontFamily: fonts.black}}>
+            {formatMoney(finalPrice)}
+          </Text>
+          <Text
+            style={{
+              fontSize: 11.5,
+              color: palette.muted,
+              fontFamily: fonts.medium,
+              textDecorationLine: 'line-through',
+            }}>
+            {formatMoney(product.price_minor)}
+          </Text>
+          {soldByWeight ? (
+            <Text style={{fontSize: 9.5, color: palette.muted}}>/كيلو</Text>
+          ) : null}
+        </View>
+        {savedMinor > 0 ? (
+          <Text style={{fontSize: 10.5, color: palette.success, fontFamily: fonts.bold}}>
+            وفّر {formatMoney(savedMinor)}
+          </Text>
+        ) : null}
+      </View>
+    </Pressable>
+  );
+}
+
+const storeOfferStyles = StyleSheet.create({
+  card: {
+    flexDirection: 'row-reverse',
+    borderRadius: radius.lg,
+    borderWidth: 1.25,
+    padding: 10,
+    gap: 10,
+    alignItems: 'center',
+  },
+  pctDisc: {
+    position: 'absolute',
+    top: -10,
+    right: 12,
+    zIndex: 5,
+    elevation: 5,
+    width: 46,
+    height: 46,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000000',
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
+    shadowOffset: {width: 0, height: 2},
+  },
+  photoWrap: {position: 'relative'},
+  photo: {
+    width: 84,
+    height: 84,
+    borderRadius: radius.md,
+    overflow: 'hidden',
+  },
+  stockVeil: {
+    position: 'absolute',
+    bottom: 5,
+    right: 5,
+    borderRadius: radius.pill,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  texts: {flex: 1, gap: 3, alignItems: 'flex-start'},
+});
+
 const offerStyles = StyleSheet.create({
   card: {
     flexDirection: 'row-reverse',

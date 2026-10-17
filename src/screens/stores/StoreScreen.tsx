@@ -66,6 +66,7 @@ import {
   SectionTitle,
 } from '../../components/ui';
 import {ProductCard} from '../../components/ProductCard';
+import {StoreOfferCard} from '../../components/ProductCards';
 import {StoreAvatar, storeTypeInfo} from '../../components/StoreCard';
 import {Stars} from '../../components/RatingSheet';
 import {getStoreDetail, getStoreProducts, getStoreProductsAdaptive, getStoreRatings} from '../../api/endpoints';
@@ -709,51 +710,27 @@ export function StoreScreen({navigation, route}: Props) {
                   </View>
                 ) : null}
 
-                {/* ─── عروض المتجر (تخفيضات التاجر من POS) ─── */}
+                {/* ─── عروض المتجر (تخفيضات التاجر من POS) ───
+                 * v4.1 (الجولة 69): طلب التاجر — «العروض في صفحة
+                 * التاجر تحتاج إلى تغيير البطاقات». البطاقة النصية
+                 * الصغيرة (132px بلا صورة) صارت بطاقة صفقة كاملة
+                 * أفقية بصورة المنتج وقرص الخصم والسعرين وسطر
+                 * التوفير — StoreOfferCard. */}
                 {offers.length > 0 ? (
                   <View style={{gap: spacing.sm}}>
                     <SectionTitle title={`عروض المتجر (${offers.length})`} />
                     <ScrollView
                       horizontal
                       showsHorizontalScrollIndicator={false}
-                      snapToInterval={132 + spacing.md}
+                      snapToInterval={236 + spacing.md}
                       decelerationRate="fast"
                       contentContainerStyle={{gap: spacing.md, paddingBottom: 2}}>
                       {offers.map(p => (
-                        <Pressable
+                        <StoreOfferCard
                           key={`offer-${p.id}`}
+                          product={p}
                           onPress={() => navigation.navigate('Product', {product: p, storeRef})}
-                          style={({pressed}) => [
-                            offerStyles.card,
-                            {
-                              backgroundColor: palette.surface,
-                              borderColor: palette.brandBorder,
-                              opacity: pressed ? 0.9 : 1,
-                            },
-                            shadowFor(palette.isDark),
-                          ]}>
-                          <View style={[offerStyles.pct, {backgroundColor: palette.danger}]}>
-                            <Text style={{fontSize: 12, color: '#FFFFFF', fontFamily: fonts.black}}>
-                              {Math.round(p.discount_pct ?? 0)}%
-                            </Text>
-                          </View>
-                          <Text
-                            style={[type.smallMedium, {color: palette.ink, fontFamily: fonts.bold}]}
-                            numberOfLines={1}>
-                            {p.name}
-                          </Text>
-                          <View style={{flexDirection: 'row-reverse', alignItems: 'center', gap: 6}}>
-                            <Text style={{fontSize: 11, color: palette.muted, textDecorationLine: 'line-through'}}>
-                              {formatMoney(p.price_minor)}
-                            </Text>
-                            <Text style={{fontSize: 14, color: palette.brandDark, fontFamily: fonts.bold}}>
-                              {formatMoney(effectiveMinor(p))}
-                            </Text>
-                          </View>
-                          <Text style={{fontSize: 10, color: palette.success, fontFamily: fonts.medium}}>
-                            توفّر {formatMoney(Math.max(0, p.price_minor - effectiveMinor(p)))}
-                          </Text>
-                        </Pressable>
+                        />
                       ))}
                     </ScrollView>
                   </View>
@@ -1118,24 +1095,8 @@ const regionStyles = StyleSheet.create({
   },
 });
 
-const offerStyles = StyleSheet.create({
-  card: {
-    width: 132,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    padding: spacing.md,
-    gap: 4,
-    alignItems: 'flex-start',
-  },
-  pct: {
-    position: 'absolute',
-    top: -10,
-    left: 10,
-    borderRadius: radius.pill,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-  },
-});
+/* v4.1: offerStyles القديمة أزيلت — بطاقات العروض صارت StoreOfferCard
+ * كاملة الصورة والصفقة (الجولة 69). */
 
 /* v3.2: كاروسيل المراجعات المدمج. */
 const reviewStyles = StyleSheet.create({
